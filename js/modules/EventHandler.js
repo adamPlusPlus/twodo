@@ -37,14 +37,6 @@ export class EventHandler {
             });
         }
         
-        // Load from inputs button
-        const loadInputsBtn = document.getElementById('load-inputs');
-        if (loadInputsBtn) {
-            loadInputsBtn.addEventListener('click', () => {
-                this.app.dataManager.loadFromInputsFile();
-            });
-        }
-        
         // File input for images/JSON
         const fileInputImagesJson = document.getElementById('file-input-images-json');
         const openFilesBtn = document.getElementById('open-files');

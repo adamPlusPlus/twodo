@@ -123,14 +123,6 @@ python3 server.py 8000
 python3 websocket_server.py 8001
 ```
 
-### Loading from inputs file
-
-Click the "Load from inputs" button to parse and import tasks from the `inputs` file. The parser recognizes:
-- `Ω` (Omega) = completion marker
-- `∆` (Delta) = fun modifier
-- `o` = task indicator
-- Time information in parentheses like `(30 min+)`
-
 ### Adding Elements
 
 Click "+ Add Element" on any page to add a new element. Choose from:
@@ -181,8 +173,6 @@ Plugins can be loaded via the browser console or will be automatically loaded wh
 - `index.html` - Main app structure
 - `app.js` - Application logic and state management
 - `app.css` - Styling
-- `parser.js` - Parser for inputs file format
-- `inputs` - Your task file (load via button)
 - `server.py` - HTTP server
 - `websocket_server.py` - WebSocket server for real-time sync
 - `serve.sh` - Simple server script

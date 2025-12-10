@@ -1,5 +1,4 @@
 // DataManager.js - Handles all data loading, saving, and migration
-import { parseInputsFile } from '../../parser.js';
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 
@@ -353,24 +352,6 @@ export class DataManager {
         } catch (error) {
             // Silently fail for autosave - don't interrupt user workflow
             console.warn('Autosave failed:', error);
-        }
-    }
-    
-    async loadFromInputsFile() {
-        try {
-            const response = await fetch('inputs');
-            const content = await response.text();
-            const parsedPages = parseInputsFile(content);
-            
-            if (parsedPages.length > 0) {
-                this.app.pages = parsedPages;
-                this.saveData();
-                this.app.render();
-                alert(`Loaded ${parsedPages.length} pages from inputs file`);
-            }
-        } catch (error) {
-            console.error('Failed to load inputs file:', error);
-            alert('Failed to load inputs file. Make sure it exists and the app is running from a server.');
         }
     }
     
