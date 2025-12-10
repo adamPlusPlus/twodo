@@ -1,0 +1,1325 @@
+// Daily Todo Tracker App
+import { DataManager } from './js/modules/DataManager.js';
+import { SettingsManager } from './js/modules/SettingsManager.js';
+import { PageManager } from './js/modules/PageManager.js';
+import { BinManager } from './js/modules/BinManager.js';
+import { ElementManager } from './js/modules/ElementManager.js';
+import { DragDropHandler } from './js/modules/DragDropHandler.js';
+import { AudioHandler } from './js/modules/AudioHandler.js';
+import { EventHandler } from './js/modules/EventHandler.js';
+import { ContextMenuHandler } from './js/modules/ContextMenuHandler.js';
+import { TouchGestureHandler } from './js/modules/TouchGestureHandler.js';
+import { ModalHandler } from './js/modules/ModalHandler.js';
+import { FileManager } from './js/modules/FileManager.js';
+// Plugin system imports
+import { PagePluginManager } from './js/modules/PagePluginManager.js';
+import { BinPluginManager } from './js/modules/BinPluginManager.js';
+import { ElementTypeManager } from './js/modules/ElementTypeManager.js';
+import { FormatRendererManager } from './js/modules/FormatRendererManager.js';
+import { pluginRegistry } from './js/core/PluginRegistry.js';
+import { eventBus } from './js/core/EventBus.js';
+import { pluginLoader } from './js/core/PluginLoader.js';
+import { RelationshipManager } from './js/modules/RelationshipManager.js';
+import { TemplateManager } from './js/modules/TemplateManager.js';
+import { AutomationEngine } from './js/core/AutomationEngine.js';
+import { TagManager } from './js/modules/TagManager.js';
+import { SearchIndex } from './js/modules/SearchIndex.js';
+import { ExportService } from './js/modules/ExportService.js';
+import { ImportService } from './js/modules/ImportService.js';
+import { OAuthManager } from './js/core/OAuthManager.js';
+import { SyncManager } from './js/modules/SyncManager.js';
+import { UndoRedoManager } from './js/modules/UndoRedoManager.js';
+import { TimeTracker } from './js/modules/TimeTracker.js';
+import { registerAllServices } from './js/core/AppServices.js';
+import { RenderService } from './js/core/RenderService.js';
+import { EVENTS } from './js/core/AppEvents.js';
+import { AppState } from './js/core/AppState.js';
+import { AppInitializer } from './js/core/AppInitializer.js';
+import { StringUtils } from './js/utils/string.js';
+import { DailyResetManager } from './js/modules/DailyResetManager.js';
+import { InlineEditor } from './js/modules/InlineEditor.js';
+
+class TodoApp {
+    constructor() {
+        // Initialize managers
+        this.dataManager = new DataManager(this);
+        this.settingsManager = new SettingsManager(this);
+        this.pageManager = new PageManager(this);
+        this.binManager = new BinManager(this);
+        this.elementManager = new ElementManager(this);
+        this.dragDropHandler = new DragDropHandler(this);
+        this.audioHandler = new AudioHandler(this);
+        this.eventHandler = new EventHandler(this);
+        this.contextMenuHandler = new ContextMenuHandler(this);
+        this.touchGestureHandler = new TouchGestureHandler(this);
+        this.modalHandler = new ModalHandler(this);
+        this.fileManager = new FileManager(this);
+        
+        // Initialize relationship manager
+        this.relationshipManager = new RelationshipManager(this);
+        
+        // Initialize template manager
+        this.templateManager = new TemplateManager(this);
+        
+        // Initialize automation engine
+        this.automationEngine = new AutomationEngine(this);
+        
+        // Initialize tag manager
+        this.tagManager = new TagManager(this);
+        
+        // Initialize search index
+        this.searchIndex = new SearchIndex(this);
+        
+        // Initialize export/import services
+        this.exportService = new ExportService(this);
+        this.importService = new ImportService(this);
+        
+        // Initialize OAuth and sync managers
+        this.oauthManager = new OAuthManager(this);
+        this.syncManager = new SyncManager(this);
+        this.undoRedoManager = new UndoRedoManager(this);
+        
+        // Initialize time tracker
+        this.timeTracker = new TimeTracker(this);
+        
+        // Initialize daily reset manager
+        this.dailyResetManager = new DailyResetManager(this);
+        
+        // Initialize inline editor
+        this.inlineEditor = new InlineEditor(this);
+        
+        // Initialize plugin system managers
+        this.pagePluginManager = new PagePluginManager(this);
+        this.binPluginManager = new BinPluginManager(this);
+        this.elementTypeManager = new ElementTypeManager(this);
+        this.formatRendererManager = new FormatRendererManager(this);
+        
+        // Expose plugin system to window for debugging
+        this.pluginRegistry = pluginRegistry;
+        this.eventBus = eventBus;
+        this.pluginLoader = pluginLoader;
+        
+        // Initialize app state (manages all application state) - must be before registerAllServices
+        this.appState = new AppState();
+        
+        // Register all services in ServiceLocator for dependency injection
+        registerAllServices(this);
+        
+        // Initialize render service (registers itself in ServiceLocator)
+        this.renderService = new RenderService(this);
+        
+        // Initialize app initializer
+        this.appInitializer = new AppInitializer(this);
+        
+        // Listen for render requests from EventBus (handled by RenderService now)
+        
+        this.init();
+    }
+    
+    /**
+     * Load the last opened file from server (device-specific)
+     */
+    async loadLastOpenedFile() {
+        try {
+            const lastOpenedFile = localStorage.getItem('twodo-last-opened-file');
+            if (!lastOpenedFile) {
+                return; // No last opened file, use default data
+            }
+            
+            // Check if file exists on server
+            const files = await this.fileManager.listFiles();
+            const fileExists = files.some(f => f.filename === lastOpenedFile);
+            
+            if (!fileExists) {
+                // File doesn't exist, clear the stored preference
+                localStorage.removeItem('twodo-last-opened-file');
+                return;
+            }
+            
+            // Load the file
+            const data = await this.fileManager.loadFile(lastOpenedFile);
+            
+            if (!data.pages || !Array.isArray(data.pages)) {
+                console.warn('Last opened file has invalid format, using default data');
+                return;
+            }
+            
+            // Update app with loaded file data
+            this.appState.pages = data.pages;
+            console.log(`Loaded last opened file: ${lastOpenedFile}`);
+            // Don't render here - let init() handle rendering after load completes
+            
+            // Diagnostic: Check if container is visible after render
+            setTimeout(() => {
+                const container = document.getElementById('bins-container');
+                const app = document.getElementById('app');
+                const body = document.body;
+                
+                if (container) {
+                    const containerStyle = window.getComputedStyle(container);
+                    const appStyle = app ? window.getComputedStyle(app) : null;
+                    const bodyStyle = window.getComputedStyle(body);
+                    
+                    console.log('[DIAGNOSTIC] bins-container styles:', {
+                        display: containerStyle.display,
+                        visibility: containerStyle.visibility,
+                        opacity: containerStyle.opacity,
+                        height: containerStyle.height,
+                        width: containerStyle.width,
+                        position: containerStyle.position,
+                        zIndex: containerStyle.zIndex,
+                        top: containerStyle.top,
+                        left: containerStyle.left,
+                        children: container.children.length,
+                        offsetTop: container.offsetTop,
+                        offsetLeft: container.offsetLeft,
+                        offsetHeight: container.offsetHeight,
+                        offsetWidth: container.offsetWidth
+                    });
+                    
+                    if (appStyle) {
+                        console.log('[DIAGNOSTIC] #app styles:', {
+                            display: appStyle.display,
+                            visibility: appStyle.visibility,
+                            opacity: appStyle.opacity,
+                            height: appStyle.height,
+                            width: appStyle.width,
+                            position: appStyle.position,
+                            zIndex: appStyle.zIndex
+                        });
+                    }
+                    
+                    console.log('[DIAGNOSTIC] body styles:', {
+                        display: bodyStyle.display,
+                        visibility: bodyStyle.visibility,
+                        opacity: bodyStyle.opacity,
+                        backgroundColor: bodyStyle.backgroundColor,
+                        color: bodyStyle.color
+                    });
+                    
+                    if (container.children.length > 0) {
+                        const firstBin = container.children[0];
+                        const binStyle = window.getComputedStyle(firstBin);
+                        console.log('[DIAGNOSTIC] First bin styles:', {
+                            display: binStyle.display,
+                            visibility: binStyle.visibility,
+                            opacity: binStyle.opacity,
+                            height: binStyle.height,
+                            width: binStyle.width,
+                            backgroundColor: binStyle.backgroundColor,
+                            color: binStyle.color,
+                            offsetHeight: firstBin.offsetHeight,
+                            offsetWidth: firstBin.offsetWidth,
+                            offsetTop: firstBin.offsetTop,
+                            offsetLeft: firstBin.offsetLeft
+                        });
+                        
+                        // Check if bin is actually in viewport
+                        const rect = firstBin.getBoundingClientRect();
+                        console.log('[DIAGNOSTIC] First bin bounding rect:', {
+                            top: rect.top,
+                            left: rect.left,
+                            bottom: rect.bottom,
+                            right: rect.right,
+                            width: rect.width,
+                            height: rect.height,
+                            inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth
+                        });
+                    }
+                }
+            }, 100);
+        } catch (error) {
+            // Silently fail - use default data if file can't be loaded
+            console.warn('Failed to load last opened file:', error);
+            localStorage.removeItem('twodo-last-opened-file');
+        }
+    }
+    
+    async init() {
+        // Load and apply settings on initialization
+        const settings = this.settingsManager.loadSettings();
+        this.settingsManager.applySettings(settings);
+        
+        // Check for file parameter in URL (before loading other data)
+        const urlParams = new URLSearchParams(window.location.search);
+        const fileParam = urlParams.get('file');
+        if (fileParam) {
+            try {
+                // Load the file specified in URL
+                const data = await this.fileManager.loadFile(fileParam);
+                if (data.pages && Array.isArray(data.pages)) {
+                    this.appState.pages = data.pages;
+                    // Store as last opened file
+                    localStorage.setItem('twodo-last-opened-file', fileParam);
+                    console.log(`Loaded file from URL: ${fileParam}`);
+                }
+            } catch (error) {
+                console.warn('Failed to load file from URL:', error);
+                // Fall through to load last opened file or default
+            }
+        } else {
+            // Check daily reset before loading data (only if no URL file param)
+            this.dataManager.checkDailyReset();
+            
+            // Load data (only once, only if no URL file param)
+            this.dataManager.loadData();
+        }
+        
+        // Initialize format renderer manager from loaded data
+        if (this.formatRendererManager) {
+            this.formatRendererManager.initializeFromSavedData();
+        }
+        
+        // Initialize relationships from loaded data (fast, synchronous)
+        this.relationshipManager.initializeFromData();
+        
+        // Set up event listeners
+        this.eventHandler.setupEventListeners();
+        this.setupTrashIcon();
+        
+        // Load last opened file BEFORE rendering to ensure we have the correct data
+        // This prevents rendering with empty/default data and then re-rendering
+        await this.loadLastOpenedFile();
+        
+        // Now render with the loaded data
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+        
+        // Now do async operations in the background (non-blocking)
+        // Connect to sync if needed
+        (async () => {
+            // After loading file, connect to sync if needed
+            if (this.fileManager && this.fileManager.currentFilename && this.syncManager) {
+                // Store filename to join once connected
+                this.syncManager.pendingFileJoin = this.fileManager.currentFilename;
+                
+                // Connect to WebSocket (non-blocking, will retry automatically)
+                // Don't await - let it connect in the background
+                this.syncManager.connect().catch(error => {
+                    console.warn('WebSocket connection failed, will retry:', error);
+                    // Connection will retry automatically, and joinFile will be called on connect
+                });
+            }
+        })();
+        
+        // Initialize plugin system in background (loads in parallel for faster startup)
+        // This happens after initial render so the UI appears quickly
+        this.initializePlugins().catch(err => console.error('Plugin initialization error:', err));
+        
+        // Initialize global search in background
+        this.initializeGlobalSearch().catch(err => console.error('Global search initialization error:', err));
+        
+        // Rebuild search index in background (non-blocking)
+        if (this.searchIndex) {
+            // Use requestIdleCallback if available, otherwise setTimeout
+            if (window.requestIdleCallback) {
+                requestIdleCallback(() => this.searchIndex.rebuildIndex());
+            } else {
+                setTimeout(() => this.searchIndex.rebuildIndex(), 0);
+            }
+        }
+    }
+    
+    /**
+     * Load all available plugins
+     */
+    async loadAllPlugins() {
+        // Define all plugin paths
+        const elementTypes = [
+            'LinkBookmarkElement', 'CodeSnippetElement', 'TableElement',
+            'ContactElement', 'ExpenseTrackerElement', 'ReadingListElement',
+            'RecipeElement', 'WorkoutElement', 'MoodTrackerElement',
+            'NoteElement', 'HabitTracker', 'TimeTracking',
+            'ElementRelationships', 'CustomProperties'
+        ];
+        
+        const pagePlugins = [
+            'SearchFilter', 'ExportImport', 'PageTemplates', 'CustomScripts',
+            'PageThemes', 'CustomViews', 'AnalyticsDashboard',
+            'PageGoalSetting', 'PageReminderSystem'
+        ];
+        
+        const binPlugins = [
+            'KanbanBoard', 'WorkflowAutomation', 'BatchOperations', 'CustomSorting',
+            'FilterPresets', 'ProgressTracker', 'TimeEstimates', 'ColorCoding',
+            'BinArchive', 'BinStatistics', 'BinNotificationRules', 'GanttChartView'
+        ];
+        
+        const formatRenderers = [
+            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat'
+        ];
+        
+        // Load all plugins
+        const loadPromises = [];
+        
+        // Load element types
+        for (const type of elementTypes) {
+            loadPromises.push(
+                this.pluginLoader.loadPlugin(`/js/plugins/element/${type}.js`, null, this)
+                    .catch(err => {
+                        // Silently ignore connection/fetch errors (file doesn't exist or server issue)
+                        // These are expected for optional plugins that may not be implemented yet
+                        const isFetchError = err instanceof TypeError && 
+                            (err.message.includes('Failed to fetch') || 
+                             err.message.includes('ERR_CONNECTION_REFUSED') ||
+                             err.message.includes('dynamically imported module'));
+                        if (isFetchError) {
+                            return null;
+                        }
+                        // Log other unexpected errors
+                        console.warn(`Failed to load element type ${type}:`, err);
+                        return null;
+                    })
+            );
+        }
+        
+        // Load page plugins
+        for (const plugin of pagePlugins) {
+            loadPromises.push(
+                this.pluginLoader.loadPlugin(`/js/plugins/page/${plugin}.js`, null, this)
+                    .catch(err => {
+                        const isFetchError = err instanceof TypeError && 
+                            (err.message.includes('Failed to fetch') || 
+                             err.message.includes('ERR_CONNECTION_REFUSED') ||
+                             err.message.includes('dynamically imported module'));
+                        if (isFetchError) {
+                            return null;
+                        }
+                        console.warn(`Failed to load page plugin ${plugin}:`, err);
+                        return null;
+                    })
+            );
+        }
+        
+        // Load bin plugins
+        for (const plugin of binPlugins) {
+            loadPromises.push(
+                this.pluginLoader.loadPlugin(`/js/plugins/bin/${plugin}.js`, null, this)
+                    .catch(err => {
+                        const isFetchError = err instanceof TypeError && 
+                            (err.message.includes('Failed to fetch') || 
+                             err.message.includes('ERR_CONNECTION_REFUSED') ||
+                             err.message.includes('dynamically imported module'));
+                        if (isFetchError) {
+                            return null;
+                        }
+                        console.warn(`Failed to load bin plugin ${plugin}:`, err);
+                        return null;
+                    })
+            );
+        }
+        
+        // Load format renderers
+        for (const format of formatRenderers) {
+            loadPromises.push(
+                this.pluginLoader.loadPlugin(`/js/plugins/format/${format}.js`, null, this)
+                    .catch(err => {
+                        const isFetchError = err instanceof TypeError && 
+                            (err.message.includes('Failed to fetch') || 
+                             err.message.includes('ERR_CONNECTION_REFUSED') ||
+                             err.message.includes('dynamically imported module'));
+                        if (isFetchError) {
+                            return null;
+                        }
+                        console.warn(`Failed to load format renderer ${format}:`, err);
+                        return null;
+                    })
+            );
+        }
+        
+        // Wait for all plugins to load
+        await Promise.allSettled(loadPromises);
+        console.log('All plugins loaded');
+    }
+    
+    /**
+     * Initialize plugin system
+     */
+    async initializePlugins() {
+        // Load all available plugins first (already parallel)
+        await this.loadAllPlugins();
+        
+        // Initialize plugins for existing pages and bins in parallel
+        const initPromises = [];
+        for (const page of this.appState.pages) {
+            initPromises.push(
+                this.pagePluginManager.initializePagePlugins(page.id)
+                    .catch(err => console.warn(`Failed to initialize page plugins for ${page.id}:`, err))
+            );
+            if (page.bins) {
+                for (const bin of page.bins) {
+                    initPromises.push(
+                        this.binPluginManager.initializeBinPlugins(page.id, bin.id)
+                            .catch(err => console.warn(`Failed to initialize bin plugins for ${page.id}/${bin.id}:`, err))
+                    );
+                }
+            }
+        }
+        // Wait for all plugin initializations in parallel
+        await Promise.allSettled(initPromises);
+    }
+    
+    /**
+     * Initialize global search feature
+     */
+    async initializeGlobalSearch() {
+        try {
+            const SearchFilter = (await import('./js/plugins/page/SearchFilter.js')).default;
+            this.globalSearchFilter = new SearchFilter(this);
+            await this.globalSearchFilter.onInit();
+        } catch (error) {
+            console.error('Failed to initialize global search:', error);
+        }
+        
+        // Setup search index update listeners
+        this.eventBus.on('element:created', () => {
+            if (this.searchIndex) {
+                this.searchIndex.rebuildIndex();
+            }
+        });
+        this.eventBus.on('element:updated', ({ pageId, binId, elementIndex }) => {
+            if (this.searchIndex) {
+                this.searchIndex.updateElement(pageId, binId, elementIndex);
+            }
+        });
+        this.eventBus.on('element:deleted', ({ pageId, binId, elementIndex }) => {
+            if (this.searchIndex) {
+                this.searchIndex.removeElement(pageId, binId, elementIndex);
+            }
+        });
+    }
+    
+    setupTrashIcon() {
+        return this.dragDropHandler.setupTrashIcon();
+    }
+    
+    // setupEventListeners is now in EventHandler.js
+
+    // Helper method to create and style buttons - delegated to AppRenderer
+    styleButton(text, onClick) {
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().styleButton(text, onClick);
+        }
+        // Fallback if renderer not available
+        const btn = document.createElement('button');
+        btn.textContent = text;
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            onClick(e);
+        };
+        return btn;
+    }
+    
+    resetToday() {
+        return this.dailyResetManager.resetToday();
+    }
+    
+    // Page and element management methods are now in PageManager, ElementManager, and DragDropHandler
+    // Delegating to managers for backward compatibility
+    addPage() {
+        return this.pageManager.addPage();
+    }
+    
+    deletePage(pageId) {
+        return this.pageManager.deletePage(pageId);
+    }
+    
+    movePage(sourcePageId, targetPageId) {
+        return this.pageManager.movePage(sourcePageId, targetPageId);
+    }
+    
+    addBin(pageId) {
+        return this.binManager.addBin(pageId);
+    }
+    
+    deleteBin(pageId, binId) {
+        return this.binManager.deleteBin(pageId, binId);
+    }
+    
+    moveBin(sourcePageId, sourceBinId, targetPageId, targetBinId) {
+        return this.binManager.moveBin(sourcePageId, sourceBinId, targetPageId, targetBinId);
+    }
+    
+    moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
+        return this.dragDropHandler.moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild, parentElementIndex, childIndex);
+    }
+    
+    reorderChildElement(pageId, binId, parentElementIndex, sourceChildIndex, targetChildIndex) {
+        return this.dragDropHandler.reorderChildElement(pageId, binId, parentElementIndex, sourceChildIndex, targetChildIndex);
+    }
+
+    nestElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null, elementToNest = null) {
+        return this.dragDropHandler.nestElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild, parentElementIndex, childIndex, elementToNest);
+    }
+    
+    addElement(pageId, binId, elementType) {
+        return this.elementManager.addElement(pageId, binId, elementType);
+    }
+    
+    createElementTemplate(type) {
+        return this.elementManager.createElementTemplate(type);
+    }
+    
+    enableInlineEditing(textElement, pageId, binId, elementIndex, element) {
+        return this.inlineEditor.enableInlineEditing(textElement, pageId, binId, elementIndex, element);
+    }
+    
+    toggleElement(pageId, binId, elementIndex, subtaskIndex = null, itemIndex = null) {
+        return this.elementManager.toggleElement(pageId, binId, elementIndex, subtaskIndex, itemIndex);
+    }
+    
+    addMultiCheckboxItem(pageId, binId, elementIndex) {
+        return this.elementManager.addMultiCheckboxItem(pageId, binId, elementIndex);
+    }
+    
+    removeMultiCheckboxItem(pageId, binId, elementIndex, itemIndex) {
+        return this.elementManager.removeMultiCheckboxItem(pageId, binId, elementIndex, itemIndex);
+    }
+    
+    toggleAllSubtasks() {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            this.renderService.getRenderer().toggleAllSubtasks();
+        }
+    }
+    
+    render() {
+        // Delegate to AppRenderer via RenderService
+        if (this.renderService && this.renderService.getRenderer) {
+            this.renderService.getRenderer().render();
+        }
+    }
+    
+    renderPageTabs() {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            this.renderService.getRenderer().renderPageTabs();
+        }
+    }
+    
+    getCurrentPositions() {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().getCurrentPositions();
+        }
+        return { bins: {}, elements: {} };
+    }
+    
+    // Animation method moved to AnimationRenderer.js
+    animateMovements(oldPositions) {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().animateMovements(oldPositions);
+        }
+    }
+    
+    renderBin(pageId, bin) {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().renderBin(pageId, bin);
+        }
+        // Fallback - should not happen
+        console.error('RenderService not available');
+        return document.createElement('div');
+    }
+    
+    // renderBin implementation moved to BinRenderer.js
+    
+    // renderBin implementation moved to BinRenderer.js
+    // renderChildren and renderElement implementations moved to ElementRenderer.js
+    
+    renderElement(pageId, binId, element, elementIndex, childIndex = null, depth = 0) {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().renderElement(pageId, binId, element, elementIndex, childIndex, depth);
+        }
+        return null;
+    }
+    
+    renderChildren(pageId, binId, parentElement, parentElementIndex, depth = 0) {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().renderChildren(pageId, binId, parentElement, parentElementIndex, depth);
+        }
+        return null;
+    }
+    
+    // Calendar rendering methods moved to CalendarRenderer.js
+    renderCalendar(container, pageId, binId, element, elementIndex) {
+        // Delegate to AppRenderer
+        if (this.renderService && this.renderService.getRenderer) {
+            return this.renderService.getRenderer().renderCalendar(container, pageId, binId, element, elementIndex);
+        }
+    }
+    
+    
+    showAddElementModal(pageId, elementIndex = null) {
+        return this.modalHandler.showAddElementModal(pageId, elementIndex);
+    }
+    
+    
+    // Utility methods moved to StringUtils
+    escapeHtml(text) {
+        return StringUtils.escapeHtml(text);
+    }
+    
+    parseLinks(text) {
+        return StringUtils.parseLinks(text);
+    }
+    
+    showContextMenu(e, pageId, binId, elementIndex, subtaskIndex = null) {
+        // If binId not provided, try to find it
+        if (!binId) {
+            binId = this.appState.activeBinId;
+            if (!binId) {
+                const page = this.appState.pages.find(p => p.id === pageId);
+                if (page && page.bins && page.bins.length > 0) {
+                    binId = page.bins[0].id;
+                }
+            }
+        }
+        return this.contextMenuHandler.showContextMenu(e, pageId, binId, elementIndex, subtaskIndex);
+    }
+    
+    hideContextMenu() {
+        return this.contextMenuHandler.hideContextMenu();
+    }
+    
+    setupTouchGestures() {
+        return this.touchGestureHandler.setupTouchGestures();
+    }
+    
+    triggerContextMenuFromTouch(e, target) {
+        return this.touchGestureHandler.triggerContextMenuFromTouch(e, target);
+    }
+    
+    showPageContextMenu(e, pageId = null) {
+        return this.contextMenuHandler.showPageContextMenu(e, pageId);
+    }
+    
+    handleContextEdit() {
+        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        if (pageId === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        
+        this.hideContextMenu();
+        
+        // Determine what we're editing:
+        // - If elementIndex is not null → element edit
+        // - If elementIndex is null and binId is explicitly set (not undefined) → bin edit
+        // - If elementIndex is null and binId is undefined → page edit
+        
+        if (elementIndex !== null && elementIndex !== undefined) {
+            // Edit element - find binId from contextMenuState or use active bin
+            let targetBinId = binId || this.appState.activeBinId;
+            if (!targetBinId) {
+                // Try to find bin containing this element
+                for (const bin of page.bins || []) {
+                    if (bin.elements && bin.elements[elementIndex]) {
+                        targetBinId = bin.id;
+                        break;
+                    }
+                }
+                if (!targetBinId && page.bins && page.bins.length > 0) {
+                    targetBinId = page.bins[0].id;
+                }
+            }
+            const bin = page.bins?.find(b => b.id === targetBinId);
+            if (!bin) return;
+            const element = bin.elements[elementIndex];
+            if (!element) return;
+            this.showEditModal(pageId, targetBinId, elementIndex, element);
+        } else if (binId !== null && binId !== undefined) {
+            // Edit bin - show bin edit modal
+            this.modalHandler.showEditBinModal(pageId, binId);
+        } else {
+            // Edit page - show page edit modal
+            this.modalHandler.showEditPageModal(pageId);
+        }
+    }
+    
+    async saveBinEdit(pageId, binId) {
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const bin = page.bins?.find(b => b.id === binId);
+        if (!bin) return;
+        
+        const titleInput = document.getElementById('edit-bin-title');
+        if (titleInput) {
+            bin.title = titleInput.value.trim() || bin.id;
+        }
+        
+        const maxHeightInput = document.getElementById('edit-bin-max-height');
+        if (maxHeightInput) {
+            const maxHeightValue = maxHeightInput.value.trim();
+            if (maxHeightValue === '') {
+                delete bin.maxHeight;
+            } else {
+                const height = parseInt(maxHeightValue, 10);
+                if (!isNaN(height) && height > 0) {
+                    bin.maxHeight = height;
+                } else {
+                    delete bin.maxHeight;
+                }
+            }
+        }
+        
+        this.dataManager.saveData();
+        this.render();
+        this.closeModal();
+    }
+    
+    async savePageEdit(pageId) {
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        
+        const titleInput = document.getElementById('edit-page-title');
+        
+        // Save grid layout configuration if grid layout is selected
+        const formatSelect = document.getElementById('page-format-select');
+        const selectedFormat = formatSelect ? formatSelect.value : this.formatRendererManager?.getPageFormat(pageId);
+        if (selectedFormat === 'grid-layout-format') {
+            const minColumnWidthInput = document.getElementById('grid-min-column-width');
+            const gapInput = document.getElementById('grid-gap');
+            const paddingInput = document.getElementById('grid-padding');
+            const maxHeightInput = document.getElementById('grid-max-height');
+            
+            if (!page.formatConfig) {
+                page.formatConfig = {};
+            }
+            
+            page.formatConfig.grid = {
+                minColumnWidth: minColumnWidthInput ? parseInt(minColumnWidthInput.value, 10) || 350 : 350,
+                gap: gapInput ? parseInt(gapInput.value, 10) || 20 : 20,
+                padding: paddingInput ? parseInt(paddingInput.value, 10) || 20 : 20,
+                maxHeight: maxHeightInput && maxHeightInput.value.trim() ? parseInt(maxHeightInput.value, 10) : null
+            };
+        } else if (page.formatConfig?.grid) {
+            // Remove grid config if not using grid layout
+            delete page.formatConfig.grid;
+            if (Object.keys(page.formatConfig).length === 0) {
+                delete page.formatConfig;
+            }
+        }
+        if (titleInput) {
+            page.title = titleInput.value.trim() || page.id;
+            this.dataManager.saveData();
+            this.render();
+        }
+        
+        this.closeModal();
+    }
+    
+    handleContextAddBin() {
+        const { pageId, binId } = this.appState.contextMenuState;
+        if (pageId === null) return;
+        
+        this.hideContextMenu();
+        // Add bin below the selected bin (afterBinId will be binId if provided, null otherwise)
+        this.binManager.addBin(pageId, binId || null);
+    }
+    
+    handleContextDeleteBin() {
+        const { pageId, binId } = this.appState.contextMenuState;
+        if (pageId === null || binId === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const bin = page.bins?.find(b => b.id === binId);
+        if (!bin) return;
+        
+        if (!confirm(`Delete bin "${bin.title || binId}"?`)) return;
+        
+        this.hideContextMenu();
+        this.deleteBin(pageId, binId);
+        this.render();
+    }
+    
+    handleContextAddSubtasks() {
+        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        if (pageId === null || elementIndex === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        if (!bin) return;
+        
+        const element = bin.elements[elementIndex];
+        if (!element) return;
+        
+        // Only tasks and header-checkbox can have subtasks
+        if (element.type !== 'task' && element.type !== 'header-checkbox') {
+            alert('This element type cannot have subtasks');
+            this.hideContextMenu();
+            return;
+        }
+        
+        this.hideContextMenu();
+        this.showAddSubtasksModal(pageId, elementIndex, element);
+    }
+    
+    handleContextViewData() {
+        const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
+        if (pageId === null || elementIndex === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        if (!bin) return;
+        
+        const element = bin.elements[elementIndex];
+        if (!element) return;
+        
+        // If it's a subtask, show subtask data
+        if (subtaskIndex !== null && element.subtasks && element.subtasks[subtaskIndex]) {
+            const subtask = element.subtasks[subtaskIndex];
+            this.hideContextMenu();
+            this.showViewDataModal(subtask, true);
+            return;
+        }
+        
+        this.hideContextMenu();
+        this.showViewDataModal(element);
+    }
+    
+    handleContextDeleteElement() {
+        const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
+        if (pageId === null || elementIndex === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const targetBinId = binId || this.appState.activeBinId;
+        if (!targetBinId) return;
+        const bin = page.bins?.find(b => b.id === targetBinId);
+        if (!bin) return;
+        
+        this.hideContextMenu();
+        
+        // Handle nested children - elementIndex might be a string like "0-1"
+        let actualElementIndex = elementIndex;
+        let childIndex = null;
+        let isChild = false;
+        
+        if (typeof elementIndex === 'string' && elementIndex.includes('-')) {
+            const parts = elementIndex.split('-');
+            actualElementIndex = parseInt(parts[0]);
+            childIndex = parseInt(parts[1]);
+            isChild = true;
+        } else {
+            actualElementIndex = parseInt(elementIndex);
+        }
+        
+        // If it's a child or subtask, delete from parent's children/subtasks
+        if (isChild && childIndex !== null) {
+            const parentElement = bin.elements[actualElementIndex];
+            if (parentElement && parentElement.children && parentElement.children[childIndex]) {
+                parentElement.children.splice(childIndex, 1);
+                // If no children remain, set children to empty array
+                if (parentElement.children.length === 0) {
+                    parentElement.children = [];
+                }
+                // Update parent completion status
+                parentElement.completed = parentElement.children.length > 0 && parentElement.children.every(ch => ch.completed);
+                this.dataManager.saveData();
+                this.render();
+            }
+        } else if (subtaskIndex !== null) {
+            // Legacy subtask support
+            const element = bin.elements[actualElementIndex];
+            if (element && element.subtasks && element.subtasks[subtaskIndex]) {
+                element.subtasks.splice(subtaskIndex, 1);
+                if (element.subtasks.length === 0) {
+                    element.subtasks = [];
+                }
+                element.completed = element.subtasks.length > 0 && element.subtasks.every(st => st.completed);
+                this.dataManager.saveData();
+                this.render();
+            } else if (element && element.children && element.children[subtaskIndex]) {
+                // Use children if subtasks don't exist
+                element.children.splice(subtaskIndex, 1);
+                if (element.children.length === 0) {
+                    element.children = [];
+                }
+                element.completed = element.children.length > 0 && element.children.every(ch => ch.completed);
+                this.dataManager.saveData();
+                this.render();
+            }
+        } else {
+            // Delete main element
+            if (bin.elements && bin.elements[actualElementIndex]) {
+                bin.elements.splice(actualElementIndex, 1);
+                this.dataManager.saveData();
+                this.render();
+            }
+        }
+    }
+    
+    handleContextAddElement() {
+        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        if (pageId === null || elementIndex === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const targetBinId = binId || this.appState.activeBinId || (page.bins?.[0]?.id);
+        if (!targetBinId) return;
+        
+        this.hideContextMenu();
+        // Use the same modal as bin-level add element
+        this.modalHandler.showAddElementModal(pageId, targetBinId, elementIndex);
+    }
+    
+    handleContextAddChildElement() {
+        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        if (pageId === null || elementIndex === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        if (!bin) return;
+        
+        const element = bin.elements[elementIndex];
+        if (!element) return;
+        
+        // Check if element's children have their own children (one-level limit)
+        const hasNestedChildren = element.children && element.children.some(child => 
+            child.children && child.children.length > 0
+        );
+        if (hasNestedChildren) {
+            alert('This element has children with their own children. One-level nesting limit enforced.');
+            this.hideContextMenu();
+            return;
+        }
+        
+        this.hideContextMenu();
+        // Show modal to select child element type, then add to element's children
+        // Use binId from contextMenuState or find it
+        const targetBinId = binId || this.appState.activeBinId || (page.bins?.[0]?.id);
+        if (targetBinId) {
+            this.showAddChildElementModal(pageId, targetBinId, elementIndex);
+        }
+    }
+    
+    showAddChildElementModal(pageId, binId, elementIndex) {
+        return this.modalHandler.showAddChildElementModal(pageId, binId, elementIndex);
+    }
+    
+    addElementAfter(pageId, binId, elementIndex, elementType) {
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        
+        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        if (!bin) return;
+        if (!bin.elements) bin.elements = [];
+        
+        const newElement = this.elementManager.createElementTemplate(elementType);
+        // Insert after the clicked element (at elementIndex + 1)
+        const insertIndex = elementIndex + 1;
+        bin.elements.splice(insertIndex, 0, newElement);
+        this.dataManager.saveData();
+        this.render();
+    }
+    
+    handleContextAddPage() {
+        this.hideContextMenu();
+        this.addPage();
+    }
+    
+    handleContextAddElementPage() {
+        const { pageId, binId } = this.appState.contextMenuState;
+        const targetPageId = pageId || this.activePageId;
+        const targetBinId = binId || this.appState.activeBinId;
+        
+        if (!targetPageId || !targetBinId) {
+            this.hideContextMenu();
+            return;
+        }
+        
+        this.hideContextMenu();
+        this.modalHandler.showAddElementModal(targetPageId, targetBinId);
+    }
+    
+    handleContextDeletePage() {
+        const { pageId } = this.appState.contextMenuState;
+        const targetPageId = pageId || this.activePageId;
+        
+        if (!targetPageId) {
+            this.hideContextMenu();
+            return;
+        }
+        
+        const page = this.appState.pages.find(p => p.id === targetPageId);
+        if (!page) {
+            this.hideContextMenu();
+            return;
+        }
+        
+        this.hideContextMenu();
+        this.deletePage(targetPageId);
+    }
+    
+    handleContextToggleSubtasks() {
+        this.hideContextMenu();
+        this.toggleAllSubtasks();
+    }
+    
+    handleContextResetDay() {
+        this.hideContextMenu();
+        this.resetToday();
+    }
+    
+    handleContextCollapseAllPages() {
+        this.hideContextMenu();
+        
+        // Collapse all pages
+        this.appState.pages.forEach(page => {
+            // Set page state to collapsed
+            this.pageStates[page.id] = false;
+        });
+        
+        // Update UI for all pages using querySelector to ensure we get all
+        const allPageArrows = document.querySelectorAll('[id^="page-toggle-"]');
+        const allPageContents = document.querySelectorAll('[id^="page-content-"]');
+        
+        allPageArrows.forEach(arrow => {
+            arrow.textContent = '▶';
+        });
+        
+        allPageContents.forEach(content => {
+            content.style.display = 'none';
+        });
+    }
+    
+    handleContextCollapsePage() {
+        const { pageId } = this.appState.contextMenuState;
+        if (pageId === null) return;
+        
+        const page = this.appState.pages.find(p => p.id === pageId);
+        if (!page) return;
+        
+        // Toggle page collapse state
+        if (!(pageId in this.pageStates)) {
+            this.pageStates[pageId] = true;
+        }
+        this.pageStates[pageId] = !this.pageStates[pageId];
+        
+        this.hideContextMenu();
+        
+        // Update the page UI
+        const pageToggleId = `page-toggle-${pageId}`;
+        const pageContentId = `page-content-${pageId}`;
+        
+        const arrow = document.getElementById(pageToggleId);
+        const content = document.getElementById(pageContentId);
+        
+        if (arrow && content) {
+            const isExpanded = this.pageStates[pageId];
+            arrow.textContent = isExpanded ? '▼' : '▶';
+            content.style.display = isExpanded ? 'block' : 'none';
+        }
+    }
+    
+    showEditModal(pageId, binId, elementIndex, element) {
+        // If binId not provided, try to find it from active bin or element location
+        if (!binId) {
+            binId = this.appState.activeBinId;
+            if (!binId) {
+                const page = this.appState.pages.find(p => p.id === pageId);
+                if (page && page.bins && page.bins.length > 0) {
+                    binId = page.bins[0].id;
+                }
+            }
+        }
+        return this.modalHandler.showEditModal(pageId, binId, elementIndex, element);
+    }
+    
+    addEditItem() {
+        return this.modalHandler.addEditItem();
+    }
+    
+    removeEditItem(idx) {
+        return this.modalHandler.removeEditItem(idx);
+    }
+    
+    saveEdit(pageId, elementIndex, skipClose = false) {
+        return this.modalHandler.saveEdit(pageId, elementIndex, skipClose);
+    }
+    
+    addEditSubtaskModal() {
+        const container = document.getElementById('edit-subtasks-in-modal');
+        if (!container) return;
+        const idx = container.children.length;
+        const newSubtask = document.createElement('div');
+        newSubtask.className = 'subtask-item';
+        newSubtask.innerHTML = `
+            <input type="text" class="edit-subtask-text-modal" data-index="${idx}" value="New subtask" placeholder="Subtask text" />
+            <input type="text" class="edit-subtask-time-modal" data-index="${idx}" value="" placeholder="Time" />
+            <label class="edit-subtask-repeat-label">
+                <input type="checkbox" class="edit-subtask-repeats-modal" data-index="${idx}" checked />
+                Repeats
+            </label>
+            <button onclick="app.removeEditSubtaskModal(${idx})" class="remove-subtask-btn">×</button>
+        `;
+        container.appendChild(newSubtask);
+        // Scroll to bottom to show new item
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    removeEditSubtaskModal(idx) {
+        return this.modalHandler.removeEditSubtaskModal(idx);
+    }
+    
+    removeAllSubtasksModal() {
+        return this.modalHandler.removeAllSubtasksModal();
+    }
+    
+    addEditChildModal() {
+        return this.modalHandler.addEditChildModal();
+    }
+    
+    removeEditChildModal(idx) {
+        return this.modalHandler.removeEditChildModal(idx);
+    }
+    
+    removeAllChildrenModal() {
+        return this.modalHandler.removeAllChildrenModal();
+    }
+    
+    toggleArchiveViewInEdit(pageId, elementIndex) {
+        return this.modalHandler.toggleArchiveViewInEdit(pageId, elementIndex);
+    }
+    
+    showAddSubtasksModal(pageId, elementIndex, element) {
+        return this.modalHandler.showAddSubtasksModal(pageId, elementIndex, element);
+    }
+    
+    addEditSubtask() {
+        const container = document.getElementById('edit-subtasks');
+        const idx = container.children.length;
+        const newSubtask = document.createElement('div');
+        newSubtask.className = 'subtask-item';
+        newSubtask.innerHTML = `
+            <input type="text" class="edit-subtask-text" data-index="${idx}" value="New subtask" />
+            <input type="text" class="edit-subtask-time" data-index="${idx}" value="" placeholder="Time" />
+            <label>
+                <input type="checkbox" class="edit-subtask-repeats" data-index="${idx}" checked />
+                Repeats
+            </label>
+            <button onclick="app.removeEditSubtask(${idx})">×</button>
+        `;
+        container.appendChild(newSubtask);
+    }
+    
+    removeEditSubtask(idx) {
+        const container = document.getElementById('edit-subtasks');
+        const item = container.querySelector(`.edit-subtask-text[data-index="${idx}"]`)?.closest('.subtask-item');
+        if (item) {
+            item.remove();
+        }
+    }
+    
+    saveChildren(pageId, elementIndex) {
+        return this.modalHandler.saveChildren(pageId, elementIndex);
+    }
+    
+    // Legacy method name for backward compatibility
+    saveSubtasks(pageId, elementIndex) {
+        return this.modalHandler.saveSubtasks(pageId, elementIndex);
+    }
+    
+    showViewDataModal(element, isSubtask = false) {
+        return this.modalHandler.showViewDataModal(element, isSubtask);
+    }
+    
+    closeModal() {
+        return this.modalHandler.closeModal();
+    }
+    
+    showTooltip(text) {
+        const tooltip = document.getElementById('global-tooltip');
+        if (tooltip) {
+            tooltip.textContent = text;
+            tooltip.classList.add('visible');
+        }
+    }
+    
+    hideTooltip() {
+        const tooltip = document.getElementById('global-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('visible');
+        }
+    }
+    
+    showAudioRecordingModal() {
+        return this.audioHandler.showAudioRecordingModal();
+    }
+    
+    async startAudioRecording() {
+        return this.audioHandler.startAudioRecording();
+    }
+    
+    stopAudioRecording() {
+        return this.audioHandler.stopAudioRecording();
+    }
+    
+    async saveAudioRecording() {
+        return this.audioHandler.saveAudioRecording();
+    }
+    
+    closeAudioRecordingModal() {
+        return this.audioHandler.closeAudioRecordingModal();
+    }
+    
+    // Inline audio recording methods - delegate to AudioHandler
+    async startInlineRecording(pageId, binId, elementIndex, originalElementIndex = null, shouldOverwrite = false) {
+        return this.audioHandler.startInlineRecording(pageId, binId, elementIndex, originalElementIndex, shouldOverwrite);
+    }
+    
+    async stopInlineRecording(pageId, binId, elementIndex, originalElementIndex = null) {
+        return this.audioHandler.stopInlineRecording(pageId, binId, elementIndex, originalElementIndex);
+    }
+    
+    async saveInlineRecording(pageId, binId, elementIndex, chunks, domElementIndex = null) {
+        return this.audioHandler.saveInlineRecording(pageId, binId, elementIndex, chunks, domElementIndex);
+    }
+    
+    async appendInlineRecording(pageId, binId, elementIndex, originalElementIndex = null) {
+        return this.audioHandler.appendInlineRecording(pageId, binId, elementIndex, originalElementIndex);
+    }
+    
+    async playInlineAudio(pageId, binId, elementIndex) {
+        return this.audioHandler.playInlineAudio(pageId, binId, elementIndex);
+    }
+    
+    stopInlineAudio(pageId, binId, elementIndex) {
+        return this.audioHandler.stopInlineAudio(pageId, binId, elementIndex);
+    }
+    
+    showAudioProgressBar(pageId, binId, elementIndex) {
+        return this.audioHandler.showAudioProgressBar(pageId, binId, elementIndex);
+    }
+    
+    hideAudioProgressBar(pageId, binId, elementIndex) {
+        return this.audioHandler.hideAudioProgressBar(pageId, binId, elementIndex);
+    }
+    
+    updateAudioStatus(pageId, binId, elementIndex, text, color) {
+        return this.audioHandler.updateAudioStatus(pageId, binId, elementIndex, text, color);
+    }
+    
+    toggleArchiveView(pageId, binId, elementIndex) {
+        return this.audioHandler.toggleArchiveView(pageId, binId, elementIndex);
+    }
+    
+}
+
+// Initialize app
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+    app = new TodoApp();
+    // Make app globally accessible for onclick handlers in modals
+    window.app = app;
+});
+
+
+

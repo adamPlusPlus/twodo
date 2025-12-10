@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Todo Tracker</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>">
+    <link rel="stylesheet" href="app.css?v=9">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="controls">
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>File</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button id="file-manager">📂 File Manager</button>
+                        <div style="border-top: 1px solid #444; margin: 8px 0;"></div>
+                        <button id="load-default">📄 Load default.json</button>
+                        <button id="save-default">💾 Save as default.json</button>
+                        <div style="border-top: 1px solid #444; margin: 8px 0;"></div>
+                        <button id="load-inputs">📝 Load from inputs</button>
+                        <button id="open-files">📎 Open Files (Images/JSON)</button>
+                        <button id="record-audio">🎤 Record Audio</button>
+                    </div>
+                </div>
+                <div id="page-tabs" class="page-tabs">
+                    <!-- Page tabs will be dynamically created here -->
+                </div>
+                <input type="file" id="file-input" accept=".json" style="display: none;">
+                <input type="file" id="file-input-images-json" accept="image/*,.json" multiple style="display: none;">
+                <button id="undo-btn" class="settings-btn" title="Undo (Ctrl+Z)" style="margin-right: 5px;">↶</button>
+                <button id="redo-btn" class="settings-btn" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" style="margin-right: 5px;">↷</button>
+                <button id="header-pin-btn" class="settings-btn" title="Pin header to top of window" style="margin-right: 5px;">📌</button>
+                <button id="search-btn" class="settings-btn" title="Search" style="margin-right: 5px;">🔍</button>
+                <button id="settings-btn" class="settings-btn" title="Settings">⚙️</button>
+            </div>
+            <div id="trash-icon" class="trash-icon" style="display: none; position: fixed; top: 10px; right: 10px; width: 60px; height: 60px; background: rgba(220, 53, 69, 0.9); border-radius: 50%; align-items: center; justify-content: center; font-size: 30px; cursor: not-allowed; z-index: 10000; border: 3px solid #dc3545; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: all 0.2s;">
+                🗑️
+            </div>
+        </header>
+        
+        <div class="bins-container" id="bins-container">
+            <!-- Bins will be dynamically created here -->
+        </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" id="context-edit">Edit</div>
+        <div class="context-menu-item" id="context-view-data">View Data</div>
+        <div class="context-menu-item" id="context-add-element">Add Element</div>
+        <div class="context-menu-item" id="context-add-child-element">Add Child Element</div>
+        <div class="context-menu-item" id="context-delete-element">Delete</div>
+        <div class="context-menu-item" id="context-collapse-page">Collapse Page</div>
+        <div class="context-menu-item" id="context-add-page">Add Page</div>
+        <div class="context-menu-item" id="context-add-element-page">Add Element</div>
+        <div class="context-menu-item" id="context-add-bin">Add Bin</div>
+        <div class="context-menu-item" id="context-delete-bin">Delete Bin</div>
+        <div class="context-menu-item" id="context-delete-page">Delete Page</div>
+        <div class="context-menu-item" id="context-toggle-subtasks">Toggle All Subtasks</div>
+        <div class="context-menu-item" id="context-collapse-all-pages">Collapse All Pages</div>
+        <div class="context-menu-item" id="context-reset-day">Reset Today</div>
+    </div>
+    
+    <!-- Modal for editing/viewing -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+    
+    <!-- Global tooltip -->
+    <div id="global-tooltip" class="tooltip"></div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content settings-modal-content">
+            <span class="modal-close" id="settings-close">&times;</span>
+            <div id="settings-body"></div>
+        </div>
+    </div>
+    
+    <!-- Audio Recording Modal -->
+    <div id="audio-recording-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="modal-close" id="audio-recording-close">&times;</span>
+            <h3 style="margin-bottom: 20px; color: #ffffff;">Audio Recording</h3>
+            <div id="audio-recording-body">
+                <div id="audio-recording-status" style="margin-bottom: 15px; color: #e0e0e0;">Ready to record</div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="audio-start-btn" style="flex: 1; padding: 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Start Recording</button>
+                    <button id="audio-stop-btn" style="flex: 1; padding: 10px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Stop Recording</button>
+                </div>
+                <div id="audio-recording-time" style="text-align: center; font-size: 24px; color: #4a9eff; margin-bottom: 15px; display: none;">00:00</div>
+                <audio id="audio-preview" controls style="width: 100%; margin-bottom: 15px; display: none;"></audio>
+                <div id="audio-save-controls" style="display: none;">
+                    <input type="text" id="audio-filename" placeholder="Enter filename (optional)" style="width: 100%; padding: 8px; margin-bottom: 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555555; border-radius: 4px;">
+                    <button id="audio-save-btn" style="width: 100%; padding: 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Recording</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="app.js?v=100"></script>
+</body>
+</html>
+

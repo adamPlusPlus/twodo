@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Logs
+*.log
+server.log
+websocket_server.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Recordings
+recordings/
+
+# Audio files
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.aac
+*.flac
+*.wma
+*.opus
+
+# Saved files
+saved_files/
+
+# Documentation
+Plan.md
+
+# Temporary files
+*.tmp
+*.temp
+

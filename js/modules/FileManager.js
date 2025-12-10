@@ -1,0 +1,699 @@
+// FileManager.js - Handles server-side file management
+export class FileManager {
+    constructor(app) {
+        this.app = app;
+        this.currentFilename = null;
+        this.lastOpenedFileKey = 'twodo-last-opened-file';
+    }
+    
+    async listFiles() {
+        try {
+            const response = await fetch('/files');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const result = await response.json();
+            if (result.success) {
+                return result.files || [];
+            } else {
+                throw new Error(result.error || 'Failed to list files');
+            }
+        } catch (error) {
+            console.error('Error listing files:', error);
+            if (this.app && this.app.modalHandler) {
+                this.app.modalHandler.showAlert('Failed to list files: ' + error.message);
+            } else {
+                alert('Failed to list files: ' + error.message);
+            }
+            return [];
+        }
+    }
+    
+    async saveFile(filename, data, silent = false) {
+        try {
+            const response = await fetch('/files/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: filename,
+                    data: data
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                this.currentFilename = result.filename;
+                
+                // Trigger buffer save after main file save
+                if (this.app && this.app.undoRedoManager) {
+                    this.app.undoRedoManager._debouncedSaveBuffer();
+                }
+                
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to save file');
+            }
+        } catch (error) {
+            console.error('Error saving file:', error);
+            // Only show alert if not silent (for autosave)
+            if (!silent) {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Failed to save file: ' + error.message);
+                } else {
+                    alert('Failed to save file: ' + error.message);
+                }
+            }
+            throw error;
+        }
+    }
+    
+    async saveAsFile(filename, data) {
+        try {
+            const response = await fetch('/files/save-as', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: filename,
+                    data: data
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                this.currentFilename = result.filename;
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to save file');
+            }
+        } catch (error) {
+            console.error('Error saving file:', error);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert('Failed to save file: ' + error.message);
+            } else {
+                alert('Failed to save file: ' + error.message);
+            }
+            throw error;
+        }
+    }
+    
+    async loadFile(filename) {
+        try {
+            const encodedFilename = encodeURIComponent(filename);
+            const response = await fetch(`/files/${encodedFilename}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                this.currentFilename = result.filename;
+                
+                // Load corresponding buffer file after loading main file
+                if (this.app && this.app.undoRedoManager) {
+                    await this.app.undoRedoManager.loadBuffer(result.filename);
+                }
+                
+                return result.data;
+            } else {
+                throw new Error(result.error || 'Failed to load file');
+            }
+        } catch (error) {
+            console.error('Error loading file:', error);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert('Failed to load file: ' + error.message);
+            } else {
+                alert('Failed to load file: ' + error.message);
+            }
+            throw error;
+        }
+    }
+    
+    async renameFile(oldFilename, newFilename) {
+        try {
+            const encodedFilename = encodeURIComponent(oldFilename);
+            const response = await fetch(`/files/${encodedFilename}/rename`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: newFilename
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                if (this.currentFilename === oldFilename) {
+                    this.currentFilename = result.filename;
+                }
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to rename file');
+            }
+        } catch (error) {
+            console.error('Error renaming file:', error);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert('Failed to rename file: ' + error.message);
+            } else {
+                alert('Failed to rename file: ' + error.message);
+            }
+            throw error;
+        }
+    }
+    
+    async deleteFile(filename) {
+        try {
+            const encodedFilename = encodeURIComponent(filename);
+            const response = await fetch(`/files/${encodedFilename}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                if (this.currentFilename === filename) {
+                    this.currentFilename = null;
+                }
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to delete file');
+            }
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert('Failed to delete file: ' + error.message);
+            } else {
+                alert('Failed to delete file: ' + error.message);
+            }
+            throw error;
+        }
+    }
+    
+    showFileManager() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+        
+        modalBody.innerHTML = `
+            <h3>File Manager</h3>
+            <div style="margin-top: 20px;">
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="file-manager-new" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 18px; line-height: 1;">+</button>
+                    <button id="file-manager-save" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">💾 Save</button>
+                    <button id="file-manager-save-as" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">💾 Save As</button>
+                    <button id="file-manager-refresh" style="padding: 8px 16px; background: #555; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh</button>
+                </div>
+                <div id="file-manager-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #444; border-radius: 4px; padding: 10px; background: #1a1a1a;">
+                    <div style="text-align: center; color: #888; padding: 20px;">Loading files...</div>
+                </div>
+            </div>
+        `;
+        
+        modal.classList.add('active');
+        
+        // Attach event listeners
+        const newBtn = document.getElementById('file-manager-new');
+        const saveBtn = document.getElementById('file-manager-save');
+        const saveAsBtn = document.getElementById('file-manager-save-as');
+        const refreshBtn = document.getElementById('file-manager-refresh');
+        
+        if (newBtn) {
+            newBtn.onclick = () => this.handleNew();
+        }
+        if (saveBtn) {
+            saveBtn.onclick = () => this.handleSave();
+        }
+        if (saveAsBtn) {
+            saveAsBtn.onclick = () => this.handleSaveAs();
+        }
+        if (refreshBtn) {
+            refreshBtn.onclick = () => this.refreshFileList();
+        }
+        
+        // Load file list
+        this.refreshFileList();
+    }
+    
+    async refreshFileList() {
+        const listDiv = document.getElementById('file-manager-list');
+        if (!listDiv) return;
+        
+        listDiv.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">Loading files...</div>';
+        
+        const files = await this.listFiles();
+        
+        if (files.length === 0) {
+            listDiv.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No saved files</div>';
+            return;
+        }
+        
+        let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+        files.forEach(file => {
+            const isCurrent = file.filename === this.currentFilename;
+            const modifiedDate = new Date(file.modified * 1000).toLocaleString();
+            const sizeKB = (file.size / 1024).toFixed(1);
+            
+            html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: ${isCurrent ? '#2a4a6a' : '#2a2a2a'}; border-radius: 4px; border: 1px solid #444;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: ${isCurrent ? 'bold' : 'normal'}; color: ${isCurrent ? '#4a9eff' : '#e0e0e0'};">
+                            ${file.filename} ${isCurrent ? '(current)' : ''}
+                        </div>
+                        <div style="font-size: 12px; color: #888; margin-top: 4px;">
+                            ${sizeKB} KB • ${modifiedDate}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="window.app.fileManager.handleLoad('${file.filename}')" 
+                                style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📂 Load</button>
+                        <button onclick="window.app.fileManager.handleRename('${file.filename}')" 
+                                style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Rename</button>
+                        <button onclick="window.app.fileManager.handleDelete('${file.filename}')" 
+                                style="padding: 6px 12px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        listDiv.innerHTML = html;
+    }
+    
+    async handleSave() {
+        if (!this.currentFilename) {
+            this.handleSaveAs();
+            return;
+        }
+        
+        try {
+            const data = {
+                pages: this.app.pages
+            };
+            
+            await this.saveFile(this.currentFilename, data);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`File saved: ${this.currentFilename}`);
+            } else {
+                alert(`File saved: ${this.currentFilename}`);
+            }
+            this.refreshFileList();
+        } catch (error) {
+            // Error already shown in saveFile
+        }
+    }
+    
+    async handleSaveAs() {
+        const defaultName = this.currentFilename ? this.currentFilename.replace('.json', '') : '';
+        let filename;
+        
+        if (this.app && this.app.modalHandler) {
+            filename = await this.app.modalHandler.showPrompt('Enter filename (without .json extension):', defaultName);
+        } else {
+            filename = prompt('Enter filename (without .json extension):', defaultName);
+        }
+        
+        if (!filename) return;
+        
+        try {
+            const data = {
+                pages: this.app.pages
+            };
+            
+            await this.saveAsFile(filename, data);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`File saved as: ${this.currentFilename}`);
+            } else {
+                alert(`File saved as: ${this.currentFilename}`);
+            }
+            this.refreshFileList();
+        } catch (error) {
+            // Error already shown in saveAsFile
+        }
+    }
+    
+    async handleLoad(filename) {
+        let confirmed;
+        if (this.app && this.app.modalHandler) {
+            confirmed = await this.app.modalHandler.showConfirm(`Load ${filename}? This will replace your current data.`);
+        } else {
+            confirmed = confirm(`Load ${filename}? This will replace your current data.`);
+        }
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        try {
+            const data = await this.loadFile(filename);
+            
+            if (!data.pages || !Array.isArray(data.pages)) {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                } else {
+                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                }
+                return;
+            }
+            
+            this.app.pages = data.pages;
+            
+            // Store last opened file in localStorage (device-specific)
+            localStorage.setItem(this.lastOpenedFileKey, filename);
+            
+            this.app.render();
+            this.app.modalHandler.closeModal();
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`File loaded: ${filename}`);
+            } else {
+                alert(`File loaded: ${filename}`);
+            }
+            this.refreshFileList();
+            
+            // Connect to sync and join file session
+            if (this.app.syncManager) {
+                if (!this.app.syncManager.isConnected) {
+                    await this.app.syncManager.connect();
+                }
+                this.app.syncManager.joinFile(filename);
+            }
+            
+            // Set current file in undo/redo manager (this loads the buffer)
+            if (this.app.undoRedoManager) {
+                await this.app.undoRedoManager.setCurrentFile(filename);
+            }
+        } catch (error) {
+            // Error already shown in loadFile
+        }
+    }
+    
+    async handleRename(filename) {
+        const defaultName = filename.replace('.json', '');
+        let newFilename;
+        
+        if (this.app && this.app.modalHandler) {
+            newFilename = await this.app.modalHandler.showPrompt('Enter new filename (without .json extension):', defaultName);
+        } else {
+            newFilename = prompt('Enter new filename (without .json extension):', defaultName);
+        }
+        
+        if (!newFilename || newFilename === defaultName) return;
+        
+        try {
+            await this.renameFile(filename, newFilename);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`File renamed to: ${newFilename}.json`);
+            } else {
+                alert(`File renamed to: ${newFilename}.json`);
+            }
+            this.refreshFileList();
+        } catch (error) {
+            // Error already shown in renameFile
+        }
+    }
+    
+    async handleDelete(filename) {
+        let confirmed;
+        if (this.app && this.app.modalHandler) {
+            confirmed = await this.app.modalHandler.showConfirm(`Delete ${filename}? This cannot be undone.`);
+        } else {
+            confirmed = confirm(`Delete ${filename}? This cannot be undone.`);
+        }
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        try {
+            await this.deleteFile(filename);
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`File deleted: ${filename}`);
+            } else {
+                alert(`File deleted: ${filename}`);
+            }
+            this.refreshFileList();
+        } catch (error) {
+            // Error already shown in deleteFile
+        }
+    }
+    
+    async handleNew() {
+        let filename;
+        if (this.app && this.app.modalHandler) {
+            filename = await this.app.modalHandler.showPrompt('Enter filename for new todo file (without .json extension):', 'new-todo');
+        } else {
+            filename = prompt('Enter filename for new todo file (without .json extension):', 'new-todo');
+        }
+        
+        if (!filename) return;
+        
+        try {
+            // Auto-save current file if one is open
+            if (this.currentFilename && this.app && this.app.pages) {
+                try {
+                    const currentData = {
+                        pages: this.app.pages
+                    };
+                    await this.saveFile(this.currentFilename, currentData);
+                } catch (saveError) {
+                    // Log but don't block - continue with creating new file
+                    console.warn('Failed to auto-save current file:', saveError);
+                }
+            }
+            
+            // Create a new empty todo file with default structure
+            const newFileData = {
+                pages: []
+            };
+            
+            await this.saveAsFile(filename, newFileData);
+            
+            // Load the new file into the UI
+            const loadedData = await this.loadFile(this.currentFilename);
+            
+            if (!loadedData.pages || !Array.isArray(loadedData.pages)) {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                } else {
+                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                }
+                return;
+            }
+            
+            // Update app with new file data
+            this.app.pages = loadedData.pages;
+            
+            // Store last opened file in localStorage (device-specific)
+            localStorage.setItem(this.lastOpenedFileKey, this.currentFilename);
+            
+            this.app.render();
+            this.app.modalHandler.closeModal();
+            
+            // Refresh file list to show the new file as current
+            this.refreshFileList();
+            
+            // Connect to sync and join file session
+            if (this.app.syncManager) {
+                if (!this.app.syncManager.isConnected) {
+                    await this.app.syncManager.connect();
+                }
+                this.app.syncManager.joinFile(this.currentFilename);
+            }
+            
+            // Set current file in undo/redo manager (this initializes empty buffer for new file)
+            if (this.app.undoRedoManager) {
+                await this.app.undoRedoManager.setCurrentFile(this.currentFilename);
+                // Clear stacks for new file
+                this.app.undoRedoManager.clear();
+            }
+        } catch (error) {
+            // Error already shown in saveAsFile or loadFile
+        }
+    }
+    
+    /**
+     * Diagnose file integrity - checks for structural issues
+     */
+    async diagnoseFileIntegrity(filename) {
+        const issues = [];
+        let elementCounts = { pages: 0, bins: 0, elements: 0 };
+        const structure = { pages: [], bins: [], elements: [] };
+        
+        try {
+            // Load the file
+            const data = await this.loadFile(filename);
+            
+            if (!data || !data.pages) {
+                issues.push({
+                    type: 'missing_pages',
+                    location: 'root',
+                    description: 'File does not contain a pages array'
+                });
+                return {
+                    isValid: false,
+                    issues,
+                    elementCounts,
+                    structure
+                };
+            }
+            
+            if (!Array.isArray(data.pages)) {
+                issues.push({
+                    type: 'invalid_pages',
+                    location: 'root',
+                    description: 'Pages is not an array'
+                });
+                return {
+                    isValid: false,
+                    issues,
+                    elementCounts,
+                    structure
+                };
+            }
+            
+            elementCounts.pages = data.pages.length;
+            
+            // Check each page
+            data.pages.forEach((page, pageIndex) => {
+                const pageId = page.id || `page-${pageIndex}`;
+                structure.pages.push({ id: pageId, index: pageIndex });
+                
+                if (!page.bins) {
+                    issues.push({
+                        type: 'missing_bins',
+                        location: `pages[${pageIndex}]`,
+                        description: `Page ${pageId} does not have a bins array`
+                    });
+                    return;
+                }
+                
+                if (!Array.isArray(page.bins)) {
+                    issues.push({
+                        type: 'invalid_bins',
+                        location: `pages[${pageIndex}]`,
+                        description: `Page ${pageId} bins is not an array`
+                    });
+                    return;
+                }
+                
+                elementCounts.bins += page.bins.length;
+                
+                // Check each bin
+                page.bins.forEach((bin, binIndex) => {
+                    const binId = bin.id || `bin-${binIndex}`;
+                    structure.bins.push({ 
+                        pageId, 
+                        binId, 
+                        pageIndex, 
+                        binIndex 
+                    });
+                    
+                    if (!bin.elements) {
+                        issues.push({
+                            type: 'missing_elements',
+                            location: `pages[${pageIndex}].bins[${binIndex}]`,
+                            description: `Bin ${binId} does not have an elements array`
+                        });
+                        return;
+                    }
+                    
+                    if (!Array.isArray(bin.elements)) {
+                        issues.push({
+                            type: 'invalid_elements',
+                            location: `pages[${pageIndex}].bins[${binIndex}]`,
+                            description: `Bin ${binId} elements is not an array`
+                        });
+                        return;
+                    }
+                    
+                    elementCounts.elements += bin.elements.length;
+                    
+                    // Check each element
+                    bin.elements.forEach((element, elementIndex) => {
+                        structure.elements.push({
+                            pageId,
+                            binId,
+                            pageIndex,
+                            binIndex,
+                            elementIndex
+                        });
+                        
+                        // Check for null/undefined elements
+                        if (element === null || element === undefined) {
+                            issues.push({
+                                type: 'null_element',
+                                location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}]`,
+                                description: `Element at index ${elementIndex} is null or undefined`
+                            });
+                            return;
+                        }
+                        
+                        // Check for missing critical properties
+                        if (element.type === undefined || element.type === null) {
+                            issues.push({
+                                type: 'missing_type',
+                                location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}]`,
+                                description: `Element at index ${elementIndex} is missing type property`
+                            });
+                        }
+                        
+                        // Check for orphaned children references
+                        if (element.children && Array.isArray(element.children)) {
+                            element.children.forEach((child, childIndex) => {
+                                if (child === null || child === undefined) {
+                                    issues.push({
+                                        type: 'null_child',
+                                        location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}].children[${childIndex}]`,
+                                        description: `Child element at index ${childIndex} is null or undefined`
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+            });
+            
+            // Check for array length mismatches (if we have structure info)
+            // This would require comparing with expected counts, which we don't have
+            // So we'll just report what we found
+            
+            return {
+                isValid: issues.length === 0,
+                issues,
+                elementCounts,
+                structure
+            };
+        } catch (error) {
+            issues.push({
+                type: 'load_error',
+                location: 'file',
+                description: `Failed to load file: ${error.message}`
+            });
+            return {
+                isValid: false,
+                issues,
+                elementCounts,
+                structure
+            };
+        }
+    }
+}
+

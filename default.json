@@ -1,0 +1,875 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "bins": [
+        {
+          "id": "bin-0",
+          "title": "Thoughts",
+          "elements": [
+            {
+              "type": "task",
+              "text": "Talk to child, to present, to Emperor Adama",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Visualize - 9 Hours - 9 days - 9 months – 9 Rewards",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Listening isn't learning",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "New task",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Vibe Serve Nick Metaphorgame Ask Think",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Objfun Invited or intimate.",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Complain to the Floor-hundred",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "No cheap dopamine, time is running out fast",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Solicited advice is the only kind worth giving",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Fictional integration",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Demonstrate, do not explicate.",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Deconstruct - Recall - Self-Critique - Spaced Repetition",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Pain is progress",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Approach anxiety on 3. 100/year",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "SELF CONTROL IS INFINITE",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "IF/THEN",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "bin-1",
+          "title": "Chores",
+          "elements": [
+            {
+              "type": "header",
+              "text": "PREP",
+              "repeats": true,
+              "timeAllocated": "00:30:00",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Stretch",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Stretch",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Pills",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Vibe   Moves",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Vibe, Moves",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Hygiene",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Preparation",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Preparation, Plan, Funify",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Preparation",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Plan",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Funify",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "header",
+              "text": "One Offs",
+              "repeats": true,
+              "timeAllocated": "30 min+",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Yard",
+              "repeats": true,
+              "timeAllocated": "",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Concrete",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Rocks",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Write 1K",
+              "repeats": true,
+              "timeAllocated": "10 min+",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Lines   Outlines",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "5 min+",
+              "funModifier": "Lines, Outlines (5 min+)",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Lines",
+                  "completed": false,
+                  "timeAllocated": "5 min+",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Outlines (5 min+)",
+                  "completed": false,
+                  "timeAllocated": "5 min+",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Story   Dialogue",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Story, Dialogue",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Story",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Dialogue",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Poetry   Pitch",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Poetry, Pitch",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Poetry",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Pitch",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "header",
+              "text": "Audio",
+              "repeats": true,
+              "timeAllocated": "20 min+",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Sing   Ear",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Sing, Ear",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Sing",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Ear",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Uke   Form   Scales   Chords   Song",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Uke, Form, Scales, Chords, Song",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Uke",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Form",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Scales",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Chords",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Song",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "MPC   Scales   Chords   Rhythm   Song",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "MPC, Scales, Chords, Rhythm, Song",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "MPC",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Scales",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Chords",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Rhythm",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Song",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "header",
+              "text": "Throughout",
+              "repeats": true,
+              "timeAllocated": "15 min-",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Compliment Family",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Compliment Family",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Compliment Family",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Familiar   Stranger   Gratitude note",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Familiar, Stranger, Gratitude note",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Familiar",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Stranger",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Gratitude note",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Bills",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Bills",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Social Outing OR Social Planning OR Social Upkeep",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Social Outing OR Social Planning OR Social Upkeep",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "Poiesis -   Story   Gamify   Dev",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Story, Gamify, Dev",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Story",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Gamify",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Dev",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Poiesis -   Art   Audio   Extra",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Art, Audio, Extra",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Art",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Audio",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                },
+                {
+                  "type": "task",
+                  "text": "Extra",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "- pages",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "5-25 pages",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "5-25 pages",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "task",
+              "text": "Update Journal",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "Update Journal",
+              "children": [
+                {
+                  "type": "task",
+                  "text": "Update Journal",
+                  "completed": false,
+                  "timeAllocated": "",
+                  "repeats": true,
+                  "funModifier": "",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bin-2",
+          "title": "Work",
+          "elements": []
+        },
+        {
+          "id": "bin-3",
+          "title": "Hobbies",
+          "elements": [
+            {
+              "type": "header",
+              "text": "New Header",
+              "repeats": true,
+              "timeAllocated": "",
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Musicasdasd",
+              "repeats": true,
+              "timeAllocated": "ASa",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "task",
+              "text": "New task",
+              "completed": false,
+              "repeats": true,
+              "timeAllocated": "",
+              "funModifier": "",
+              "subtasks": [],
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Audio",
+              "repeats": true,
+              "timeAllocated": "",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Poiesis",
+              "repeats": true,
+              "timeAllocated": "",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "Write",
+              "repeats": true,
+              "timeAllocated": "",
+              "completed": false,
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "New Header",
+              "repeats": true,
+              "timeAllocated": "",
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "New Header",
+              "repeats": true,
+              "timeAllocated": "",
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "New Header",
+              "repeats": true,
+              "timeAllocated": "",
+              "children": []
+            },
+            {
+              "type": "header",
+              "text": "New Header",
+              "repeats": true,
+              "timeAllocated": "",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "lastModified": "2025-11-29T20:30:38.961Z",
+  "version": "1.0",
+  "subtaskStates": {
+    "page-1-5": true,
+    "page-1-11": true,
+    "page-1-12": true,
+    "page-1-13": true,
+    "page-1-15": true,
+    "page-1-16": true,
+    "page-1-17": true,
+    "page-1-19": true,
+    "page-1-20": true,
+    "page-1-23": true,
+    "page-1-24": true,
+    "page-1-25": true,
+    "page-1-26": true,
+    "bin-1-5": true,
+    "bin-1-11": true,
+    "bin-1-12": true,
+    "bin-1-13": true,
+    "bin-1-15": true,
+    "bin-1-16": true,
+    "bin-1-17": true,
+    "bin-1-19": true,
+    "bin-1-20": true,
+    "bin-1-23": true,
+    "bin-1-24": true,
+    "bin-1-25": true,
+    "bin-1-26": true
+  },
+  "allSubtasksExpanded": true,
+  "settings": {
+    "background": "#1a1a1a",
+    "page": {
+      "background": "#2d2d2d",
+      "margin": "0px",
+      "padding": "20px",
+      "borderRadius": "8px",
+      "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+      "fontSize": "14px",
+      "opacity": "1.00",
+      "color": "#e0e0e0",
+      "title": {
+        "fontSize": "18px",
+        "color": "#ffffff",
+        "marginBottom": "15px"
+      }
+    },
+    "element": {
+      "background": "transparent",
+      "margin": "0px",
+      "padding": "10px",
+      "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+      "fontSize": "14px",
+      "opacity": "1",
+      "color": "#e0e0e0",
+      "hoverBackground": "#363636"
+    },
+    "header": {
+      "fontSize": "16px",
+      "color": "#b8b8b8",
+      "margin": "10px 0"
+    },
+    "checkbox": {
+      "size": "18px"
+    }
+  }
+}
