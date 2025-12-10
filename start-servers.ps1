@@ -119,14 +119,14 @@ if ($Foreground) {
     
     # Start HTTP server in background
     Write-Host "Starting HTTP server on port 8000..."
-    Start-Process python3 -ArgumentList "server.py", "8000" -WindowStyle Hidden -RedirectStandardOutput "server.log" -RedirectStandardError "server.log"
+    Start-Process cmd -ArgumentList "/c", "cd /d `"$scriptDir`" && python3 server.py 8000 > server.log 2>&1" -WindowStyle Hidden
     
     # Wait a moment before starting the second server
     Start-Sleep -Seconds 1
     
     # Start WebSocket server in background
     Write-Host "Starting WebSocket server on port 8001..."
-    Start-Process python3 -ArgumentList "websocket_server.py", "8001" -WindowStyle Hidden -RedirectStandardOutput "websocket_server.log" -RedirectStandardError "websocket_server.log"
+    Start-Process cmd -ArgumentList "/c", "cd /d `"$scriptDir`" && python3 websocket_server.py 8001 > websocket_server.log 2>&1" -WindowStyle Hidden
     
     # Wait a moment for servers to start
     Start-Sleep -Seconds 2

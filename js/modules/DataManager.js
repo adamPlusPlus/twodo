@@ -601,7 +601,7 @@ export class DataManager {
     
     playArchivedAudio(filename) {
         const audio = document.createElement('audio');
-        audio.src = `/recordings/${filename}`;
+        audio.src = `/saved_files/recordings/${filename}`;
         audio.controls = true;
         audio.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; background: #2d2d2d; padding: 20px; border-radius: 8px;';
         document.body.appendChild(audio);

@@ -49,7 +49,7 @@ export class ContextMenuHandler {
         const timeSinceLastClick = now - this.app.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
@@ -148,8 +148,13 @@ export class ContextMenuHandler {
     
     hideContextMenu() {
         const menu = document.getElementById('context-menu');
+        if (!menu) {
+            return;
+        }
         menu.classList.remove('active');
-        this.app.contextMenuState.visible = false;
+        if (this.app.contextMenuState) {
+            this.app.contextMenuState.visible = false;
+        }
         // Hide all menu items, they will be shown/hidden as needed
         menu.querySelectorAll('.context-menu-item').forEach(item => {
             item.style.display = '';
@@ -161,7 +166,7 @@ export class ContextMenuHandler {
         const timeSinceLastClick = now - this.app.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
@@ -217,7 +222,7 @@ export class ContextMenuHandler {
         const timeSinceLastClick = now - this.app.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu

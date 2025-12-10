@@ -42,10 +42,19 @@ export class RenderService {
         }
         
         this.isRendering = true;
+        performance.mark('render-start');
+        const renderStart = performance.now();
         
         try {
             // Delegate to AppRenderer
             this.appRenderer.render();
+            
+            performance.mark('render-end');
+            const renderTime = performance.now() - renderStart;
+            if (renderTime > 100) {
+                console.log(`[PERF] Render took ${renderTime.toFixed(1)}ms`);
+            }
+            console.log(`[DIAG] Render complete: ${renderTime.toFixed(1)}ms`);
             
             // Emit render complete event
             eventBus.emit(EVENTS.APP.RENDERED);

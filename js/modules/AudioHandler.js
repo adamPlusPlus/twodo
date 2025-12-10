@@ -383,7 +383,7 @@ export class AudioHandler {
         
         // Fetch existing audio file
         try {
-            const response = await fetch(`/recordings/${existingFile}`);
+            const response = await fetch(`/saved_files/recordings/${existingFile}`);
             if (!response.ok) {
                 throw new Error('Failed to load existing recording');
             }
@@ -422,7 +422,7 @@ export class AudioHandler {
         try {
             // Create player if it doesn't exist
             if (!this.app.appState.inlineAudioPlayers[audioKey]) {
-                const response = await fetch(`/recordings/${filename}`);
+                const response = await fetch(`/saved_files/recordings/${filename}`);
                 if (!response.ok) {
                     throw new Error(`Failed to load audio file: ${response.status}`);
                 }

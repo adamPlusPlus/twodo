@@ -184,7 +184,7 @@ Plugins can be loaded via the browser console or will be automatically loaded wh
 
 ## Data Storage
 
-All data is stored in browser localStorage with the key `twodo-data`. The last reset date is tracked to enable automatic daily resets. Audio files are stored in the `recordings/` directory and archived data is stored in localStorage with the key `twodo-audio-archive`.
+All data is stored in browser localStorage with the key `twodo-data`. The last reset date is tracked to enable automatic daily resets. Audio files are stored in the `saved_files/recordings/` directory and archived data is stored in localStorage with the key `twodo-audio-archive`.
 
 ## Plugin Development
 

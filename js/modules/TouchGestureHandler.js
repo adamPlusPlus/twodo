@@ -100,7 +100,7 @@ export class TouchGestureHandler {
         
         // If the event wasn't prevented and no handler showed a menu,
         // fall back to the original logic for edge cases
-        if (!contextMenuEvent.defaultPrevented && !this.app.contextMenuState.visible) {
+        if (!contextMenuEvent.defaultPrevented && (!this.app.contextMenuState || !this.app.contextMenuState.visible)) {
             // Fallback: try to find context menu data manually
             this.fallbackContextMenuFromTouch(e, target);
         }

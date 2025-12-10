@@ -1,6 +1,7 @@
 // ElementTypeRegistry.js - Registry for element type renderers
 // Maps element types to their renderer classes
 import { TaskRenderer } from './TaskRenderer.js';
+import { HeaderRenderer } from './HeaderRenderer.js';
 import { HeaderCheckboxRenderer } from './HeaderCheckboxRenderer.js';
 import { MultiCheckboxRenderer } from './MultiCheckboxRenderer.js';
 import { AudioRenderer } from './AudioRenderer.js';
@@ -27,6 +28,7 @@ export class ElementTypeRegistry {
      */
     initializeRenderers() {
         this.renderers.set('task', new TaskRenderer(this.app));
+        this.renderers.set('header', new HeaderRenderer(this.app));
         this.renderers.set('header-checkbox', new HeaderCheckboxRenderer(this.app));
         this.renderers.set('multi-checkbox', new MultiCheckboxRenderer(this.app));
         this.renderers.set('audio', new AudioRenderer(this.app));

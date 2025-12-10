@@ -61,7 +61,10 @@ export class AppInitializer {
         
         // Load last opened file BEFORE rendering to ensure we have the correct data
         // This prevents rendering with empty/default data and then re-rendering
+        const initLoadStart = performance.now();
         await this.app.loadLastOpenedFile();
+        const initLoadTime = performance.now() - initLoadStart;
+        console.log(`[DIAG] AppInitializer.init() - loadLastOpenedFile took: ${initLoadTime.toFixed(1)}ms`);
         
         // Now render with the loaded data
         eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
@@ -246,7 +249,7 @@ export class AppInitializer {
      */
     async initializeGlobalSearch() {
         try {
-            const SearchFilter = (await import('./plugins/page/SearchFilter.js')).default;
+            const SearchFilter = (await import('/js/plugins/page/SearchFilter.js')).default;
             this.app.globalSearchFilter = new SearchFilter(this.app);
             await this.app.globalSearchFilter.onInit();
         } catch (error) {

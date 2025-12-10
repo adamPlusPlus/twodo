@@ -1,4 +1,7 @@
 // FileManager.js - Handles server-side file management
+import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
+
 export class FileManager {
     constructor(app) {
         this.app = app;
@@ -108,34 +111,95 @@ export class FileManager {
         }
     }
     
-    async loadFile(filename) {
+    async loadFile(filename, loadBuffer = true) {
+        const perfStart = performance.now();
         try {
             const encodedFilename = encodeURIComponent(filename);
-            const response = await fetch(`/files/${encodedFilename}`);
+            // Use AbortController for timeout handling
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            if (result.success) {
-                this.currentFilename = result.filename;
+            try {
+                const fetchStart = performance.now();
+                const fetchUrl = `/files/${encodedFilename}`;
                 
-                // Load corresponding buffer file after loading main file
-                if (this.app && this.app.undoRedoManager) {
-                    await this.app.undoRedoManager.loadBuffer(result.filename);
+                // Check how many requests are in flight before our fetch
+                const requestsBefore = performance.getEntriesByType('resource').length;
+                console.log(`[DIAG] FileManager.loadFile(): ${requestsBefore} resource requests before fetch`);
+                
+                const response = await fetch(fetchUrl, {
+                    signal: controller.signal,
+                    cache: 'no-cache'
+                });
+                const fetchTime = performance.now() - fetchStart;
+                clearTimeout(timeoutId);
+                
+                // Extract network timing - wait a bit for timing to be available
+                setTimeout(() => {
+                    const resourceTimings = performance.getEntriesByType('resource');
+                    const resourceTiming = resourceTimings.find(entry => entry.name.includes(encodedFilename));
+                    if (resourceTiming) {
+                        console.log('[DIAG] FileManager.loadFile() network timing:', {
+                            stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
+                            dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
+                            tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
+                            ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
+                            download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
+                            total: resourceTiming.duration.toFixed(1) + 'ms'
+                        });
+                    } else {
+                        console.log('[DIAG] FileManager.loadFile(): Could not find resource timing entry');
+                    }
+                }, 100);
+                
+                if (!response.ok) {
+                    // If 404, the file doesn't exist - rethrow to allow caller to handle
+                    if (response.status === 404) {
+                        const error = new Error(`File not found: ${filename}`);
+                        error.status = 404;
+                        throw error;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                return result.data;
-            } else {
-                throw new Error(result.error || 'Failed to load file');
+                const parseStart = performance.now();
+                const result = await response.json();
+                const parseTime = performance.now() - parseStart;
+                
+                if (result.success) {
+                    this.currentFilename = result.filename;
+                    
+                    // Load corresponding buffer file after loading main file (if requested)
+                    if (loadBuffer && this.app && this.app.undoRedoManager) {
+                        const bufferStart = performance.now();
+                        await this.app.undoRedoManager.loadBuffer(result.filename);
+                        const bufferTime = performance.now() - bufferStart;
+                        console.log(`[PERF] Buffer load: ${bufferTime.toFixed(1)}ms`);
+                    }
+                    
+                    const totalTime = performance.now() - perfStart;
+                    console.log(`[PERF] File load ${filename}: fetch=${fetchTime.toFixed(1)}ms, parse=${parseTime.toFixed(1)}ms, total=${totalTime.toFixed(1)}ms`);
+                    
+                    return result.data;
+                } else {
+                    throw new Error(result.error || 'Failed to load file');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('File load timeout');
+                }
+                throw fetchError;
             }
         } catch (error) {
-            console.error('Error loading file:', error);
-            if (this.app && this.app.modalHandler) {
-                await this.app.modalHandler.showAlert('Failed to load file: ' + error.message);
-            } else {
-                alert('Failed to load file: ' + error.message);
+            // Only show alert for non-404 errors (404 is handled by caller)
+            if (error.status !== 404 && !error.message.includes('timeout')) {
+                console.error('Error loading file:', error);
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Failed to load file: ' + error.message);
+                } else {
+                    alert('Failed to load file: ' + error.message);
+                }
             }
             throw error;
         }
@@ -374,12 +438,22 @@ export class FileManager {
                 return;
             }
             
+            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
+            if (this.app.appState) {
+                this.app.appState.pages = data.pages;
+                // Update currentPageId if needed
+                if (data.pages.length > 0 && !data.pages.find(p => p.id === this.app.appState.currentPageId)) {
+                    this.app.appState.currentPageId = data.pages[0].id;
+                }
+            }
+            // Also set app.pages for backward compatibility with other modules
             this.app.pages = data.pages;
             
             // Store last opened file in localStorage (device-specific)
             localStorage.setItem(this.lastOpenedFileKey, filename);
             
-            this.app.render();
+            // Request render via EventBus
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             this.app.modalHandler.closeModal();
             if (this.app && this.app.modalHandler) {
                 await this.app.modalHandler.showAlert(`File loaded: ${filename}`);
@@ -498,13 +572,22 @@ export class FileManager {
                 return;
             }
             
-            // Update app with new file data
+            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
+            if (this.app.appState) {
+                this.app.appState.pages = loadedData.pages;
+                // Update currentPageId if needed
+                if (loadedData.pages.length > 0 && !loadedData.pages.find(p => p.id === this.app.appState.currentPageId)) {
+                    this.app.appState.currentPageId = loadedData.pages[0].id;
+                }
+            }
+            // Also set app.pages for backward compatibility with other modules
             this.app.pages = loadedData.pages;
             
             // Store last opened file in localStorage (device-specific)
             localStorage.setItem(this.lastOpenedFileKey, this.currentFilename);
             
-            this.app.render();
+            // Request render via EventBus
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             this.app.modalHandler.closeModal();
             
             // Refresh file list to show the new file as current

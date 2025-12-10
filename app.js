@@ -41,6 +41,9 @@ import { InlineEditor } from './js/modules/InlineEditor.js';
 
 class TodoApp {
     constructor() {
+        performance.mark('app-constructor-start');
+        const constructorStart = performance.now();
+        
         // Initialize managers
         this.dataManager = new DataManager(this);
         this.settingsManager = new SettingsManager(this);
@@ -77,6 +80,22 @@ class TodoApp {
         // Initialize OAuth and sync managers
         this.oauthManager = new OAuthManager(this);
         this.syncManager = new SyncManager(this);
+        
+        // Start loading file early (in parallel with other initialization)
+        // This prevents the file request from being queued behind other operations
+        this._fileLoadPromise = null;
+        const lastOpenedFile = localStorage.getItem('twodo-last-opened-file');
+        if (lastOpenedFile) {
+            performance.mark('preload-start');
+            const preloadInitStart = performance.now();
+            const requestsBeforePreload = performance.getEntriesByType('resource').length;
+            console.log('[DIAG] Starting preload:', lastOpenedFile);
+            console.log(`[DIAG] Preload init: ${requestsBeforePreload} resource requests already loaded`);
+            // Start the fetch immediately, but don't await it yet
+            this._fileLoadPromise = this._preloadFile(lastOpenedFile);
+            const preloadInitTime = performance.now() - preloadInitStart;
+            console.log(`[DIAG] Preload promise created in: ${preloadInitTime.toFixed(1)}ms`);
+        }
         this.undoRedoManager = new UndoRedoManager(this);
         
         // Initialize time tracker
@@ -113,34 +132,148 @@ class TodoApp {
         
         // Listen for render requests from EventBus (handled by RenderService now)
         
+        performance.mark('app-constructor-end');
+        const constructorTime = performance.now() - constructorStart;
+        console.log(`[DIAG] Constructor took: ${constructorTime.toFixed(1)}ms`);
+        console.log(`[DIAG] Preload started: ${this._fileLoadPromise ? 'YES' : 'NO'}`);
+        
         this.init();
+    }
+    
+    /**
+     * Preload file data early (non-blocking)
+     * This starts the fetch immediately so it can happen in parallel with other initialization
+     */
+    async _preloadFile(filename) {
+        performance.mark('preload-fetch-start');
+        const preloadStart = performance.now();
+        console.log(`[DIAG] _preloadFile() called for: ${filename}`);
+        
+        try {
+            const encodedFilename = encodeURIComponent(filename);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            try {
+                const fetchStart = performance.now();
+                const fetchUrl = `/files/${encodedFilename}`;
+                
+                // Check how many requests are in flight before our fetch
+                const requestsBefore = performance.getEntriesByType('resource').length;
+                console.log(`[DIAG] Preload: ${requestsBefore} resource requests before fetch`);
+                
+                const response = await fetch(fetchUrl, {
+                    signal: controller.signal,
+                    cache: 'no-cache'
+                });
+                const fetchEnd = performance.now();
+                const fetchTime = fetchEnd - fetchStart;
+                clearTimeout(timeoutId);
+                
+                // Extract network timing - wait a bit for timing to be available
+                setTimeout(() => {
+                    const resourceTimings = performance.getEntriesByType('resource');
+                    const resourceTiming = resourceTimings.find(entry => entry.name.includes(encodedFilename));
+                    if (resourceTiming) {
+                        console.log('[DIAG] Preload network timing:', {
+                            stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
+                            dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
+                            tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
+                            ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
+                            download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
+                            total: resourceTiming.duration.toFixed(1) + 'ms'
+                        });
+                    } else {
+                        console.log('[DIAG] Preload: Could not find resource timing entry');
+                    }
+                }, 100);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        console.log('[DIAG] Preload: File not found (404)');
+                        return null; // File doesn't exist
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const parseStart = performance.now();
+                const result = await response.json();
+                const parseTime = performance.now() - parseStart;
+                
+                if (result.success) {
+                    performance.mark('preload-fetch-end');
+                    const preloadTime = performance.now() - preloadStart;
+                    console.log(`[DIAG] Preload fetch: ${fetchTime.toFixed(1)}ms, parse: ${parseTime.toFixed(1)}ms, total: ${preloadTime.toFixed(1)}ms`);
+                    return result.data; // Return the data for later use
+                } else {
+                    throw new Error(result.error || 'Failed to load file');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    console.log('[DIAG] Preload: Timeout');
+                    throw new Error('File load timeout');
+                }
+                throw fetchError;
+            }
+        } catch (error) {
+            console.log(`[DIAG] Preload failed: ${error.message}`);
+            // Silently fail - will be handled in loadLastOpenedFile
+            return null;
+        }
     }
     
     /**
      * Load the last opened file from server (device-specific)
      */
     async loadLastOpenedFile() {
+        performance.mark('load-file-start');
+        const loadStart = performance.now();
+        console.log('[DIAG] loadLastOpenedFile() called');
+        
         try {
             const lastOpenedFile = localStorage.getItem('twodo-last-opened-file');
             if (!lastOpenedFile) {
+                console.log('[DIAG] No last opened file in localStorage');
                 return; // No last opened file, use default data
             }
             
-            // Check if file exists on server
-            const files = await this.fileManager.listFiles();
-            const fileExists = files.some(f => f.filename === lastOpenedFile);
-            
-            if (!fileExists) {
-                // File doesn't exist, clear the stored preference
-                localStorage.removeItem('twodo-last-opened-file');
-                return;
+            // Use preloaded data if available (started in constructor)
+            let data;
+            if (this._fileLoadPromise) {
+                console.log('[DIAG] Preload promise exists, awaiting...');
+                const preloadAwaitStart = performance.now();
+                const preloadedData = await this._fileLoadPromise;
+                const preloadAwaitTime = performance.now() - preloadAwaitStart;
+                console.log(`[DIAG] Preload await took: ${preloadAwaitTime.toFixed(1)}ms`);
+                
+                if (preloadedData) {
+                    // Use preloaded data - fetch already completed!
+                    console.log('[DIAG] Using preloaded data');
+                    data = preloadedData;
+                    this.fileManager.currentFilename = lastOpenedFile;
+                } else {
+                    // Preload failed or file doesn't exist, try normal load
+                    console.log('[DIAG] Preload returned null, doing normal load');
+                    const loadPromise = this.fileManager.loadFile(lastOpenedFile, false);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('File load timeout')), 5000)
+                    );
+                    data = await Promise.race([loadPromise, timeoutPromise]);
+                }
+            } else {
+                // No preload started, do normal load
+                console.log('[DIAG] No preload promise, doing normal load');
+                const loadPromise = this.fileManager.loadFile(lastOpenedFile, false);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('File load timeout')), 5000)
+                );
+                data = await Promise.race([loadPromise, timeoutPromise]);
             }
-            
-            // Load the file
-            const data = await this.fileManager.loadFile(lastOpenedFile);
             
             if (!data.pages || !Array.isArray(data.pages)) {
                 console.warn('Last opened file has invalid format, using default data');
+                localStorage.removeItem('twodo-last-opened-file');
                 return;
             }
             
@@ -149,89 +282,25 @@ class TodoApp {
             console.log(`Loaded last opened file: ${lastOpenedFile}`);
             // Don't render here - let init() handle rendering after load completes
             
-            // Diagnostic: Check if container is visible after render
-            setTimeout(() => {
-                const container = document.getElementById('bins-container');
-                const app = document.getElementById('app');
-                const body = document.body;
-                
-                if (container) {
-                    const containerStyle = window.getComputedStyle(container);
-                    const appStyle = app ? window.getComputedStyle(app) : null;
-                    const bodyStyle = window.getComputedStyle(body);
-                    
-                    console.log('[DIAGNOSTIC] bins-container styles:', {
-                        display: containerStyle.display,
-                        visibility: containerStyle.visibility,
-                        opacity: containerStyle.opacity,
-                        height: containerStyle.height,
-                        width: containerStyle.width,
-                        position: containerStyle.position,
-                        zIndex: containerStyle.zIndex,
-                        top: containerStyle.top,
-                        left: containerStyle.left,
-                        children: container.children.length,
-                        offsetTop: container.offsetTop,
-                        offsetLeft: container.offsetLeft,
-                        offsetHeight: container.offsetHeight,
-                        offsetWidth: container.offsetWidth
-                    });
-                    
-                    if (appStyle) {
-                        console.log('[DIAGNOSTIC] #app styles:', {
-                            display: appStyle.display,
-                            visibility: appStyle.visibility,
-                            opacity: appStyle.opacity,
-                            height: appStyle.height,
-                            width: appStyle.width,
-                            position: appStyle.position,
-                            zIndex: appStyle.zIndex
-                        });
-                    }
-                    
-                    console.log('[DIAGNOSTIC] body styles:', {
-                        display: bodyStyle.display,
-                        visibility: bodyStyle.visibility,
-                        opacity: bodyStyle.opacity,
-                        backgroundColor: bodyStyle.backgroundColor,
-                        color: bodyStyle.color
-                    });
-                    
-                    if (container.children.length > 0) {
-                        const firstBin = container.children[0];
-                        const binStyle = window.getComputedStyle(firstBin);
-                        console.log('[DIAGNOSTIC] First bin styles:', {
-                            display: binStyle.display,
-                            visibility: binStyle.visibility,
-                            opacity: binStyle.opacity,
-                            height: binStyle.height,
-                            width: binStyle.width,
-                            backgroundColor: binStyle.backgroundColor,
-                            color: binStyle.color,
-                            offsetHeight: firstBin.offsetHeight,
-                            offsetWidth: firstBin.offsetWidth,
-                            offsetTop: firstBin.offsetTop,
-                            offsetLeft: firstBin.offsetLeft
-                        });
-                        
-                        // Check if bin is actually in viewport
-                        const rect = firstBin.getBoundingClientRect();
-                        console.log('[DIAGNOSTIC] First bin bounding rect:', {
-                            top: rect.top,
-                            left: rect.left,
-                            bottom: rect.bottom,
-                            right: rect.right,
-                            width: rect.width,
-                            height: rect.height,
-                            inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth
-                        });
-                    }
-                }
-            }, 100);
+            performance.mark('load-file-end');
+            const loadTime = performance.now() - loadStart;
+            console.log(`[DIAG] Total loadLastOpenedFile: ${loadTime.toFixed(1)}ms`);
+            
+            // Load buffer in background (non-blocking)
+            if (this.undoRedoManager) {
+                this.undoRedoManager.loadBuffer(lastOpenedFile).catch(err => {
+                    console.warn('Failed to load buffer in background:', err);
+                });
+            }
         } catch (error) {
-            // Silently fail - use default data if file can't be loaded
-            console.warn('Failed to load last opened file:', error);
-            localStorage.removeItem('twodo-last-opened-file');
+            // If file not found (404) or timeout, clear the stored preference
+            if (error.status === 404 || error.message.includes('not found') || error.message.includes('timeout')) {
+                localStorage.removeItem('twodo-last-opened-file');
+                console.log('Last opened file not found or timeout, cleared preference');
+            } else {
+                // For other errors, log but don't block initialization
+                console.warn('Failed to load last opened file:', error);
+            }
         }
     }
     

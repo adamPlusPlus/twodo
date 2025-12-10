@@ -10,6 +10,7 @@ import json
 import os
 from urllib.parse import urlparse, unquote
 import sys
+from http.server import ThreadingHTTPServer
 
 PORT = 8000
 if len(sys.argv) > 1:
@@ -19,6 +20,44 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.request_path = None
         super().__init__(*args, **kwargs)
+    
+    def translate_path(self, path):
+        """Override to serve from dist/ if it exists, otherwise from root"""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        dist_dir = os.path.join(script_dir, 'dist')
+        
+        # Remove leading slash and query parameters
+        parsed_path = urlparse(path)
+        clean_path = parsed_path.path.lstrip('/')
+        
+        # If dist/ exists, try to serve from there first
+        if os.path.exists(dist_dir) and os.path.isdir(dist_dir):
+            # Handle root/index.html
+            if clean_path == '' or clean_path == 'index.html':
+                dist_index = os.path.join(dist_dir, 'index.html')
+                if os.path.exists(dist_index):
+                    # Return absolute path - SimpleHTTPRequestHandler can handle this
+                    return os.path.abspath(dist_index)
+            else:
+                # Try to find the file in dist/
+                # Replace URL separators with OS separators for path joining
+                clean_path_os = clean_path.replace('/', os.sep)
+                dist_file = os.path.join(dist_dir, clean_path_os)
+                # Convert to absolute path and normalize
+                dist_file = os.path.abspath(os.path.normpath(dist_file))
+                dist_dir_abs = os.path.abspath(os.path.normpath(dist_dir))
+                
+                # Security check: ensure file is within dist_dir
+                # Use both forward and backslash for Windows compatibility
+                if (dist_file.startswith(dist_dir_abs + os.sep) or 
+                    dist_file.startswith(dist_dir_abs + '/') or 
+                    dist_file == dist_dir_abs):
+                    if os.path.exists(dist_file) and os.path.isfile(dist_file):
+                        # Return absolute path
+                        return dist_file
+        
+        # Fall back to root directory (uses current working directory from main())
+        return super().translate_path(path)
     
     def log_message(self, format, *args):
         """Override to log all requests for debugging"""
@@ -90,7 +129,8 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 # Get the directory where this script is located
                 script_dir = os.path.dirname(os.path.abspath(__file__))
-                audio_dir = os.path.join(script_dir, 'recordings')
+                saved_files_dir = os.path.join(script_dir, 'saved_files')
+                audio_dir = os.path.join(saved_files_dir, 'recordings')
                 
                 # Create recordings directory if it doesn't exist
                 os.makedirs(audio_dir, exist_ok=True)
@@ -302,6 +342,54 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
         
+        # Handle /assets/ requests from dist/ directory
+        if path.startswith('/assets/'):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            dist_dir = os.path.join(script_dir, 'dist')
+            if os.path.exists(dist_dir):
+                # Get the file path relative to dist/
+                file_path = path[1:]  # Remove leading /
+                file_path_os = file_path.replace('/', os.sep)
+                dist_file = os.path.join(dist_dir, file_path_os)
+                dist_file = os.path.abspath(os.path.normpath(dist_file))
+                dist_dir_abs = os.path.abspath(os.path.normpath(dist_dir))
+                
+                # Security check
+                if (dist_file.startswith(dist_dir_abs + os.sep) or 
+                    dist_file.startswith(dist_dir_abs + '/') or 
+                    dist_file == dist_dir_abs):
+                    if os.path.exists(dist_file) and os.path.isfile(dist_file):
+                        try:
+                            # Read and serve the file
+                            with open(dist_file, 'rb') as f:
+                                content = f.read()
+                            
+                            # Determine content type
+                            if dist_file.endswith('.js'):
+                                content_type = 'application/javascript'
+                            elif dist_file.endswith('.css'):
+                                content_type = 'text/css'
+                            elif dist_file.endswith('.map'):
+                                content_type = 'application/json'
+                            else:
+                                content_type = 'application/octet-stream'
+                            
+                            self.send_response(200)
+                            self.send_header('Content-type', content_type)
+                            self.send_header('Content-Length', str(len(content)))
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.end_headers()
+                            self.wfile.write(content)
+                            self.wfile.flush()
+                            return
+                        except Exception as e:
+                            print(f"Error serving asset {dist_file}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            self.send_response(500)
+                            self.end_headers()
+                            return
+        
         # Handle file management endpoints
         if path == '/files':
             try:
@@ -414,9 +502,12 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
         elif path.startswith('/files/'):
+            import time
+            start_time = time.time()
             try:
-                # Extract filename from path
+                # Extract filename from path and URL decode it
                 filename = path[7:]  # Remove '/files/'
+                filename = unquote(filename)  # Decode URL-encoded filename
                 filename = os.path.basename(filename)  # Prevent directory traversal
                 filename = ''.join(c for c in filename if c.isalnum() or c in '.-_')
                 
@@ -435,15 +526,36 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps({'success': False, 'error': 'File not found'}).encode('utf-8'))
                     return
                 
-                # Read and return file
+                # Read and return file - optimize by reading file size first
+                read_start = time.time()
+                file_size = os.path.getsize(file_path)
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file_data = json.load(f)
+                read_time = time.time() - read_start
                 
+                # Serialize JSON once - use separators to reduce size
+                serialize_start = time.time()
+                response_data = json.dumps({'success': True, 'data': file_data, 'filename': filename}, ensure_ascii=False, separators=(',', ':'))
+                response_bytes = response_data.encode('utf-8')
+                serialize_time = time.time() - serialize_start
+                
+                # Send response - minimize headers for speed
+                send_start = time.time()
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Content-Length', str(len(response_bytes)))
                 self.end_headers()
-                self.wfile.write(json.dumps({'success': True, 'data': file_data, 'filename': filename}).encode('utf-8'))
+                self.wfile.write(response_bytes)
+                self.wfile.flush()
+                send_time = time.time() - send_start
+                total_time = time.time() - start_time
+                
+                # Log to stderr (captured in log file when running in background)
+                import sys
+                perf_msg = f"[PERF] {filename}: read={read_time*1000:.1f}ms, serialize={serialize_time*1000:.1f}ms, send={send_time*1000:.1f}ms, total={total_time*1000:.1f}ms, {len(response_bytes)}B\n"
+                sys.stderr.write(perf_msg)
+                sys.stderr.flush()
                 return
                 
             except Exception as e:
@@ -470,6 +582,11 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
     
     def end_headers(self):
         """Add CORS headers and cache control to all responses"""
+        # Add HTTP/2-like optimizations for module loading
+        # Set higher connection limit hint (though browser may ignore)
+        if self.path.endswith('.js'):
+            # Add preload hint for JS modules
+            self.send_header('Link', f'<{self.path}>; rel=modulepreload')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Content-Length')
@@ -634,7 +751,9 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     
-    with socketserver.TCPServer(("0.0.0.0", PORT), TwodoHandler) as httpd:
+    # Use ThreadingHTTPServer for concurrent request handling
+    # This prevents blocking when multiple requests come in (e.g., plugin files)
+    with ThreadingHTTPServer(("0.0.0.0", PORT), TwodoHandler) as httpd:
         print(f"Starting server on http://localhost:{PORT}")
         print(f"Using TwodoHandler - POST endpoint: /save-default.json")
         

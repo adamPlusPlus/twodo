@@ -7,6 +7,17 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>">
     <link rel="stylesheet" href="app.css?v=9">
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    
+    <!-- Module preload hints - tell browser to fetch critical modules in parallel -->
+    <link rel="modulepreload" href="js/core/EventBus.js">
+    <link rel="modulepreload" href="js/core/AppState.js">
+    <link rel="modulepreload" href="js/core/AppEvents.js">
+    <link rel="modulepreload" href="js/core/AppServices.js">
+    <link rel="modulepreload" href="js/modules/DataManager.js">
+    <link rel="modulepreload" href="js/modules/FileManager.js">
+    <link rel="modulepreload" href="js/core/AppInitializer.js">
+    <link rel="modulepreload" href="js/core/RenderService.js">
+    <link rel="modulepreload" href="js/core/AppRenderer.js">
 </head>
 <body>
     <div id="app">
@@ -106,7 +117,8 @@
         </div>
     </div>
     
-    <script type="module" src="app.js?v=100"></script>
+    <!-- Use bundled version in production, unbundled in development -->
+    <script type="module" src="/app.js?v=100"></script>
 </body>
 </html>
 
