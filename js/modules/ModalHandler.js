@@ -841,9 +841,16 @@ export class ModalHandler {
         // Text field (only for elements that have text)
         if (element.type === 'task' || element.type === 'header-checkbox' || element.type === 'audio' || element.type === 'timer' || 
             element.type === 'counter' || element.type === 'tracker' || element.type === 'rating' || element.type === 'time-log') {
+            // Convert HTML back to plain text for editing (decode HTML entities and remove tags)
+            let plainText = element.text || '';
+            // Create a temporary div to decode HTML entities and extract text content
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = plainText;
+            plainText = tempDiv.textContent || tempDiv.innerText || plainText;
+            
             html += `
                 <label>Text:</label>
-                <input type="text" id="edit-text" value="${this.escapeHtml(element.text || '')}" />
+                <textarea id="edit-text" style="width: 100%; min-height: 60px; padding: 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; font-family: inherit; resize: vertical;">${this.escapeHtml(plainText)}</textarea>
             `;
         }
         
@@ -1831,7 +1838,18 @@ export class ModalHandler {
         const textField = document.getElementById('edit-text');
         if (textField) {
             const oldText = element.text || '';
-            const newText = textField.value.trim();
+            let newText = textField.value.trim();
+            
+            // Convert markdown to HTML if user typed markdown syntax
+            // Check if text contains markdown patterns but not HTML tags
+            if (newText && !/<[a-z][\s\S]*>/i.test(newText)) {
+                // Text doesn't contain HTML, check for markdown
+                if (/\*\*.*\*\*|__.*__|\*[^*]+\*|_[^_]+_|`[^`]+`|\[.*\]\(.*\)/.test(newText)) {
+                    // Contains markdown syntax - convert to HTML
+                    newText = StringUtils.parseMarkdown(newText);
+                }
+            }
+            
             if (oldText !== newText && this.app.undoRedoManager) {
                 this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, oldText);
             }
@@ -2257,17 +2275,17 @@ export class ModalHandler {
             const allFormats = this.app.formatRendererManager.getAllFormats();
             const currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
             
-            // Filter to only show default, grid, and horizontal formats
-            // Order: Grid Layout first, then Horizontal Layout (to match expected order)
-            const allowedFormats = ['grid-layout-format', 'horizontal-layout-format'];
+            // Filter to only show default, grid, horizontal, and document formats
+            // Order: Grid Layout, Horizontal Layout, Document View (to match expected order)
+            const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
             const filteredFormats = allFormats.filter(format => {
                 const formatName = format.formatName || format.id;
                 return allowedFormats.includes(formatName);
             }).sort((a, b) => {
-                // Sort to ensure consistent order: Grid Layout, then Horizontal Layout
+                // Sort to ensure consistent order: Grid Layout, Horizontal Layout, Document View
                 const aName = a.formatName || a.id;
                 const bName = b.formatName || b.id;
-                const order = ['grid-layout-format', 'horizontal-layout-format'];
+                const order = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
                 const aIndex = order.indexOf(aName);
                 const bIndex = order.indexOf(bName);
                 return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
@@ -2386,6 +2404,8 @@ export class ModalHandler {
                 }
                 // Update grid config visibility
                 updateGridConfigVisibility();
+                // Close modal to show format change immediately
+                this.closeModal();
             });
         }
         

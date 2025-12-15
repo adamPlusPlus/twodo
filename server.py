@@ -92,6 +92,7 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                 
                 filename = data.get('filename', '')
                 file_data = data.get('data', {})
+                create_backup = data.get('createBackup', False)
                 
                 if not filename:
                     raise ValueError("Filename is required")
@@ -103,6 +104,16 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                     filename += '.json'
                 
                 file_path = os.path.join(saved_files_dir, filename)
+                
+                # Create backup if requested (only for manual saves)
+                if create_backup and os.path.exists(file_path):
+                    backup_path = file_path + '.bak'
+                    try:
+                        import shutil
+                        shutil.copy2(file_path, backup_path)
+                        print(f"Backup created: {filename}.bak")
+                    except Exception as e:
+                        print(f"Warning: Failed to create backup: {e}")
                 
                 # Save file
                 with open(file_path, 'w', encoding='utf-8') as f:
@@ -387,8 +398,8 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                             import traceback
                             traceback.print_exc()
                             self.send_response(500)
-                            self.end_headers()
-                            return
+            self.end_headers()
+            return
         
         # Handle file management endpoints
         if path == '/files':
@@ -397,11 +408,11 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                 saved_files_dir = os.path.join(script_dir, 'saved_files')
                 os.makedirs(saved_files_dir, exist_ok=True)
                 
-                # List all JSON files
+                # List all JSON files (exclude backup files with .bak extension)
                 files = []
                 if os.path.exists(saved_files_dir):
                     for filename in os.listdir(saved_files_dir):
-                        if filename.endswith('.json'):
+                        if filename.endswith('.json') and not filename.endswith('.bak'):
                             file_path = os.path.join(saved_files_dir, filename)
                             stat = os.stat(file_path)
                             files.append({
@@ -511,7 +522,8 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                 filename = os.path.basename(filename)  # Prevent directory traversal
                 filename = ''.join(c for c in filename if c.isalnum() or c in '.-_')
                 
-                if not filename.endswith('.json'):
+                # Accept both .json and .bak files
+                if not filename.endswith('.json') and not filename.endswith('.bak'):
                     filename += '.json'
                 
                 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -593,10 +605,25 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
         
         # Add no-cache headers for HTML, CSS, and JS files to prevent caching
         path = self.request_path or self.path
-        if path.endswith(('.html', '.css', '.js', '.json')) or path == '/' or path == '/index.html' or path == '':
+        # Parse path to get clean path without query params
+        parsed_path = urlparse(path)
+        clean_path = parsed_path.path
+        
+        if clean_path.endswith(('.html', '.css', '.js', '.json')) or clean_path == '/' or clean_path == '/index.html' or clean_path == '':
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
+        
+        # Add CSP header for HTML files to allow data URIs for scripts
+        # This is critical for modulepreload links that may be converted to data URIs
+        if clean_path.endswith('.html') or clean_path == '/' or clean_path == '/index.html' or clean_path == '':
+            # Allow data URIs for scripts (needed for some module loading scenarios)
+            # script-src-elem is specifically for <script> elements and takes precedence
+            # Using both script-src and script-src-elem to ensure coverage
+            csp_policy = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:;"
+            self.send_header('Content-Security-Policy', csp_policy)
+            # Debug: print to verify CSP is being set
+            print(f"[CSP] Setting CSP header for {clean_path}")
         
         super().end_headers()
     
@@ -701,9 +728,11 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 # Extract filename from path
                 filename = path[7:]  # Remove '/files/'
+                filename = unquote(filename)  # Decode URL-encoded filename
                 filename = os.path.basename(filename)
                 filename = ''.join(c for c in filename if c.isalnum() or c in '.-_')
-                if not filename.endswith('.json'):
+                # Accept both .json and .bak files
+                if not filename.endswith('.json') and not filename.endswith('.bak'):
                     filename += '.json'
                 
                 script_dir = os.path.dirname(os.path.abspath(__file__))
