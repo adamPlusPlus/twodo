@@ -2275,12 +2275,19 @@ export class ModalHandler {
             const allFormats = this.app.formatRendererManager.getAllFormats();
             const currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
             
+            // Debug: log all formats to help diagnose missing formats
+            console.log('[ModalHandler] All formats:', allFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
+            
             // Filter to only show default, grid, horizontal, and document formats
             // Order: Grid Layout, Horizontal Layout, Document View (to match expected order)
             const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
             const filteredFormats = allFormats.filter(format => {
                 const formatName = format.formatName || format.id;
-                return allowedFormats.includes(formatName);
+                const isAllowed = allowedFormats.includes(formatName);
+                if (!isAllowed && format.type === 'format') {
+                    console.log(`[ModalHandler] Format filtered out: ${formatName} (${format.name || format.id})`);
+                }
+                return isAllowed;
             }).sort((a, b) => {
                 // Sort to ensure consistent order: Grid Layout, Horizontal Layout, Document View
                 const aName = a.formatName || a.id;
@@ -2290,6 +2297,8 @@ export class ModalHandler {
                 const bIndex = order.indexOf(bName);
                 return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
             });
+            
+            console.log('[ModalHandler] Filtered formats:', filteredFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
             
             html += `
                 <div style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 4px;">

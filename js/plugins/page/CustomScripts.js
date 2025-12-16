@@ -19,7 +19,7 @@ export default class CustomScripts extends BasePlugin {
     }
     
     async onInit() {
-        console.log(`${this.name} initialized for page.`);
+        // console.log(`${this.name} initialized for page.`);
         
         // Initialize script sandbox if not exists
         if (!this.app.scriptSandbox) {

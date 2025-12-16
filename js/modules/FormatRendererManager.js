@@ -51,10 +51,12 @@ export class FormatRendererManager {
      */
     scanForFormats() {
         const formatPlugins = pluginRegistry.getByType('format');
+        console.log(`[FormatRendererManager] scanForFormats found ${formatPlugins.length} format plugins:`, formatPlugins.map(p => ({ id: p.id, formatName: p.formatName, name: p.name })));
         formatPlugins.forEach(plugin => {
             const formatName = plugin.formatName || plugin.id;
             if (formatName && !this.formatRenderers.has(formatName)) {
                 this.formatRenderers.set(formatName, plugin);
+                console.log(`[FormatRendererManager] Scanned and registered format: ${formatName} (${plugin.name || plugin.id})`);
             }
         });
     }
@@ -65,12 +67,15 @@ export class FormatRendererManager {
      */
     registerFormat(pluginId) {
         const plugin = pluginRegistry.get(pluginId);
+        console.log(`[FormatRendererManager] registerFormat called for ${pluginId}, plugin found:`, !!plugin, 'type:', plugin?.type);
         if (plugin && plugin.type === 'format') {
             const formatName = plugin.formatName || plugin.id;
             this.formatRenderers.set(formatName, plugin);
+            console.log(`[FormatRendererManager] Registered format: ${formatName} (${plugin.name || plugin.id})`);
         } else {
             // Plugin might not be registered yet - this is OK, it will be picked up by scanForFormats
             // or when the plugin:loaded event fires
+            console.log(`[FormatRendererManager] Plugin ${pluginId} not found or not a format plugin`);
         }
     }
     

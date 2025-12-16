@@ -55,55 +55,13 @@ export class BinRenderer {
             binContent.style.overflowX = 'hidden';
         }
         
-        // Add context menu handler for bin-content area
-        binContent.addEventListener('contextmenu', (e) => {
-            // Only show menu if clicking on empty space (not on an element or button)
-            if (!e.target.closest('.element') && !e.target.closest('button')) {
-                // Check for double right-click before preventing default
-                const now = Date.now();
-                const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
-                
-                if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState.visible) {
-                    // Double right-click - hide custom menu and allow browser menu
-                    this.app.hideContextMenu();
-                    this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
-                    // Don't prevent default - let browser show its context menu
-                    return;
-                }
-                
-                // Single right-click - show custom menu
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.contextMenuHandler.showBinContextMenu(e, pageId, bin.id);
-            }
-        });
+        // Context menu is now handled by unified handler in EventHandler
         
         const elementsList = document.createElement('div');
         elementsList.className = 'elements-list';
         elementsList.id = `elements-list-${bin.id}`;
         
-        // Add context menu handler for empty elements-list area
-        elementsList.addEventListener('contextmenu', (e) => {
-            // Only show menu if clicking on empty space (not on an element)
-            if (!e.target.closest('.element')) {
-                // Check for double right-click before preventing default
-                const now = Date.now();
-                const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
-                
-                if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState.visible) {
-                    // Double right-click - hide custom menu and allow browser menu
-                    this.app.hideContextMenu();
-                    this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
-                    // Don't prevent default - let browser show its context menu
-                    return;
-                }
-                
-                // Single right-click - show custom menu
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.contextMenuHandler.showBinContextMenu(e, pageId, bin.id);
-            }
-        });
+        // Context menu is now handled by unified handler in EventHandler
         
         // Ensure bin.elements exists and is an array
         if (!bin.elements || !Array.isArray(bin.elements)) {
@@ -129,41 +87,7 @@ export class BinRenderer {
             this.app.appState.activeBinId = bin.id;
         });
         
-        // Context menu handler for entire bin (except content area and specific controls)
-        const handleBinMenu = (e) => {
-            // Don't show menu if clicking on:
-            // - Elements (but allow empty bin-content area)
-            // - Bin controls (Delete button)
-            // - Toggle arrow
-            // - Add element button (but allow empty elements-list)
-            const isElement = e.target.closest('.element');
-            const isBinControl = e.target.closest('.bin-controls');
-            const isToggleArrow = e.target.closest('.bin-toggle-arrow');
-            const isAddElementBtn = e.target.closest('.add-element-btn');
-            const isInBinContent = e.target.closest('[id^="bin-content-"]');
-            const isEmptyElementsList = isInBinContent && (e.target.classList.contains('elements-list') || e.target.id.startsWith('bin-content-'));
-            
-            // Allow context menu on empty bin-content area or bin header
-            if ((!isElement && !isBinControl && !isToggleArrow && !isAddElementBtn) || isEmptyElementsList) {
-                // Check for double right-click before preventing default
-                const now = Date.now();
-                const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
-                
-                if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState.visible) {
-                    // Double right-click - hide custom menu and allow browser menu
-                    this.app.hideContextMenu();
-                    this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
-                    // Don't prevent default - let browser show its context menu
-                    return;
-                }
-                
-                // Single right-click - show custom menu
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.contextMenuHandler.showBinContextMenu(e, pageId, bin.id);
-            }
-        };
-        binDiv.addEventListener('contextmenu', handleBinMenu);
+        // Context menu is now handled by unified handler in EventHandler
         
         // Custom double-click detection for bins
         let binLastClickTime = 0;
@@ -404,25 +328,25 @@ export class BinRenderer {
                         if (bin.id === dragData.binId && pageId === dragData.pageId) {
                             const targetIndex = dragData.parentElementIndex + 1;
                             // console.log('Un-nesting element and placing below parent at index:', targetIndex);
-                            this.app.elementManager.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, targetIndex,
+                            this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, targetIndex,
                                 dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                         } else {
                             // If dropping on different bin, find parent's position in target bin or add to end
                             // For now, just add to end - could be enhanced to find matching parent
                             // console.log('Moving nested element to different bin (un-nesting):', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
-                            this.app.elementManager.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                            this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
                                 dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                         }
                     } else {
                         // Fallback: just un-nest and add to end
                         // console.log('Moving nested element to bin (un-nesting):', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
-                        this.app.elementManager.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                        this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
                             dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                     }
                 } else {
                     // console.log('Moving element to bin:', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
                 // Move element to this bin at the end
-                    this.app.elementManager.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                    this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
                         dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                 }
             }
@@ -663,7 +587,7 @@ export class BinRenderer {
                 
                 // moveElement will handle un-nesting if isChild is true
                 // console.log('Moving element within bin (un-nesting if needed):', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id, targetIndex);
-                this.app.elementManager.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, targetIndex,
+                this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, targetIndex,
                     dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                 
                 // Clean up drag-over classes

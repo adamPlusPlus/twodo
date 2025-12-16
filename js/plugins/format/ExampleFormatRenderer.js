@@ -22,7 +22,7 @@ export default class ExampleFormatRenderer extends BaseFormatRenderer {
     
     async onInit() {
         // Custom initialization logic
-        console.log('ExampleFormatRenderer initialized');
+        // console.log('ExampleFormatRenderer initialized');
     }
     
     renderPage(container, page, context) {

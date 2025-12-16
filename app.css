@@ -80,7 +80,7 @@ header h1 {
 
 .controls {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     margin-bottom: 10px;
 }
@@ -89,6 +89,7 @@ header h1 {
     position: relative;
     display: inline-block;
     vertical-align: top;
+    flex-shrink: 0;
 }
 
 .dropdown-toggle {
@@ -102,10 +103,14 @@ header h1 {
     border-radius: 0;
     margin: 0;
     font-weight: 500;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    width: 100%;
+    width: auto;
+    min-width: auto;
+    max-width: none;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .dropdown-toggle:hover {
@@ -127,6 +132,10 @@ header h1 {
 }
 
 .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1001;
     max-height: 0;
     overflow: hidden;
     background: #2d2d2d;
@@ -135,7 +144,8 @@ header h1 {
     transition: max-height 0.3s ease-out, padding 0.3s ease-out;
     padding: 0;
     min-width: 220px;
-    width: max-content;
+    width: 220px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
 .dropdown-menu.active {
@@ -398,6 +408,8 @@ header h1 {
     position: relative;
     z-index: 1;
     background: transparent;
+    min-height: calc(100vh - 200px);
+    padding: 20px;
 }
 
 .bin {
@@ -1326,9 +1338,15 @@ header h1 {
     }
     
     /* Larger touch targets */
-    button, .context-menu-item, .dropdown-toggle, .settings-btn {
+    button, .context-menu-item, .settings-btn {
         min-height: 44px;
         min-width: 44px;
+        padding: 12px 16px;
+    }
+    
+    .dropdown-toggle {
+        min-height: 44px;
+        min-width: auto;
         padding: 12px 16px;
     }
     

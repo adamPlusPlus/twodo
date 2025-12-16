@@ -20,7 +20,7 @@ export default class WorkflowAutomation extends BasePlugin {
     }
     
     async onInit() {
-        console.log(`${this.name} initialized for bin.`);
+        // console.log(`${this.name} initialized for bin.`);
         
         // Initialize automation engine if not exists
         if (!this.app.automationEngine) {

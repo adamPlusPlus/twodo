@@ -131,7 +131,7 @@ export class AppInitializer {
         ];
         
         const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat'
+            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat'
         ];
         
         // Load all plugins
@@ -215,6 +215,12 @@ export class AppInitializer {
         // Wait for all plugins to load
         await Promise.allSettled(loadPromises);
         console.log('All plugins loaded');
+        
+        // Rescan for formats after all plugins are loaded
+        if (this.app.formatRendererManager) {
+            console.log('[AppInitializer] Rescanning for formats after plugin load...');
+            this.app.formatRendererManager.scanForFormats();
+        }
     }
     
     /**

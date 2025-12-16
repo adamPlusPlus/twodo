@@ -19,7 +19,7 @@ export default class PageTemplates extends BasePlugin {
     }
     
     async onInit() {
-        console.log(`${this.name} initialized for page.`);
+        // console.log(`${this.name} initialized for page.`);
     }
     
     renderSettingsUI() {

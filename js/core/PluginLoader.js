@@ -75,7 +75,7 @@ export class PluginLoader {
                 throw new Error(`No plugin class found in module "${pluginPath}"`);
             }
             
-            // Instantiate plugin - try with app first, fallback to no args
+            // Instantiate plugin - try with app first, fallback to no args, then with empty config
             let plugin;
             try {
                 // Try instantiating with app if provided
@@ -87,9 +87,19 @@ export class PluginLoader {
             } catch (e) {
                 // If that fails, try without app
                 if (app) {
-                    plugin = new PluginClass();
+                    try {
+                        plugin = new PluginClass();
+                    } catch (e2) {
+                        // If that also fails, try with empty config object
+                        plugin = new PluginClass({});
+                    }
                 } else {
-                    throw e;
+                    // Try with empty config object
+                    try {
+                        plugin = new PluginClass({});
+                    } catch (e2) {
+                        throw e; // Throw original error
+                    }
                 }
             }
             

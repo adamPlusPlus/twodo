@@ -46,14 +46,14 @@ export class ContextMenuHandler {
     
     showContextMenu(e, pageId, binId, elementIndex, subtaskIndex = null) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.lastRightClickTime;
+        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -63,18 +63,18 @@ export class ContextMenuHandler {
         
         // If binId not provided, try to find it
         if (!binId) {
-            binId = this.app.activeBinId;
+            binId = this.app.appState.activeBinId;
             if (!binId) {
-                const page = this.app.pages.find(p => p.id === pageId);
+                const page = this.app.appState.pages.find(p => p.id === pageId);
                 if (page && page.bins && page.bins.length > 0) {
                     binId = page.bins[0].id;
                 }
             }
         }
         
-        this.app.lastRightClickTime = now;
+        this.app.appState.lastRightClickTime = now;
         
-        this.app.contextMenuState = {
+        this.app.appState.setContextMenuState({
             visible: true,
             pageId: pageId,
             binId: binId,
@@ -82,7 +82,7 @@ export class ContextMenuHandler {
             subtaskIndex: subtaskIndex,
             x: e.clientX,
             y: e.clientY
-        };
+        });
         
         const menu = document.getElementById('context-menu');
 
@@ -152,8 +152,8 @@ export class ContextMenuHandler {
             return;
         }
         menu.classList.remove('active');
-        if (this.app.contextMenuState) {
-            this.app.contextMenuState.visible = false;
+        if (this.app.appState.contextMenuState) {
+            this.app.appState.setContextMenuState({ visible: false });
         }
         // Hide all menu items, they will be shown/hidden as needed
         menu.querySelectorAll('.context-menu-item').forEach(item => {
@@ -163,14 +163,14 @@ export class ContextMenuHandler {
     
     showBinContextMenu(e, pageId, binId) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.lastRightClickTime;
+        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -178,7 +178,7 @@ export class ContextMenuHandler {
         e.preventDefault();
         e.stopPropagation();
         
-        this.app.lastRightClickTime = now;
+        this.app.appState.lastRightClickTime = now;
         
         const menu = document.getElementById('context-menu');
         
@@ -207,26 +207,26 @@ export class ContextMenuHandler {
         menu.style.display = '';
         
         // Set context menu state with the correct pageId and binId
-        this.app.contextMenuState = {
+        this.app.appState.setContextMenuState({
             visible: true,
             pageId: pageId,
             binId: binId,
             elementIndex: null,
             x: e.clientX,
             y: e.clientY
-        };
+        });
     }
     
     showPageContextMenu(e, pageId = null) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.lastRightClickTime;
+        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.doubleClickThreshold && this.app.contextMenuState && this.app.contextMenuState.visible) {
+        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -234,12 +234,12 @@ export class ContextMenuHandler {
         e.preventDefault();
         e.stopPropagation();
         
-        this.app.lastRightClickTime = now;
+        this.app.appState.lastRightClickTime = now;
         
         const menu = document.getElementById('context-menu');
         
         // Show only page-level menu items (including edit for pages)
-        const pageLevelItems = ['context-add-page', 'context-add-element-page', 'context-delete-page', 'context-toggle-subtasks', 'context-collapse-all-pages', 'context-reset-day', 'context-edit'];
+        const pageLevelItems = ['context-add-page', 'context-add-element-page', 'context-delete-page', 'context-toggle-subtasks', 'context-collapse-all-pages', 'context-reset-day', 'context-edit', 'context-paste-markdown'];
         menu.querySelectorAll('.context-menu-item').forEach(item => {
             if (pageLevelItems.includes(item.id)) {
                 item.style.display = 'block';
@@ -284,13 +284,13 @@ export class ContextMenuHandler {
         menu.style.display = '';
         
         // Set context menu state with the correct pageId (binId explicitly set to null for page context)
-        this.app.contextMenuState = {
+        this.app.appState.setContextMenuState({
             visible: true,
             pageId: pageIdToUse,
             binId: null,
             elementIndex: null,
             x: e.clientX,
             y: e.clientY
-        };
+        });
     }
 }

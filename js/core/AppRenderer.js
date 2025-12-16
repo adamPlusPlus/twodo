@@ -164,25 +164,12 @@ export class AppRenderer {
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
             
-            // Right-click for context menu
-            tab.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.contextMenuHandler.showPageContextMenu(e, page.id);
-            });
+            // Context menu is now handled by unified handler in EventHandler
             
             tabsContainer.appendChild(tab);
         });
 
-        // Add context menu handler for the page tabs container (empty space)
-        tabsContainer.addEventListener('contextmenu', (e) => {
-            // Only show menu if clicking on empty space (not on a page tab)
-            if (!e.target.closest('.page-tab')) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.app.contextMenuHandler.showPageContextMenu(e);
-            }
-        });
+        // Context menu is now handled by unified handler in EventHandler
     }
     
     /**

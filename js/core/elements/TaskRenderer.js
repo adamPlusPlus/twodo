@@ -41,7 +41,15 @@ export class TaskRenderer {
         const isExpanded = this.app.appState.subtaskStates[childrenStateKey];
         const initialArrow = isExpanded ? '▼' : '▶';
     
-        taskTextSpan.innerHTML = `<span class="subtask-arrow" id="${childrenToggleId}">${initialArrow}</span> ${this.app.escapeHtml(element.text)}`;
+        // Parse HTML in text if present, otherwise escape it
+        const textFragment = this.app.parseLinks(element.text);
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'subtask-arrow';
+        arrowSpan.id = childrenToggleId;
+        arrowSpan.textContent = initialArrow;
+        taskTextSpan.appendChild(arrowSpan);
+        taskTextSpan.appendChild(document.createTextNode(' '));
+        taskTextSpan.appendChild(textFragment);
         // For tasks with children, clicking the text toggles children, not completion
         taskTextSpan.onclick = (e) => {
         e.stopPropagation();

@@ -23,7 +23,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
     }
     
     async onInit() {
-        console.log(`${this.name} format renderer initialized.`);
+        // console.log(`${this.name} format renderer initialized.`);
         
         // Don't call registerFormat here - the plugin isn't registered in the registry yet
         // The FormatRendererManager will pick it up via:

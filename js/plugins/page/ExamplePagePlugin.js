@@ -19,7 +19,7 @@ export default class ExamplePagePlugin extends BasePlugin {
     
     async onInit() {
         // Custom initialization logic
-        console.log('ExamplePagePlugin initialized');
+        // console.log('ExamplePagePlugin initialized');
     }
     
     async onEnable() {

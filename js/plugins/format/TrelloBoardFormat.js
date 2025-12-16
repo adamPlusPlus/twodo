@@ -23,7 +23,7 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
     }
     
     async onInit() {
-        console.log(`${this.name} format renderer initialized.`);
+        // console.log(`${this.name} format renderer initialized.`);
     }
     
     /**

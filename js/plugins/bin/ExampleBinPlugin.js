@@ -19,7 +19,7 @@ export default class ExampleBinPlugin extends BasePlugin {
     
     async onInit() {
         // Custom initialization logic
-        console.log('ExampleBinPlugin initialized');
+        // console.log('ExampleBinPlugin initialized');
     }
     
     async onEnable() {

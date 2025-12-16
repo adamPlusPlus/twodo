@@ -24,7 +24,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
     
     async onInit() {
         // Emit event for registration - FormatRendererManager listens to this
+        console.log('[DocumentViewFormat] onInit called, id:', this.id, 'formatName:', this.formatName);
         eventBus.emit('format:registered', { pluginId: this.id });
+        console.log('[DocumentViewFormat] format:registered event emitted');
     }
     
     /**

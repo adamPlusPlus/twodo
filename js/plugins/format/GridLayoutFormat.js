@@ -19,7 +19,7 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
     }
     
     async onInit() {
-        console.log(`${this.name} format renderer initialized.`);
+        // console.log(`${this.name} format renderer initialized.`);
     }
     
     /**

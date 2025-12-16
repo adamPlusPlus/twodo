@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "H:\_Projects\twodo\websocket_server.py", line 500, in main
+    async with websockets.serve(handler, "0.0.0.0", port):
+               ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bacch\AppData\Roaming\Python\Python313\site-packages\websockets\legacy\server.py", line 1098, in __aenter__
+    return await self
+           ^^^^^^^^^^
+  File "C:\Users\bacch\AppData\Roaming\Python\Python313\site-packages\websockets\legacy\server.py", line 1116, in __await_impl__
+    server = await self._create_server()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\asyncio\base_events.py", line 1616, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8001): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+Starting WebSocket server on ws://localhost:8001
+
+WebSocket server error: [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8001): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted

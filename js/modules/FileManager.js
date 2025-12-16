@@ -7,6 +7,11 @@ export class FileManager {
         this.app = app;
         this.currentFilename = null;
         this.lastOpenedFileKey = 'twodo-last-opened-file';
+        // Backup loading state
+        this.originalFilename = null;  // The original file that was backed up
+        this.tempFilename = null;  // Temporary filename for saves (filename-1.json, overwritten by autosaves)
+        this.isBackupLoaded = false;  // Whether a backup file was loaded
+        this.backupDiffers = false;  // Whether the backup differs from current file
     }
     
     async listFiles() {
@@ -34,14 +39,21 @@ export class FileManager {
     
     async saveFile(filename, data, silent = false) {
         try {
+            // If backup is loaded and differs, use temp filename for saves
+            let actualFilename = filename;
+            if (this.isBackupLoaded && this.backupDiffers && this.tempFilename) {
+                actualFilename = this.tempFilename;
+            }
+            
             const response = await fetch('/files/save', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    filename: filename,
-                    data: data
+                    filename: actualFilename,
+                    data: data,
+                    createBackup: !silent  // Create backup only for manual saves (not autosave)
                 })
             });
             
@@ -51,7 +63,16 @@ export class FileManager {
             
             const result = await response.json();
             if (result.success) {
-                this.currentFilename = result.filename;
+                // If this was an autosave with temp file, keep using the same temp filename (overwrite)
+                if (this.isBackupLoaded && this.backupDiffers && silent && this.tempFilename) {
+                    this.currentFilename = this.tempFilename;
+                    // Keep tempFilename the same - autosaves overwrite the same temp file
+                } else if (!this.isBackupLoaded || !this.backupDiffers || !silent) {
+                    // Normal save or manual save that resolved temp file
+                    this.currentFilename = result.filename;
+                } else {
+                    this.currentFilename = this.tempFilename;
+                }
                 
                 // Trigger buffer save after main file save
                 if (this.app && this.app.undoRedoManager) {
@@ -85,7 +106,8 @@ export class FileManager {
                 },
                 body: JSON.stringify({
                     filename: filename,
-                    data: data
+                    data: data,
+                    createBackup: true  // Always create backup for Save As (manual save)
                 })
             });
             
@@ -349,6 +371,8 @@ export class FileManager {
                     <div style="display: flex; gap: 8px;">
                         <button onclick="window.app.fileManager.handleLoad('${file.filename}')" 
                                 style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📂 Load</button>
+                        <button onclick="window.app.fileManager.handleLoadBackup('${file.filename}')" 
+                                style="padding: 6px 12px; background: #6a8eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">💾 Load .bak</button>
                         <button onclick="window.app.fileManager.handleRename('${file.filename}')" 
                                 style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Rename</button>
                         <button onclick="window.app.fileManager.handleDelete('${file.filename}')" 
@@ -363,6 +387,67 @@ export class FileManager {
     }
     
     async handleSave() {
+        // If backup was loaded and differs, prompt user to overwrite or save as
+        if (this.isBackupLoaded && this.backupDiffers && this.originalFilename) {
+            let choice;
+            if (this.app && this.app.modalHandler) {
+                choice = await this.app.modalHandler.showConfirm(
+                    `You loaded a backup file that differs from ${this.originalFilename}.\n\n` +
+                    `Do you want to overwrite ${this.originalFilename} with your current changes?\n\n` +
+                    `Click OK to overwrite, or Cancel to save as a new file.`
+                );
+            } else {
+                choice = confirm(
+                    `You loaded a backup file that differs from ${this.originalFilename}.\n\n` +
+                    `Do you want to overwrite ${this.originalFilename} with your current changes?\n\n` +
+                    `Click OK to overwrite, or Cancel to save as a new file.`
+                );
+            }
+            
+            if (choice) {
+                // Overwrite original file
+                try {
+                    const data = {
+                        pages: this.app.pages
+                    };
+                    
+                    // Store temp filename for cleanup
+                    const tempFileToDelete = this.tempFilename;
+                    
+                    // Reset backup loading state BEFORE saving so saveFile uses original filename
+                    const originalFile = this.originalFilename;
+                    this.originalFilename = null;
+                    this.tempFilename = null;
+                    this.isBackupLoaded = false;
+                    this.backupDiffers = false;
+                    
+                    // Now save to original file
+                    await this.saveFile(originalFile, data);
+                    
+                    // Clean up temporary file
+                    if (tempFileToDelete) {
+                        await this.deleteFile(tempFileToDelete).catch(err => {
+                            console.warn('Failed to delete temp file:', err);
+                        });
+                    }
+                    
+                    if (this.app && this.app.modalHandler) {
+                        await this.app.modalHandler.showAlert(`File saved: ${originalFile}`);
+                    } else {
+                        alert(`File saved: ${originalFile}`);
+                    }
+                    this.refreshFileList();
+                } catch (error) {
+                    // Error already shown in saveFile
+                }
+            } else {
+                // Save as new file
+                this.handleSaveAs();
+            }
+            return;
+        }
+        
+        // Normal save flow
         if (!this.currentFilename) {
             this.handleSaveAs();
             return;
@@ -374,6 +459,17 @@ export class FileManager {
             };
             
             await this.saveFile(this.currentFilename, data);
+            
+            // If we just saved and had a temp file, clean it up and reset state
+            if (this.isBackupLoaded && this.tempFilename && this.currentFilename === this.tempFilename) {
+                // This shouldn't happen in normal flow, but handle it just in case
+                this.isBackupLoaded = false;
+                this.backupDiffers = false;
+                this.tempFilename = null;
+                this.originalFilename = null;
+                this.tempFileCounter = 0;
+            }
+            
             if (this.app && this.app.modalHandler) {
                 await this.app.modalHandler.showAlert(`File saved: ${this.currentFilename}`);
             } else {
@@ -386,7 +482,7 @@ export class FileManager {
     }
     
     async handleSaveAs() {
-        const defaultName = this.currentFilename ? this.currentFilename.replace('.json', '') : '';
+        const defaultName = this.currentFilename ? this.currentFilename.replace('.json', '').replace(/-\d+$/, '') : '';
         let filename;
         
         if (this.app && this.app.modalHandler) {
@@ -402,7 +498,24 @@ export class FileManager {
                 pages: this.app.pages
             };
             
+            // Store temp filename for cleanup
+            const tempFileToDelete = this.tempFilename;
+            
+            // Reset backup loading state BEFORE saving
+            this.originalFilename = null;
+            this.tempFilename = null;
+            this.isBackupLoaded = false;
+            this.backupDiffers = false;
+            
             await this.saveAsFile(filename, data);
+            
+            // Clean up temporary file if backup was loaded
+            if (tempFileToDelete) {
+                await this.deleteFile(tempFileToDelete).catch(err => {
+                    console.warn('Failed to delete temp file:', err);
+                });
+            }
+            
             if (this.app && this.app.modalHandler) {
                 await this.app.modalHandler.showAlert(`File saved as: ${this.currentFilename}`);
             } else {
@@ -476,6 +589,117 @@ export class FileManager {
             }
         } catch (error) {
             // Error already shown in loadFile
+        }
+    }
+    
+    async handleLoadBackup(filename) {
+        const backupFilename = filename + '.bak';
+        let confirmed;
+        if (this.app && this.app.modalHandler) {
+            confirmed = await this.app.modalHandler.showConfirm(`Load backup file ${backupFilename}? This will replace your current data.`);
+        } else {
+            confirmed = confirm(`Load backup file ${backupFilename}? This will replace your current data.`);
+        }
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        try {
+            // Load the backup file
+            const backupData = await this.loadFile(backupFilename);
+            
+            if (!backupData.pages || !Array.isArray(backupData.pages)) {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                } else {
+                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                }
+                return;
+            }
+            
+            // Load the current file to compare
+            let currentData = null;
+            let differs = true;
+            try {
+                currentData = await this.loadFile(filename);
+                // Compare the pages data (normalize by stringifying)
+                const backupPagesStr = JSON.stringify(backupData.pages);
+                const currentPagesStr = JSON.stringify(currentData.pages || []);
+                differs = backupPagesStr !== currentPagesStr;
+            } catch (error) {
+                // Current file doesn't exist or can't be loaded - assume it differs
+                differs = true;
+            }
+            
+            // Set backup loading state
+            this.originalFilename = filename;
+            this.isBackupLoaded = true;
+            this.backupDiffers = differs;
+            
+            // Generate temporary filename if backup differs (always use -1, autosaves will overwrite it)
+            if (differs) {
+                const baseName = filename.replace('.json', '');
+                this.tempFilename = `${baseName}-1.json`;
+                this.currentFilename = this.tempFilename;
+            } else {
+                // Backup is same as current, no temp file needed
+                this.tempFilename = null;
+                this.currentFilename = filename;
+            }
+            
+            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
+            if (this.app.appState) {
+                this.app.appState.pages = backupData.pages;
+                // Update currentPageId if needed
+                if (backupData.pages.length > 0 && !backupData.pages.find(p => p.id === this.app.appState.currentPageId)) {
+                    this.app.appState.currentPageId = backupData.pages[0].id;
+                }
+            }
+            // Also set app.pages for backward compatibility with other modules
+            this.app.pages = backupData.pages;
+            
+            // Store last opened file in localStorage (device-specific) - use original filename, not backup
+            localStorage.setItem(this.lastOpenedFileKey, filename);
+            
+            // Request render via EventBus
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+            this.app.modalHandler.closeModal();
+            
+            if (differs) {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
+                } else {
+                    alert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
+                }
+            } else {
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup is identical to the current file.`);
+                } else {
+                    alert(`Backup file loaded: ${backupFilename}\n\nThis backup is identical to the current file.`);
+                }
+            }
+            
+            this.refreshFileList();
+            
+            // Connect to sync and join file session (use original filename, not backup)
+            if (this.app.syncManager) {
+                if (!this.app.syncManager.isConnected) {
+                    await this.app.syncManager.connect();
+                }
+                this.app.syncManager.joinFile(filename);
+            }
+            
+            // Set current file in undo/redo manager (this loads the buffer) - use original filename
+            if (this.app.undoRedoManager) {
+                await this.app.undoRedoManager.setCurrentFile(filename);
+            }
+        } catch (error) {
+            if (this.app && this.app.modalHandler) {
+                await this.app.modalHandler.showAlert(`Failed to load backup file: ${error.message}`);
+            } else {
+                alert(`Failed to load backup file: ${error.message}`);
+            }
         }
     }
     

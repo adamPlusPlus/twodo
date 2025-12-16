@@ -142,35 +142,83 @@ export const StringUtils = {
      */
     parseLinks(text) {
         if (!text || typeof text !== 'string') return document.createDocumentFragment();
-        // URL regex pattern
-        const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/g;
-        const parts = text.split(urlPattern);
-        const fragment = document.createDocumentFragment();
         
-        parts.forEach((part) => {
-            if (urlPattern.test(part)) {
-                // This is a URL
-                let href = part;
-                if (!href.startsWith('http://') && !href.startsWith('https://')) {
-                    href = 'https://' + href;
+        try {
+            // Check if text contains HTML tags (simple check for opening tags)
+            const hasHtml = /<[a-z][a-z0-9]*[^>]*>/i.test(text);
+            
+            if (hasHtml) {
+                // Text contains HTML - render it directly
+                // Use a safer approach: create a container, set innerHTML, then extract children
+                const tempDiv = document.createElement('div');
+                // Sanitize: only allow safe HTML tags
+                const allowedTags = /<\/?(strong|em|code|a|b|i|u|span|div|p|br)[^>]*>/gi;
+                if (allowedTags.test(text) || text.match(/<[a-z][a-z0-9]*[^>]*>/i)) {
+                    tempDiv.innerHTML = text;
+                } else {
+                    // If it looks like HTML but doesn't match allowed tags, escape it
+                    tempDiv.textContent = text;
                 }
-                const link = document.createElement('a');
-                link.href = href;
-                link.textContent = part;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.style.color = '#4a9eff';
-                link.style.textDecoration = 'underline';
-                link.onclick = (e) => e.stopPropagation(); // Prevent element click when clicking link
-                fragment.appendChild(link);
-            } else if (part) {
-                // Regular text
-                const textNode = document.createTextNode(part);
-                fragment.appendChild(textNode);
+                
+                const fragment = document.createDocumentFragment();
+                
+                // Move all children to fragment
+                while (tempDiv.firstChild) {
+                    fragment.appendChild(tempDiv.firstChild);
+                }
+                
+                // Style any existing links
+                fragment.querySelectorAll('a').forEach(link => {
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    if (!link.style.color) {
+                        link.style.color = '#4a9eff';
+                    }
+                    if (!link.style.textDecoration) {
+                        link.style.textDecoration = 'underline';
+                    }
+                    link.onclick = (e) => e.stopPropagation();
+                });
+                
+                return fragment;
+            } else {
+            // No HTML - use original link parsing logic
+            const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/g;
+            const parts = text.split(urlPattern);
+            const fragment = document.createDocumentFragment();
+            
+            parts.forEach((part) => {
+                if (urlPattern.test(part)) {
+                    // This is a URL
+                    let href = part;
+                    if (!href.startsWith('http://') && !href.startsWith('https://')) {
+                        href = 'https://' + href;
+                    }
+                    const link = document.createElement('a');
+                    link.href = href;
+                    link.textContent = part;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.style.color = '#4a9eff';
+                    link.style.textDecoration = 'underline';
+                    link.onclick = (e) => e.stopPropagation(); // Prevent element click when clicking link
+                    fragment.appendChild(link);
+                } else if (part) {
+                    // Regular text
+                    const textNode = document.createTextNode(part);
+                    fragment.appendChild(textNode);
+                }
+            });
+            
+            return fragment;
             }
-        });
-        
-        return fragment;
+        } catch (error) {
+            console.error('Error parsing links:', error);
+            // Fallback: return text as plain text node
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(document.createTextNode(text));
+            return fragment;
+        }
     },
     
     /**

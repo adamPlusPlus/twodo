@@ -352,10 +352,7 @@ export class ElementRenderer {
         }
         div.dataset.pageId = pageId;
         
-        // Add right-click and double-click handlers
-        div.addEventListener('contextmenu', (e) => {
-            this.app.showContextMenu(e, pageId, binId, elementIndex);
-        });
+        // Context menu is now handled by unified handler in EventHandler
         
         // Custom double-click detection with shorter delay
         let lastClickTime = 0;

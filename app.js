@@ -414,7 +414,7 @@ class TodoApp {
         ];
         
         const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat'
+            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat'
         ];
         
         // Load all plugins
@@ -498,6 +498,12 @@ class TodoApp {
         // Wait for all plugins to load
         await Promise.allSettled(loadPromises);
         console.log('All plugins loaded');
+        
+        // Rescan for formats after all plugins are loaded
+        if (this.formatRendererManager) {
+            console.log('[app.js] Rescanning for formats after plugin load...');
+            this.formatRendererManager.scanForFormats();
+        }
     }
     
     /**

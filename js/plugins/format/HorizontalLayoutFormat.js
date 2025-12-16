@@ -19,7 +19,7 @@ export default class HorizontalLayoutFormat extends BaseFormatRenderer {
     }
     
     async onInit() {
-        console.log(`${this.name} format renderer initialized.`);
+        // console.log(`${this.name} format renderer initialized.`);
     }
     
     /**

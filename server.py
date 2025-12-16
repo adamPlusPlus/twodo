@@ -609,21 +609,30 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
         parsed_path = urlparse(path)
         clean_path = parsed_path.path
         
+        # Debug: log the path being processed
+        print(f"[DEBUG] end_headers called with path={path}, clean_path={clean_path}")
+        
         if clean_path.endswith(('.html', '.css', '.js', '.json')) or clean_path == '/' or clean_path == '/index.html' or clean_path == '':
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
         
-        # Add CSP header for HTML files to allow data URIs for scripts
+        # Add CSP header for HTML files to allow data URIs for scripts and WebSocket connections
         # This is critical for modulepreload links that may be converted to data URIs
-        if clean_path.endswith('.html') or clean_path == '/' or clean_path == '/index.html' or clean_path == '':
+        is_html_path = clean_path.endswith('.html') or clean_path == '/' or clean_path == '/index.html' or clean_path == ''
+        print(f"[DEBUG] is_html_path={is_html_path} for clean_path={clean_path}")
+        
+        if is_html_path:
             # Allow data URIs for scripts (needed for some module loading scenarios)
             # script-src-elem is specifically for <script> elements and takes precedence
             # Using both script-src and script-src-elem to ensure coverage
-            csp_policy = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:;"
+            # connect-src allows WebSocket connections (ws:// and wss://)
+            csp_policy = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob: ws: wss: http://localhost:*; connect-src 'self' ws: wss: http://localhost:* https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net data: blob:; style-src 'self' 'unsafe-inline';"
             self.send_header('Content-Security-Policy', csp_policy)
             # Debug: print to verify CSP is being set
-            print(f"[CSP] Setting CSP header for {clean_path}")
+            print(f"[CSP] Setting CSP header for {clean_path} with connect-src")
+        else:
+            print(f"[DEBUG] NOT setting CSP header - path doesn't match HTML condition")
         
         super().end_headers()
     
