@@ -231,7 +231,7 @@ export class ElementManager {
             childIndex = parseInt(parts[1]);
         }
         
-        const page = this.app.pages.find(p => p.id === actualPageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === actualPageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === actualBinId);

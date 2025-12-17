@@ -7,6 +7,7 @@ import { BinRenderer } from './BinRenderer.js';
 import { ElementRenderer } from './ElementRenderer.js';
 // import { CalendarRenderer } from './CalendarRenderer.js'; // TEMPORARILY DISABLED
 import { AnimationRenderer } from './AnimationRenderer.js';
+import { PaneManager } from './PaneManager.js';
 
 /**
  * AppRenderer - Manages all rendering operations
@@ -22,6 +23,7 @@ export class AppRenderer {
         this.elementRenderer = new ElementRenderer(app);
         // this.calendarRenderer = new CalendarRenderer(app); // TEMPORARILY DISABLED
         this.animationRenderer = new AnimationRenderer(app);
+        this.paneManager = new PaneManager(app, this);
     }
     
     /**
@@ -59,6 +61,30 @@ export class AppRenderer {
             }
         }
         
+        // Check if multi-pane mode is enabled (for now, we'll add a flag later)
+        const useMultiPane = this.app.appState.multiPaneEnabled !== false; // Default to true for now
+        
+        if (useMultiPane) {
+            // Initialize pane manager if not already done
+            if (!this.paneManager.rootLayout) {
+                this.paneManager.initialize();
+            }
+            
+            // Render all panes
+            const allPanes = this.paneManager.getAllPanes();
+            allPanes.forEach(pane => {
+                this.paneManager.renderPane(pane);
+            });
+            
+            // If no panes, create one with current page
+            if (allPanes.length === 0) {
+                this.paneManager.openPane(this.app.appState.currentPageId);
+            }
+            
+            return;
+        }
+        
+        // Legacy single-pane rendering
         const container = document.getElementById('bins-container');
         if (!container) return;
         
@@ -106,6 +132,10 @@ export class AppRenderer {
             return;
         }
         
+        // Preserve scroll position before rendering
+        const scrollTop = container.scrollTop;
+        const scrollLeft = container.scrollLeft;
+        
         // Default rendering - reset container CSS to default vertical layout
         // Clear any format-specific CSS that was applied
         container.style.cssText = '';
@@ -127,6 +157,10 @@ export class AppRenderer {
                         });
                     }
                 }
+                
+                // Restore scroll position after rendering
+                container.scrollTop = scrollTop;
+                container.scrollLeft = scrollLeft;
             }, 0);
         }
         

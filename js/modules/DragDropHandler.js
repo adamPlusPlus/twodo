@@ -8,7 +8,7 @@ export class DragDropHandler {
     }
     
     moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
-        const sourcePage = this.app.pages.find(p => p.id === sourcePageId);
+        const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
@@ -48,7 +48,7 @@ export class DragDropHandler {
         }
         
         // Add to target
-        const targetPage = this.app.pages.find(p => p.id === targetPageId);
+        const targetPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             // Re-add element to source if target is invalid
@@ -193,7 +193,7 @@ export class DragDropHandler {
             oldPosition: oldPosition // Store the captured old position
         };
         // Log resulting structure
-        const resultPage = this.app.pages.find(p => p.id === targetPageId);
+        const resultPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
         const resultBin = resultPage?.bins?.find(b => b.id === targetBinId);
         const resultElement = resultBin?.elements[adjustedTargetIndex];
         const resultText = resultElement?.text || 'N/A';
@@ -201,7 +201,7 @@ export class DragDropHandler {
         // If we un-nested a child, check if parent still has children
         let parentChildrenInfo = 'N/A';
         if (isChild && parentElementIndex !== null) {
-            const sourcePage = this.app.pages.find(p => p.id === sourcePageId);
+            const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
             const sourceBin = sourcePage?.bins?.find(b => b.id === sourceBinId);
             const parentElement = sourceBin?.elements[parentElementIndex];
             if (parentElement) {
@@ -224,7 +224,7 @@ export class DragDropHandler {
     }
 
     reorderChildElement(pageId, binId, parentElementIndex, sourceChildIndex, targetChildIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
         if (!page) {
             console.error('Page not found:', pageId);
             return;
@@ -281,7 +281,7 @@ export class DragDropHandler {
 
     nestElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null, elementToNest = null) {
         
-        const sourcePage = this.app.pages.find(p => p.id === sourcePageId);
+        const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
@@ -293,7 +293,7 @@ export class DragDropHandler {
             return;
         }
         
-        const targetPage = this.app.pages.find(p => p.id === targetPageId);
+        const targetPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             return;

@@ -851,16 +851,23 @@ export class ModalHandler {
         // Text field (only for elements that have text)
         if (element.type === 'task' || element.type === 'header-checkbox' || element.type === 'audio' || element.type === 'timer' || 
             element.type === 'counter' || element.type === 'tracker' || element.type === 'rating' || element.type === 'time-log') {
-            // Convert HTML back to plain text for editing (decode HTML entities and remove tags)
-            let plainText = element.text || '';
-            // Create a temporary div to decode HTML entities and extract text content
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = plainText;
-            plainText = tempDiv.textContent || tempDiv.innerText || plainText;
+            // Show raw text for editing (preserve markdown/HTML as stored)
+            // If text contains HTML, extract plain text; otherwise show as-is (for markdown)
+            let editText = element.text || '';
+            
+            // If text contains HTML tags, extract plain text for editing
+            // Otherwise, show markdown/raw text as-is
+            if (/<[a-z][a-z0-9]*[^>]*>/i.test(editText)) {
+                // Contains HTML - extract plain text for editing
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = editText;
+                editText = tempDiv.textContent || tempDiv.innerText || editText;
+            }
+            // If it's markdown (like **bold**), show it as-is so user can edit the markdown
             
             html += `
                 <label>Text:</label>
-                <textarea id="edit-text" style="width: 100%; min-height: 60px; padding: 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; font-family: inherit; resize: vertical;">${this.escapeHtml(plainText)}</textarea>
+                <textarea id="edit-text" style="width: 100%; min-height: 60px; padding: 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; font-family: inherit; resize: vertical;">${this.escapeHtml(editText)}</textarea>
             `;
         }
         
@@ -1850,15 +1857,9 @@ export class ModalHandler {
             const oldText = element.text || '';
             let newText = textField.value.trim();
             
-            // Convert markdown to HTML if user typed markdown syntax
-            // Check if text contains markdown patterns but not HTML tags
-            if (newText && !/<[a-z][\s\S]*>/i.test(newText)) {
-                // Text doesn't contain HTML, check for markdown
-                if (/\*\*.*\*\*|__.*__|\*[^*]+\*|_[^_]+_|`[^`]+`|\[.*\]\(.*\)/.test(newText)) {
-                    // Contains markdown syntax - convert to HTML
-                    newText = StringUtils.parseMarkdown(newText);
-                }
-            }
+            // Store text as-is (preserve markdown or HTML as user typed it)
+            // Views will handle rendering via parseLinks which supports both markdown and HTML
+            // This allows users to edit raw formatting text in modals
             
             if (oldText !== newText && this.app.undoRedoManager) {
                 this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, oldText);
@@ -2288,7 +2289,31 @@ export class ModalHandler {
         // Format Renderer Section
         if (this.app.formatRendererManager) {
             const allFormats = this.app.formatRendererManager.getAllFormats();
-            const currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+            
+            // Check if we're editing a tab (from pane context menu)
+            let currentFormat = null;
+            let editingTabInfo = null;
+            if (this.app.appState && this.app.appState._editingTabInfo) {
+                editingTabInfo = this.app.appState._editingTabInfo;
+                // Get format from the tab being edited
+                if (this.app.renderService && this.app.renderService.getRenderer) {
+                    const appRenderer = this.app.renderService.getRenderer();
+                    if (appRenderer && appRenderer.paneManager) {
+                        const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
+                        if (pane) {
+                            const tab = pane.tabs.find(t => t.id === editingTabInfo.tabId);
+                            if (tab) {
+                                currentFormat = tab.format || null;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to page format if not editing a tab
+            if (currentFormat === null) {
+                currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+            }
             
             // Debug: log all formats to help diagnose missing formats
             console.log('[ModalHandler] All formats:', allFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
@@ -2315,9 +2340,12 @@ export class ModalHandler {
             
             console.log('[ModalHandler] Filtered formats:', filteredFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
             
+            // Determine label text based on context
+            const formatLabel = editingTabInfo ? 'Tab Display Format:' : 'Page Format:';
+            
             html += `
                 <div style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 4px;">
-                    <label style="font-weight: 600; display: block; margin-bottom: 10px;">Page Format:</label>
+                    <label style="font-weight: 600; display: block; margin-bottom: 10px;">${formatLabel}</label>
                     <select id="page-format-select" style="width: 100%; padding: 8px; margin-top: 5px;">
                         <option value="">Default Format (Vertical)</option>
             `;
@@ -2430,7 +2458,27 @@ export class ModalHandler {
             if (!formatSelect) return;
             
             const allFormats = this.app.formatRendererManager.getAllFormats();
-            const currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+            
+            // Check if we're editing a tab (from pane context menu)
+            let currentFormat = null;
+            const editingTabInfo = this.app.appState?._editingTabInfo;
+            if (editingTabInfo && this.app.renderService && this.app.renderService.getRenderer) {
+                const appRenderer = this.app.renderService.getRenderer();
+                if (appRenderer && appRenderer.paneManager) {
+                    const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
+                    if (pane) {
+                        const tab = pane.tabs.find(t => t.id === editingTabInfo.tabId);
+                        if (tab) {
+                            currentFormat = tab.format || null;
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to page format if not editing a tab
+            if (currentFormat === null) {
+                currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+            }
             const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
             const filteredFormats = allFormats.filter(format => {
                 const formatName = format.formatName || format.id;
@@ -2493,6 +2541,33 @@ export class ModalHandler {
             
             formatSelect.addEventListener('change', async (e) => {
                 const formatName = e.target.value || null;
+                
+                // Check if we're editing a tab (from pane context menu)
+                const editingTabInfo = this.app.appState?._editingTabInfo;
+                if (editingTabInfo && this.app.renderService && this.app.renderService.getRenderer) {
+                    const appRenderer = this.app.renderService.getRenderer();
+                    if (appRenderer && appRenderer.paneManager) {
+                        const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
+                        if (pane) {
+                            const tab = pane.tabs.find(t => t.id === editingTabInfo.tabId);
+                            if (tab) {
+                                // Update the tab's format
+                                tab.format = formatName;
+                                // Re-render the pane to show the new format
+                                appRenderer.paneManager.renderPane(pane);
+                                // Clear the editing tab info
+                                delete this.app.appState._editingTabInfo;
+                                // Update grid config visibility
+                                updateGridConfigVisibility();
+                                // Close modal to show format change immediately
+                                this.closeModal();
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Fallback: update page format (for non-tab context)
                 if (formatName) {
                     await this.app.formatRendererManager.setPageFormat(pageId, formatName);
                 } else {

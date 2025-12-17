@@ -56,6 +56,19 @@ export class AppState {
         this._recordingTimer = null;
         this._inlineAudioRecorders = {};
         this._inlineAudioPlayers = {};
+        
+        // Multi-pane state
+        this._multiPaneEnabled = true; // Enable multi-pane by default
+    }
+    
+    // Multi-pane enabled getter/setter
+    get multiPaneEnabled() {
+        return this._multiPaneEnabled;
+    }
+    
+    set multiPaneEnabled(value) {
+        this._multiPaneEnabled = value;
+        eventBus.emit(EVENTS.UI.CHANGED, { type: 'multiPaneEnabled', value });
     }
     
     // Pages getter/setter

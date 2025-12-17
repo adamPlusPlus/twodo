@@ -144,20 +144,38 @@ export const StringUtils = {
         if (!text || typeof text !== 'string') return document.createDocumentFragment();
         
         try {
+            // First, convert markdown formatting to HTML if present
+            let processedText = text;
+            const hasMarkdown = /\*\*|\*[^*]|\`|\[.*\]\(.*\)/.test(text);
+            
+            if (hasMarkdown && !/<[a-z][a-z0-9]*[^>]*>/i.test(text)) {
+                // Has markdown but no HTML - convert markdown to HTML
+                // Code (before bold/italic to avoid conflicts)
+                processedText = processedText.replace(/`([^`]+)`/g, '<code>$1</code>');
+                // Bold
+                processedText = processedText.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                // Italic (but not if it's part of bold)
+                processedText = processedText.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+                // Strikethrough
+                processedText = processedText.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+                // Links
+                processedText = processedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+            }
+            
             // Check if text contains HTML tags (simple check for opening tags)
-            const hasHtml = /<[a-z][a-z0-9]*[^>]*>/i.test(text);
+            const hasHtml = /<[a-z][a-z0-9]*[^>]*>/i.test(processedText);
             
             if (hasHtml) {
                 // Text contains HTML - render it directly
                 // Use a safer approach: create a container, set innerHTML, then extract children
                 const tempDiv = document.createElement('div');
                 // Sanitize: only allow safe HTML tags
-                const allowedTags = /<\/?(strong|em|code|a|b|i|u|span|div|p|br)[^>]*>/gi;
-                if (allowedTags.test(text) || text.match(/<[a-z][a-z0-9]*[^>]*>/i)) {
-                    tempDiv.innerHTML = text;
+                const allowedTags = /<\/?(strong|em|code|a|b|i|u|span|div|p|br|del|s)[^>]*>/gi;
+                if (allowedTags.test(processedText) || processedText.match(/<[a-z][a-z0-9]*[^>]*>/i)) {
+                    tempDiv.innerHTML = processedText;
                 } else {
                     // If it looks like HTML but doesn't match allowed tags, escape it
-                    tempDiv.textContent = text;
+                    tempDiv.textContent = processedText;
                 }
                 
                 const fragment = document.createDocumentFragment();
@@ -184,7 +202,7 @@ export const StringUtils = {
             } else {
             // No HTML - use original link parsing logic
             const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/g;
-            const parts = text.split(urlPattern);
+            const parts = processedText.split(urlPattern);
             const fragment = document.createDocumentFragment();
             
             parts.forEach((part) => {

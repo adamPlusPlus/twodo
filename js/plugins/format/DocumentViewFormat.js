@@ -659,10 +659,11 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             container.innerHTML = '';
         }
         
-        // Apply Obsidian-like styling
+        // Apply Obsidian-like styling - flexible width to fill window
         container.style.cssText = `
-            max-width: ${this.config.lineWidth || 700}px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
             padding: 40px 20px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             font-size: ${this.config.fontSize || 16}px;
@@ -670,14 +671,18 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             color: #dcddde;
             background: #1e1e1e;
             min-height: calc(100vh - 100px);
+            box-sizing: border-box;
         `;
         
         // Create document wrapper with edit/preview split view
         const docWrapper = document.createElement('div');
         docWrapper.className = 'document-view';
         docWrapper.style.cssText = `
+            width: 100%;
+            max-width: 100%;
             background: #1e1e1e;
             color: #dcddde;
+            box-sizing: border-box;
         `;
         
         // Page title
@@ -748,10 +753,19 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             font-size: 14px;
         `;
         
-        // Store current view mode (default: split)
-        let currentViewMode = 'split';
+        // Store current view mode (restore from page metadata or default to split)
+        const pageViewModeKey = `_documentViewMode_${page.id}`;
+        let currentViewMode = page._documentViewMode || 'split';
         const setViewMode = (mode) => {
             currentViewMode = mode;
+            // Persist view mode to page metadata
+            if (app && app.appState && app.appState.pages) {
+                const pages = app.appState.pages;
+                const pageIndex = pages.findIndex(p => p.id === page.id);
+                if (pageIndex !== -1) {
+                    pages[pageIndex]._documentViewMode = mode;
+                }
+            }
             editBtn.style.background = mode === 'edit' ? '#4a9eff' : '#2a2a2a';
             editBtn.style.color = mode === 'edit' ? 'white' : '#dcddde';
             previewBtn.style.background = mode === 'preview' ? '#4a9eff' : '#2a2a2a';
@@ -822,32 +836,99 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             }
         });
         
+        // Helper function to create textarea with line numbers
+        const createTextareaWithLineNumbers = (value, container) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = `
+                display: flex;
+                width: 100%;
+                max-width: 100%;
+                position: relative;
+                background: #1a1a1a;
+                border: 1px solid #3a3a3a;
+                border-radius: 4px;
+                overflow: hidden;
+                box-sizing: border-box;
+            `;
+            
+            // Line numbers container
+            const lineNumbers = document.createElement('div');
+            lineNumbers.className = 'line-numbers';
+            lineNumbers.style.cssText = `
+                padding: 20px 10px 20px 20px;
+                background: #1a1a1a;
+                color: #666;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+                font-size: 14px;
+                line-height: 1.6;
+                text-align: right;
+                user-select: none;
+                white-space: pre;
+                min-width: 50px;
+                border-right: 1px solid #3a3a3a;
+                overflow: hidden;
+            `;
+            
+            // Textarea
+            const textarea = document.createElement('textarea');
+            textarea.className = 'document-edit-textarea';
+            textarea.value = value;
+            textarea.style.cssText = `
+                flex: 1;
+                min-height: 600px;
+                padding: 20px;
+                background: #1a1a1a;
+                color: #dcddde;
+                border: none;
+                outline: none;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+                font-size: 14px;
+                line-height: 1.6;
+                resize: vertical;
+                tab-size: 2;
+            `;
+            
+            // Function to update line numbers
+            const updateLineNumbers = () => {
+                const lines = textarea.value.split('\n');
+                const lineCount = lines.length;
+                lineNumbers.textContent = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+            };
+            
+            // Sync scrolling
+            textarea.addEventListener('scroll', () => {
+                lineNumbers.scrollTop = textarea.scrollTop;
+            });
+            
+            // Update line numbers on input
+            textarea.addEventListener('input', () => {
+                updateLineNumbers();
+            });
+            
+            // Store update function on textarea for external access
+            textarea.updateLineNumbers = updateLineNumbers;
+            
+            // Initial line numbers
+            updateLineNumbers();
+            
+            wrapper.appendChild(lineNumbers);
+            wrapper.appendChild(textarea);
+            container.appendChild(wrapper);
+            
+            return textarea;
+        };
+        
         // Create edit container (raw markdown textarea)
         const editContainer = document.createElement('div');
         editContainer.className = 'document-edit-container';
         editContainer.style.cssText = `
             display: none;
             width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         `;
         
-        const editTextarea = document.createElement('textarea');
-        editTextarea.className = 'document-edit-textarea';
-        editTextarea.value = markdown;
-        editTextarea.style.cssText = `
-            width: 100%;
-            min-height: 600px;
-            padding: 20px;
-            background: #1a1a1a;
-            color: #dcddde;
-            border: 1px solid #3a3a3a;
-            border-radius: 4px;
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            resize: vertical;
-            tab-size: 2;
-        `;
-        editContainer.appendChild(editTextarea);
+        const editTextarea = createTextareaWithLineNumbers(markdown, editContainer);
         
         // Create preview container (rendered HTML)
         const previewContainer = document.createElement('div');
@@ -855,6 +936,8 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         previewContainer.style.cssText = `
             display: none;
             width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         `;
         
         const previewContent = document.createElement('div');
@@ -871,6 +954,8 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             display: flex;
             gap: 20px;
             width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         `;
         
         const splitEdit = document.createElement('div');
@@ -880,24 +965,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             min-width: 0;
         `;
         
-        const splitEditTextarea = document.createElement('textarea');
-        splitEditTextarea.className = 'document-edit-textarea';
-        splitEditTextarea.value = markdown;
-        splitEditTextarea.style.cssText = `
-            width: 100%;
-            min-height: 600px;
-            padding: 20px;
-            background: #1a1a1a;
-            color: #dcddde;
-            border: 1px solid #3a3a3a;
-            border-radius: 4px;
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            resize: none;
-            tab-size: 2;
-        `;
-        splitEdit.appendChild(splitEditTextarea);
+        const splitEditTextarea = createTextareaWithLineNumbers(markdown, splitEdit);
         
         const splitPreview = document.createElement('div');
         splitPreview.className = 'document-split-preview';
@@ -946,7 +1014,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                         const markdownFromHtml = this.htmlToMarkdown(html);
                         // Update textareas
                         editTextarea.value = markdownFromHtml;
+                        if (editTextarea.updateLineNumbers) editTextarea.updateLineNumbers();
                         splitEditTextarea.value = markdownFromHtml;
+                        if (splitEditTextarea.updateLineNumbers) splitEditTextarea.updateLineNumbers();
                         // Update other preview (but don't re-enable editing to avoid recursion)
                         if (targetElement === previewContent) {
                             const wasEditable = splitPreviewContent.contentEditable === 'true';
@@ -992,7 +1062,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                             
                             // Update all textareas and previews
                             editTextarea.value = newMarkdown;
+                            if (editTextarea.updateLineNumbers) editTextarea.updateLineNumbers();
                             splitEditTextarea.value = newMarkdown;
+                            if (splitEditTextarea.updateLineNumbers) splitEditTextarea.updateLineNumbers();
                             updatePreview(newMarkdown, previewContent, true);
                             updatePreview(newMarkdown, splitPreviewContent, true);
                             
@@ -1019,8 +1091,19 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                                                     await app.dataManager.saveData();
                                                 }
                                                 // Re-render to show changes
+                                                // Preserve format AND view mode
                                                 app._preservingFormat = true;
+                                                // Store current view mode before render
+                                                const savedViewMode = currentViewMode;
                                                 app.render();
+                                                // Restore view mode after render (will be handled by setViewMode on next render)
+                                                if (app.appState && app.appState.pages) {
+                                                    const pages = app.appState.pages;
+                                                    const pageIndex = pages.findIndex(p => p.id === page.id);
+                                                    if (pageIndex !== -1) {
+                                                        pages[pageIndex]._documentViewMode = savedViewMode;
+                                                    }
+                                                }
                                                 break;
                                             }
                                         }
@@ -1045,12 +1128,63 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                             
                             // Update all textareas and previews
                             editTextarea.value = newMarkdown;
+                            if (editTextarea.updateLineNumbers) editTextarea.updateLineNumbers();
                             splitEditTextarea.value = newMarkdown;
+                            if (splitEditTextarea.updateLineNumbers) splitEditTextarea.updateLineNumbers();
                             updatePreview(newMarkdown, previewContent, true);
                             updatePreview(newMarkdown, splitPreviewContent, true);
                             
                             // Update task item data
                             taskItem.dataset.originalLine = newLine;
+                            
+                            // Find and update the actual element in page data
+                            if (app && app.appState && app.appState.pages) {
+                                const pages = app.appState.pages;
+                                const currentPage = pages.find(p => p.id === page.id);
+                                if (currentPage && currentPage.bins) {
+                                    // Extract task text to find the element
+                                    const taskTextMatch = originalLine.match(/^[\s-]*\[[x ]\]\s*(.*)$/);
+                                    const taskText = taskTextMatch ? taskTextMatch[1] : originalLine.replace(/^[\s-]*\[[x ]\]\s*/, '');
+                                    
+                                    for (const bin of currentPage.bins) {
+                                        if (bin.elements) {
+                                            const elementIndex = bin.elements.findIndex(el => {
+                                                // Try to match element by text
+                                                const elText = el.text || '';
+                                                return elText.trim() === taskText.trim();
+                                            });
+                                            if (elementIndex !== -1) {
+                                                const element = bin.elements[elementIndex];
+                                                // Update completed status
+                                                element.completed = isChecked;
+                                                // Ensure it's a task type (not note)
+                                                if (element.type === 'note') {
+                                                    element.type = 'task';
+                                                }
+                                                // Save changes
+                                                if (app.dataManager) {
+                                                    await app.dataManager.saveData();
+                                                }
+                                                // Re-render to show changes in other views
+                                                // Preserve format AND view mode
+                                                app._preservingFormat = true;
+                                                // Store current view mode before render
+                                                const savedViewMode = currentViewMode;
+                                                app.render();
+                                                // Restore view mode after render (will be handled by setViewMode on next render)
+                                                if (app.appState && app.appState.pages) {
+                                                    const pages = app.appState.pages;
+                                                    const pageIndex = pages.findIndex(p => p.id === page.id);
+                                                    if (pageIndex !== -1) {
+                                                        pages[pageIndex]._documentViewMode = savedViewMode;
+                                                    }
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             
                             // Save to page data
                             saveMarkdownToPage(newMarkdown);
@@ -1087,6 +1221,14 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             const markdownText = source.value;
             if (target && target.value !== markdownText) {
                 target.value = markdownText;
+                // Update line numbers for target if it has the function
+                if (target.updateLineNumbers) {
+                    target.updateLineNumbers();
+                }
+            }
+            // Update line numbers for source if it has the function
+            if (source.updateLineNumbers) {
+                source.updateLineNumbers();
             }
             updatePreview(markdownText, previewContent);
             updatePreview(markdownText, splitPreviewContent);

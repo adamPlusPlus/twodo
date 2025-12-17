@@ -499,7 +499,19 @@ export default class KanbanBoard extends BasePlugin {
         // Element text
         const text = DOMUtils.createElement('div', {
             style: `flex: 1; color: ${isCompleted ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${isCompleted ? 'text-decoration: line-through;' : ''}`
-        }, StringUtils.escapeHtml(element.text || 'Untitled'));
+        });
+        
+        // Use parseLinks to handle HTML formatting (strong, links, etc.) consistently with other views
+        const textFragment = this.app && this.app.parseLinks ? this.app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+        if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+            // Fragment - append all children
+            while (textFragment.firstChild) {
+                text.appendChild(textFragment.firstChild);
+            }
+        } else {
+            // Single node or text
+            text.appendChild(textFragment);
+        }
         
         text.addEventListener('click', () => {
             if (this.app && this.app.modalHandler) {

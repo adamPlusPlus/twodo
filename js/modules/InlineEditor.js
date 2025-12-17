@@ -56,6 +56,8 @@ export class InlineEditor {
             textElement.style.borderRadius = '';
             
             // Update element text if changed
+            // Store as plain text (inline editing extracts plain text, which is correct)
+            // Users can use markdown/HTML syntax which will be rendered by parseLinks
             if (newText !== originalText) {
                 const page = this.app.appState.pages.find(p => p.id === pageId);
                 const bin = page?.bins?.find(b => b.id === binId);
