@@ -3,6 +3,7 @@
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
 import { ElementTypeRegistry } from './elements/ElementTypeRegistry.js';
+import { SharedDragDrop } from '../utils/SharedDragDrop.js';
 
 /**
  * ElementRenderer - Handles rendering of elements and their children
@@ -13,6 +14,7 @@ export class ElementRenderer {
     constructor(app) {
         this.app = app;
         this.typeRegistry = new ElementTypeRegistry(app);
+        this.sharedDragDrop = null; // Initialize on first use
     }
     
     /**
@@ -278,11 +280,27 @@ export class ElementRenderer {
         }
         
         div.className = classes.join(' ');
-        div.draggable = true;
-        div.dataset.dragType = 'element';
-        div.dataset.pageId = pageId;
-        div.dataset.binId = binId;
-        div.dataset.elementIndex = elementIndex;
+        
+        // Setup drag and drop - use shared functionality for text/checkbox elements in vertical/horizontal layouts
+        // Check if we're in a format that supports shared drag-drop (vertical/horizontal)
+        const pageFormat = this.app.formatRendererManager?.getPageFormat?.(pageId);
+        const supportsSharedDragDrop = !pageFormat || pageFormat === 'grid-layout-format' || pageFormat === 'horizontal-layout-format';
+        
+        if (supportsSharedDragDrop && (element.type === 'task' || element.type === 'note' || element.type === 'header-checkbox' || element.type === 'text')) {
+            // Use shared drag-drop for text/checkbox elements
+            // Initialize shared drag-drop if not already done
+            if (!this.sharedDragDrop) {
+                this.sharedDragDrop = new SharedDragDrop(this.app);
+            }
+            this.sharedDragDrop.setupElementDragDrop(div, pageId, binId, elementIndex, element);
+        } else {
+            // Use standard drag-drop for other elements
+            div.draggable = true;
+            div.dataset.dragType = 'element';
+            div.dataset.pageId = pageId;
+            div.dataset.binId = binId;
+            div.dataset.elementIndex = elementIndex;
+        }
         
         // Add progress bar plugin if enabled
         if (element.progress !== undefined) {

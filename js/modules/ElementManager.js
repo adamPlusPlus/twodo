@@ -195,6 +195,22 @@ export class ElementManager {
                 completed: false,
                 persistent: true, // Calendars are persistent
                 children: []
+            },
+            'note': {
+                type: 'note',
+                text: 'New Note',
+                content: '',
+                format: 'markdown',
+                completed: false,
+                persistent: true,
+                children: []
+            },
+            'text': {
+                type: 'text',
+                text: 'New Text',
+                completed: false,
+                repeats: true,
+                children: []
             }
         };
         

@@ -1,0 +1,12 @@
+Fix CSP WebSocket support and add Document View format
+
+- Added connect-src directive to CSP header in server.py to allow WebSocket connections (ws: and wss:)
+- Updated CSP policy to include connect-src 'self' ws: wss: http://localhost:* https://cdn.jsdelivr.net
+- Added debug logging to FormatRendererManager and DocumentViewFormat for troubleshooting
+- Added format rescan after plugin loading in app.js to ensure DocumentViewFormat is registered
+- Enhanced ModalHandler with debug logging to diagnose format dropdown issues
+- Fixed plugin loading to handle DocumentViewFormat constructor signature
+- Rebuilt dist/ folder with updated code
+
+This fixes the WebSocket CSP violation error and adds debugging to help diagnose why Document View format wasn't appearing in the dropdown.
+

@@ -25,7 +25,7 @@ export default class SearchFilter extends BasePlugin {
     }
 
     async onInit() {
-        if (this.config.enabled) {
+        if (this.config.enabled && this.app && this.app.eventBus) {
             this.injectSearchUI();
             this.app.eventBus.on('element:created', this.handleElementChange.bind(this));
             this.app.eventBus.on('element:updated', this.handleElementChange.bind(this));
@@ -34,9 +34,11 @@ export default class SearchFilter extends BasePlugin {
     }
 
     async onDestroy() {
-        this.app.eventBus.off('element:created', this.handleElementChange.bind(this));
-        this.app.eventBus.off('element:updated', this.handleElementChange.bind(this));
-        this.app.eventBus.off('element:deleted', this.handleElementChange.bind(this));
+        if (this.app && this.app.eventBus) {
+            this.app.eventBus.off('element:created', this.handleElementChange.bind(this));
+            this.app.eventBus.off('element:updated', this.handleElementChange.bind(this));
+            this.app.eventBus.off('element:deleted', this.handleElementChange.bind(this));
+        }
     }
 
     handleElementChange() {

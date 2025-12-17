@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   build: {
+    // Clear output directory before building
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         // Bundle all core modules into a single file

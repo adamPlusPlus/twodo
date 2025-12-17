@@ -1,0 +1,10 @@
+Document View improvements and shared drag-and-drop functionality
+
+- Fixed document view to not default to bullet points for elements
+- Added checkbox-to-text conversion: unchecking checkbox in document view converts element to 'note' type (text-only)
+- Added 'note' and 'text' element type templates to ElementManager
+- Created SharedDragDrop utility for vertical/horizontal layouts
+- Implemented drag-and-drop nesting: text/checkbox elements can be dragged over elements with title/text to nest them
+- Visual indicator (dashed border) shows when nesting is possible
+- Integrated shared drag-drop into ElementRenderer for grid and horizontal layouts
+

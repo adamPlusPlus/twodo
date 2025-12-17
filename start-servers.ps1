@@ -94,6 +94,22 @@ Start-Sleep -Seconds 2
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
+# Build the project before starting servers
+Write-Host "Building project..." -ForegroundColor Cyan
+try {
+    $buildOutput = npm run build 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✅ Build completed successfully" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  Build completed with warnings/errors:" -ForegroundColor Yellow
+        Write-Host $buildOutput
+    }
+} catch {
+    Write-Host "❌ Build failed: $_" -ForegroundColor Red
+    Write-Host "Continuing with existing build..." -ForegroundColor Yellow
+}
+Write-Host ""
+
 if ($Foreground) {
     # Foreground mode: Start servers in separate visible windows
     Write-Host "Starting servers in foreground mode (separate windows)..." -ForegroundColor Cyan

@@ -16,7 +16,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 enabled: false,
                 lineWidth: 700,
                 fontSize: 16,
-                lineHeight: 1.6
+                lineHeight: 1.3  // Reduced default spacing
             },
             ...config
         });
@@ -42,10 +42,10 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         switch (element.type) {
             case 'code':
                 // Code block element
-                const codeTitle = element.text ? `**${element.text}**\n\n` : '';
+                const codeTitle = element.text ? `**${element.text}**\n` : '';
                 const language = element.language || 'text';
                 const code = element.code || '';
-                markdown = `${indent}${codeTitle}\`\`\`${language}\n${code}\n\`\`\`\n\n`;
+                markdown = `${indent}${codeTitle}\`\`\`${language}\n${code}\n\`\`\`\n`;
                 break;
                 
             case 'note':
@@ -53,19 +53,20 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 if (element.content) {
                     if (element.format === 'markdown') {
                         // Use content directly as markdown
-                        markdown = `${indent}${element.content}\n\n`;
+                        markdown = `${indent}${element.content}\n`;
                     } else {
                         // HTML content - convert to markdown-like or render as HTML
-                        markdown = `${indent}${this.htmlToMarkdown(element.content)}\n\n`;
+                        markdown = `${indent}${this.htmlToMarkdown(element.content)}\n`;
                     }
                 } else if (element.text) {
-                    markdown = `${indent}${this.processFormattedText(element.text)}\n\n`;
+                    markdown = `${indent}${this.processFormattedText(element.text)}\n`;
                 }
                 break;
                 
             case 'task':
                 const checkbox = element.completed ? '[x]' : '[ ]';
                 const taskText = this.processFormattedText(element.text || 'Untitled');
+                // Tasks should be checkboxes, not bullet points
                 markdown = `${indent}- ${checkbox} ${taskText}`;
                 if (element.deadline) {
                     const deadline = new Date(element.deadline);
@@ -76,10 +77,19 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 
             case 'header-checkbox':
                 const headerText = this.processFormattedText(element.text || 'Untitled');
-                if (element.completed) {
-                    markdown = `${indent}## ~~${headerText}~~\n`;
+                // Headers should be prominent - use h2 for main headers, h3 for nested
+                if (depth === 0) {
+                    if (element.completed) {
+                        markdown = `## ~~${headerText}~~\n`;
+                    } else {
+                        markdown = `## ${headerText}\n`;
+                    }
                 } else {
-                    markdown = `${indent}## ${headerText}\n`;
+                    if (element.completed) {
+                        markdown = `### ~~${headerText}~~\n`;
+                    } else {
+                        markdown = `### ${headerText}\n`;
+                    }
                 }
                 break;
                 
@@ -149,8 +159,21 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 break;
                 
             default:
+                // For unknown types, render as plain text (not bullet point)
                 const defaultText = this.processFormattedText(element.text || 'Untitled');
-                markdown = `${indent}- ${defaultText}\n`;
+                // If it has no text but has other properties, try to render something useful
+                if (!defaultText || defaultText === 'Untitled') {
+                    // Try to find any meaningful content
+                    if (element.content) {
+                        markdown = `${indent}${this.processFormattedText(element.content)}\n`;
+                    } else {
+                        // Only use bullet point as last resort
+                        markdown = `${indent}- ${defaultText}\n`;
+                    }
+                } else {
+                    // Render as paragraph, not bullet point
+                    markdown = `${indent}${defaultText}\n`;
+                }
         }
         
         // Handle children/subtasks
@@ -192,6 +215,22 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         
         let md = html;
         
+        // Convert interactive checkboxes back to markdown format
+        // Match: <li class="task-item"...><input type="checkbox"...> <span class="task-text">...</span></li>
+        md = md.replace(/<li[^>]*class="task-item"[^>]*(?:data-original-line="([^"]*)")?[^>]*><input[^>]*type="checkbox"[^>]*(?:checked)?[^>]*>\s*<span[^>]*class="task-text"[^>]*>(.*?)<\/span><\/li>/gis, (match, originalLine, taskText) => {
+            // Use original line if available, otherwise reconstruct
+            if (originalLine && originalLine.trim()) {
+                // Update checkbox state in original line
+                const isChecked = match.includes('checked');
+                return originalLine.replace(/\[x\]|\[ \]/, isChecked ? '[x]' : '[ ]');
+            }
+            // Reconstruct from checkbox state and text
+            const isChecked = match.includes('checked');
+            const checkbox = isChecked ? '[x]' : '[ ]';
+            const text = this.stripHtmlTags(taskText);
+            return `- ${checkbox} ${text}`;
+        });
+        
         // Preserve HTML for inline formatting (we'll render it as HTML later)
         // But convert block elements to markdown
         
@@ -224,10 +263,21 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         // Images
         md = md.replace(/<img[^>]*src=["']([^"']+)["'][^>]*(?:alt=["']([^"']*)["'])?[^>]*>/gi, '![$2]($1)');
         
-        // Line breaks
+        // Line breaks - convert <br> to \n
         md = md.replace(/<br\s*\/?>/gi, '\n');
-        md = md.replace(/<\/p>/gi, '\n\n');
+        
+        // Paragraphs - convert to double newlines for separation, but preserve single newlines
+        md = md.replace(/<\/p>/gi, '\n');
         md = md.replace(/<p[^>]*>/gi, '');
+        
+        // Lists - convert <ul> and <li> back to markdown
+        md = md.replace(/<\/ul>/gi, '\n');
+        md = md.replace(/<ul[^>]*>/gi, '');
+        // Regular list items (not task items, those are handled above)
+        md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, (match, content) => {
+            const text = this.stripHtmlTags(content);
+            return `- ${text}`;
+        });
         
         // Remove other block tags but keep content
         md = md.replace(/<\/?(div|section|article)[^>]*>/gi, '\n');
@@ -236,7 +286,22 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         // We'll preserve <strong>, <em>, <span> for styling
         md = md.replace(/<(?!\/?(?:strong|em|span|b|i|u|s|code|a|img))[^>]+>/gi, '');
         
+        // Clean up excessive newlines (more than 2 consecutive)
+        md = md.replace(/\n{3,}/g, '\n\n');
+        
         return md.trim();
+    }
+    
+    /**
+     * Strip HTML tags from text (but preserve content)
+     * @param {string} html - HTML string
+     * @returns {string} Text content
+     */
+    stripHtmlTags(html) {
+        if (!html) return '';
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        return div.textContent || div.innerText || '';
     }
     
     /**
@@ -396,7 +461,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 inQuote = false;
             }
             
-            // Lists
+            // Lists (including task checkboxes)
             if (trimmed.startsWith('- ')) {
                 if (inQuote) {
                     result.push('</blockquote>');
@@ -404,6 +469,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 }
                 const depth = (originalLine.length - originalLine.trimStart().length) / 2; // Count leading spaces / 2
                 const content = trimmed.substring(2);
+                
+                // Check if this is a task checkbox: `- [x]` or `- [ ]`
+                const checkboxMatch = content.match(/^(\[x\]|\[ \])\s*(.*)$/);
                 
                 // Close lists if depth decreased
                 while (currentListDepth > depth) {
@@ -418,8 +486,19 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 }
                 
                 // Process inline formatting in list items
-                const processedContent = this.processInlineFormatting(this.unescapeMarkdown(content));
-                result.push(`<li>${processedContent}</li>`);
+                if (checkboxMatch) {
+                    // This is a task checkbox - create interactive checkbox
+                    const isChecked = checkboxMatch[1] === '[x]';
+                    const taskText = checkboxMatch[2] || '';
+                    const processedText = this.processInlineFormatting(this.unescapeMarkdown(taskText));
+                    // Store original markdown line for updating
+                    const checkboxId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    result.push(`<li class="task-item" data-checkbox-id="${checkboxId}" data-original-line="${this.escapeHtml(originalLine)}"><input type="checkbox" class="task-checkbox" ${isChecked ? 'checked' : ''} data-task-id="${checkboxId}"> <span class="task-text">${processedText}</span></li>`);
+                } else {
+                    // Regular list item
+                    const processedContent = this.processInlineFormatting(this.unescapeMarkdown(content));
+                    result.push(`<li>${processedContent}</li>`);
+                }
                 return;
             }
             
@@ -587,13 +666,13 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             padding: 40px 20px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             font-size: ${this.config.fontSize || 16}px;
-            line-height: ${this.config.lineHeight || 1.6};
+            line-height: ${this.config.lineHeight || 1.3};
             color: #dcddde;
             background: #1e1e1e;
             min-height: calc(100vh - 100px);
         `;
         
-        // Create document wrapper
+        // Create document wrapper with edit/preview split view
         const docWrapper = document.createElement('div');
         docWrapper.className = 'document-view';
         docWrapper.style.cssText = `
@@ -613,6 +692,96 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             color: #ffffff;
         `;
         docWrapper.appendChild(title);
+        
+        // View mode toggle buttons (Obsidian-style)
+        const viewControls = document.createElement('div');
+        viewControls.className = 'document-view-controls';
+        viewControls.style.cssText = `
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 8px;
+            background: #252525;
+            border-radius: 6px;
+            border: 1px solid #3a3a3a;
+        `;
+        
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'view-mode-btn';
+        editBtn.dataset.mode = 'edit';
+        editBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #2a2a2a;
+            color: #dcddde;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        
+        const previewBtn = document.createElement('button');
+        previewBtn.textContent = 'Preview';
+        previewBtn.className = 'view-mode-btn';
+        previewBtn.dataset.mode = 'preview';
+        previewBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #2a2a2a;
+            color: #dcddde;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        
+        const splitBtn = document.createElement('button');
+        splitBtn.textContent = 'Split';
+        splitBtn.className = 'view-mode-btn';
+        splitBtn.dataset.mode = 'split';
+        splitBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #4a9eff;
+            color: white;
+            border: 1px solid #4a9eff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        
+        // Store current view mode (default: split)
+        let currentViewMode = 'split';
+        const setViewMode = (mode) => {
+            currentViewMode = mode;
+            editBtn.style.background = mode === 'edit' ? '#4a9eff' : '#2a2a2a';
+            editBtn.style.color = mode === 'edit' ? 'white' : '#dcddde';
+            previewBtn.style.background = mode === 'preview' ? '#4a9eff' : '#2a2a2a';
+            previewBtn.style.color = mode === 'preview' ? 'white' : '#dcddde';
+            splitBtn.style.background = mode === 'split' ? '#4a9eff' : '#2a2a2a';
+            splitBtn.style.color = mode === 'split' ? 'white' : '#dcddde';
+            
+            if (mode === 'edit') {
+                editContainer.style.display = 'block';
+                previewContainer.style.display = 'none';
+                splitContainer.style.display = 'none';
+            } else if (mode === 'preview') {
+                editContainer.style.display = 'none';
+                previewContainer.style.display = 'block';
+                splitContainer.style.display = 'none';
+            } else {
+                editContainer.style.display = 'none';
+                previewContainer.style.display = 'none';
+                splitContainer.style.display = 'flex';
+            }
+        };
+        
+        editBtn.addEventListener('click', () => setViewMode('edit'));
+        previewBtn.addEventListener('click', () => setViewMode('preview'));
+        splitBtn.addEventListener('click', () => setViewMode('split'));
+        
+        viewControls.appendChild(editBtn);
+        viewControls.appendChild(previewBtn);
+        viewControls.appendChild(splitBtn);
+        docWrapper.appendChild(viewControls);
         
         if (!page.bins || page.bins.length === 0) {
             if (!app._preservingFormat) {
@@ -640,20 +809,301 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             
             // Elements in bin
             if (bin.elements && Array.isArray(bin.elements) && bin.elements.length > 0) {
-                bin.elements.forEach(element => {
-                    markdown += this.elementToMarkdown(element, 0) + '\n\n';
+                bin.elements.forEach((element, elIndex) => {
+                    const elementMarkdown = this.elementToMarkdown(element, 0);
+                    markdown += elementMarkdown;
+                    // Only add extra newline if not last element and element doesn't already end with newlines
+                    if (elIndex < bin.elements.length - 1 && !elementMarkdown.endsWith('\n\n')) {
+                        markdown += '\n';
+                    }
                 });
             } else {
                 markdown += '*No elements*\n\n';
             }
         });
         
-        // Convert markdown to HTML and render
-        const content = document.createElement('div');
-        content.className = 'document-content';
-        content.style.cssText = `
+        // Create edit container (raw markdown textarea)
+        const editContainer = document.createElement('div');
+        editContainer.className = 'document-edit-container';
+        editContainer.style.cssText = `
+            display: none;
+            width: 100%;
+        `;
+        
+        const editTextarea = document.createElement('textarea');
+        editTextarea.className = 'document-edit-textarea';
+        editTextarea.value = markdown;
+        editTextarea.style.cssText = `
+            width: 100%;
+            min-height: 600px;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #dcddde;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            tab-size: 2;
+        `;
+        editContainer.appendChild(editTextarea);
+        
+        // Create preview container (rendered HTML)
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'document-preview-container';
+        previewContainer.style.cssText = `
+            display: none;
+            width: 100%;
+        `;
+        
+        const previewContent = document.createElement('div');
+        previewContent.className = 'document-content';
+        previewContent.style.cssText = `
             color: #dcddde;
         `;
+        previewContainer.appendChild(previewContent);
+        
+        // Create split container (both edit and preview side by side)
+        const splitContainer = document.createElement('div');
+        splitContainer.className = 'document-split-container';
+        splitContainer.style.cssText = `
+            display: flex;
+            gap: 20px;
+            width: 100%;
+        `;
+        
+        const splitEdit = document.createElement('div');
+        splitEdit.className = 'document-split-edit';
+        splitEdit.style.cssText = `
+            flex: 1;
+            min-width: 0;
+        `;
+        
+        const splitEditTextarea = document.createElement('textarea');
+        splitEditTextarea.className = 'document-edit-textarea';
+        splitEditTextarea.value = markdown;
+        splitEditTextarea.style.cssText = `
+            width: 100%;
+            min-height: 600px;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #dcddde;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            tab-size: 2;
+        `;
+        splitEdit.appendChild(splitEditTextarea);
+        
+        const splitPreview = document.createElement('div');
+        splitPreview.className = 'document-split-preview';
+        splitPreview.style.cssText = `
+            flex: 1;
+            min-width: 0;
+            overflow-y: auto;
+            max-height: 600px;
+        `;
+        
+        const splitPreviewContent = document.createElement('div');
+        splitPreviewContent.className = 'document-content';
+        splitPreviewContent.style.cssText = `
+            color: #dcddde;
+        `;
+        splitPreview.appendChild(splitPreviewContent);
+        
+        splitContainer.appendChild(splitEdit);
+        splitContainer.appendChild(splitPreview);
+        
+        // Function to update preview from markdown
+        const updatePreview = (markdownText, targetElement, isEditable = false) => {
+            targetElement.innerHTML = this.markdownToHTML(markdownText);
+            
+            // Make preview editable if requested
+            if (isEditable) {
+                targetElement.contentEditable = true;
+                targetElement.style.outline = 'none';
+                targetElement.style.minHeight = '600px';
+                
+                // Handle return key to insert newline
+                targetElement.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        document.execCommand('insertLineBreak');
+                    }
+                });
+                
+                // Sync changes back to markdown (debounced)
+                let syncTimeout;
+                targetElement.addEventListener('input', () => {
+                    clearTimeout(syncTimeout);
+                    syncTimeout = setTimeout(() => {
+                        // Convert HTML back to markdown
+                        const html = targetElement.innerHTML;
+                        const markdownFromHtml = this.htmlToMarkdown(html);
+                        // Update textareas
+                        editTextarea.value = markdownFromHtml;
+                        splitEditTextarea.value = markdownFromHtml;
+                        // Update other preview (but don't re-enable editing to avoid recursion)
+                        if (targetElement === previewContent) {
+                            const wasEditable = splitPreviewContent.contentEditable === 'true';
+                            updatePreview(markdownFromHtml, splitPreviewContent, wasEditable);
+                        } else {
+                            const wasEditable = previewContent.contentEditable === 'true';
+                            updatePreview(markdownFromHtml, previewContent, wasEditable);
+                        }
+                        // Save
+                        saveMarkdownToPage(markdownFromHtml);
+                    }, 300);
+                });
+            }
+            
+            // Make checkboxes interactive
+            const checkboxes = targetElement.querySelectorAll('.task-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', async (e) => {
+                    const taskItem = checkbox.closest('.task-item');
+                    if (!taskItem) return;
+                    
+                    const originalLine = taskItem.dataset.originalLine;
+                    if (!originalLine) return;
+                    
+                    const isChecked = e.target.checked;
+                    
+                    // If checkbox is unchecked, convert element to 'note' type (text-only)
+                    if (!isChecked) {
+                        // Find the element in page data and convert to note type
+                        const currentMarkdown = editTextarea.value || splitEditTextarea.value;
+                        const lines = currentMarkdown.split('\n');
+                        const lineIndex = lines.findIndex(line => line.trim() === originalLine.trim());
+                        
+                        if (lineIndex !== -1) {
+                            // Extract task text (remove checkbox and bullet)
+                            const taskTextMatch = originalLine.match(/^[\s-]*\[[x ]\]\s*(.*)$/);
+                            const taskText = taskTextMatch ? taskTextMatch[1] : originalLine.replace(/^[\s-]*\[[x ]\]\s*/, '');
+                            
+                            // Update markdown: remove checkbox, make it plain text
+                            const newLine = taskText.trim();
+                            lines[lineIndex] = newLine;
+                            const newMarkdown = lines.join('\n');
+                            
+                            // Update all textareas and previews
+                            editTextarea.value = newMarkdown;
+                            splitEditTextarea.value = newMarkdown;
+                            updatePreview(newMarkdown, previewContent, true);
+                            updatePreview(newMarkdown, splitPreviewContent, true);
+                            
+                            // Find and update the actual element in page data
+                            if (app && app.appState && app.appState.pages) {
+                                const pages = app.appState.pages;
+                                const currentPage = pages.find(p => p.id === page.id);
+                                if (currentPage && currentPage.bins) {
+                                    for (const bin of currentPage.bins) {
+                                        if (bin.elements) {
+                                            const elementIndex = bin.elements.findIndex(el => {
+                                                // Try to match element by text
+                                                const elText = el.text || '';
+                                                return elText.trim() === taskText.trim();
+                                            });
+                                            if (elementIndex !== -1) {
+                                                const element = bin.elements[elementIndex];
+                                                // Convert to note type (text-only, no checkbox)
+                                                element.type = 'note';
+                                                element.text = taskText.trim();
+                                                delete element.completed; // Remove checkbox property
+                                                // Save changes
+                                                if (app.dataManager) {
+                                                    await app.dataManager.saveData();
+                                                }
+                                                // Re-render to show changes
+                                                app._preservingFormat = true;
+                                                app.render();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Save markdown to page metadata
+                            saveMarkdownToPage(newMarkdown);
+                        }
+                    } else {
+                        // Checkbox is checked - update markdown normally
+                        const newLine = originalLine.replace(/\[x\]|\[ \]/, isChecked ? '[x]' : '[ ]');
+                        
+                        // Update the markdown text
+                        const currentMarkdown = editTextarea.value || splitEditTextarea.value;
+                        const lines = currentMarkdown.split('\n');
+                        const lineIndex = lines.findIndex(line => line.trim() === originalLine.trim());
+                        if (lineIndex !== -1) {
+                            lines[lineIndex] = newLine;
+                            const newMarkdown = lines.join('\n');
+                            
+                            // Update all textareas and previews
+                            editTextarea.value = newMarkdown;
+                            splitEditTextarea.value = newMarkdown;
+                            updatePreview(newMarkdown, previewContent, true);
+                            updatePreview(newMarkdown, splitPreviewContent, true);
+                            
+                            // Update task item data
+                            taskItem.dataset.originalLine = newLine;
+                            
+                            // Save to page data
+                            saveMarkdownToPage(newMarkdown);
+                        }
+                    }
+                });
+            });
+        };
+        
+        // Function to save markdown back to page data
+        const saveMarkdownToPage = async (markdownText) => {
+            // Parse markdown back to page structure
+            // This is complex - for now, we'll store the raw markdown in page metadata
+            if (app.appState) {
+                const pages = app.appState.pages || [];
+                const pageIndex = pages.findIndex(p => p.id === page.id);
+                if (pageIndex !== -1) {
+                    if (!pages[pageIndex]._documentMarkdown) {
+                        pages[pageIndex]._documentMarkdown = {};
+                    }
+                    pages[pageIndex]._documentMarkdown.raw = markdownText;
+                    pages[pageIndex]._documentMarkdown.lastModified = Date.now();
+                    app.appState.pages = pages;
+                    // Trigger save
+                    if (app.dataManager) {
+                        await app.dataManager.saveData();
+                    }
+                }
+            }
+        };
+        
+        // Sync edit textarea changes to split edit textarea and update previews
+        const syncEditChanges = (source, target) => {
+            const markdownText = source.value;
+            if (target && target.value !== markdownText) {
+                target.value = markdownText;
+            }
+            updatePreview(markdownText, previewContent);
+            updatePreview(markdownText, splitPreviewContent);
+            
+            // Debounce save
+            clearTimeout(syncEditChanges._saveTimeout);
+            syncEditChanges._saveTimeout = setTimeout(() => {
+                saveMarkdownToPage(markdownText);
+            }, 1000);
+        };
+        
+        editTextarea.addEventListener('input', () => syncEditChanges(editTextarea, splitEditTextarea));
+        splitEditTextarea.addEventListener('input', () => syncEditChanges(splitEditTextarea, editTextarea));
+        
+        // Initial preview render (make preview editable)
+        updatePreview(markdown, previewContent, true);
+        updatePreview(markdown, splitPreviewContent, true);
         
         // Apply Obsidian-like typography
         const style = document.createElement('style');
@@ -669,7 +1119,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             .document-view h2 {
                 font-size: 1.8em;
                 font-weight: 600;
-                margin: 1.5em 0 0.8em 0;
+                margin: 1em 0 0.5em 0;
                 padding-bottom: 0.2em;
                 border-bottom: 1px solid #3a3a3a;
                 color: #ffffff;
@@ -677,20 +1127,50 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             .document-view h3 {
                 font-size: 1.4em;
                 font-weight: 600;
-                margin: 1.2em 0 0.6em 0;
+                margin: 0.8em 0 0.4em 0;
                 color: #ffffff;
             }
             .document-view p {
-                margin: 0.8em 0;
+                margin: 0.3em 0;
                 color: #dcddde;
             }
+            .document-view p:first-child {
+                margin-top: 0;
+            }
+            .document-view p:last-child {
+                margin-bottom: 0;
+            }
             .document-view ul {
-                margin: 0.8em 0;
+                margin: 0.3em 0;
                 padding-left: 1.5em;
             }
             .document-view li {
-                margin: 0.4em 0;
+                margin: 0.1em 0;
                 color: #dcddde;
+            }
+            .document-view li.task-item {
+                list-style: none;
+                margin-left: -1.5em;
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .document-view .task-checkbox {
+                margin-top: 2px;
+                cursor: pointer;
+                width: 18px;
+                height: 18px;
+                flex-shrink: 0;
+            }
+            .document-view .task-text {
+                flex: 1;
+            }
+            .document-view [contenteditable="true"] {
+                outline: none;
+            }
+            .document-view [contenteditable="true"]:focus {
+                outline: 1px solid #4a9eff;
+                outline-offset: 2px;
             }
             .document-view code {
                 background: #2a2a2a;
@@ -769,8 +1249,13 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         `;
         docWrapper.appendChild(style);
         
-        content.innerHTML = this.markdownToHTML(markdown);
-        docWrapper.appendChild(content);
+        // Append containers to wrapper
+        docWrapper.appendChild(editContainer);
+        docWrapper.appendChild(previewContainer);
+        docWrapper.appendChild(splitContainer);
+        
+        // Set initial view mode
+        setViewMode('split');
         
         // Only append if not preserving format (prevents duplicates)
         if (!app._preservingFormat || container.children.length === 0) {

@@ -774,6 +774,16 @@ export class ModalHandler {
         modal.classList.remove('active');
         this.app.currentEdit = null;
         
+        // Clean up format:registered event listeners
+        if (this._formatRegisteredHandlers && this._formatRegisteredHandlers.size > 0) {
+            this._formatRegisteredHandlers.forEach((handler, pageId) => {
+                if (this.app.eventBus) {
+                    this.app.eventBus.off('format:registered', handler);
+                }
+            });
+            this._formatRegisteredHandlers.clear();
+        }
+        
         // Remove Enter key handler if it exists
         if (this.app.currentEnterKeyHandler) {
             document.removeEventListener('keydown', this.app.currentEnterKeyHandler, true);
@@ -2259,8 +2269,13 @@ export class ModalHandler {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
         
-        const page = this.app.pages.find(p => p.id === pageId);
-        if (!page) return;
+        // Use appState.pages (source of truth) with fallback to app.pages for backward compatibility
+        const pages = this.app.appState?.pages || this.app.pages || [];
+        const page = pages.find(p => p.id === pageId);
+        if (!page) {
+            console.error('[ModalHandler] Page not found:', pageId, 'Available pages:', pages.map(p => p.id));
+            return;
+        }
         
         let html = `
             <h3>Edit Page</h3>
@@ -2356,6 +2371,13 @@ export class ModalHandler {
             const enabledPlugins = this.app.pagePluginManager.getPagePlugins(pageId);
             const enabledPluginIds = new Set(enabledPlugins.map(p => p.id));
             
+            console.log('[ModalHandler] Page plugins check:', {
+                hasPagePluginManager: !!this.app.pagePluginManager,
+                allPluginsCount: allPlugins.length,
+                allPlugins: allPlugins.map(p => ({ id: p.id, name: p.name, type: p.type })),
+                enabledPluginsCount: enabledPlugins.length
+            });
+            
             if (allPlugins.length > 0) {
                 html += `
                     <div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 4px; border: 1px solid #444;">
@@ -2377,7 +2399,17 @@ export class ModalHandler {
                         </div>
                     </div>
                 `;
+            } else {
+                // Show message if no plugins available (for debugging)
+                html += `
+                    <div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 4px; border: 1px solid #444;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Page Plugins:</label>
+                        <div style="color: #888; font-size: 14px;">No page plugins available. Plugins may still be loading...</div>
+                    </div>
+                `;
             }
+        } else {
+            console.warn('[ModalHandler] pagePluginManager not found on app instance');
         }
         
         html += `
@@ -2389,6 +2421,62 @@ export class ModalHandler {
         
         modalBody.innerHTML = html;
         modal.classList.add('active');
+        
+        // Listen for format registration events and update dropdown dynamically
+        const updateFormatsDropdown = () => {
+            if (!this.app.formatRendererManager) return;
+            
+            const formatSelect = modalBody.querySelector('#page-format-select');
+            if (!formatSelect) return;
+            
+            const allFormats = this.app.formatRendererManager.getAllFormats();
+            const currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+            const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
+            const filteredFormats = allFormats.filter(format => {
+                const formatName = format.formatName || format.id;
+                return allowedFormats.includes(formatName);
+            }).sort((a, b) => {
+                const aName = a.formatName || a.id;
+                const bName = b.formatName || b.id;
+                const order = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
+                const aIndex = order.indexOf(aName);
+                const bIndex = order.indexOf(bName);
+                return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+            });
+            
+            // Clear existing options except default
+            formatSelect.innerHTML = '<option value="">Default Format (Vertical)</option>';
+            
+            // Add filtered formats
+            filteredFormats.forEach(format => {
+                const formatName = format.formatName || format.id;
+                const selected = currentFormat === formatName ? 'selected' : '';
+                const option = document.createElement('option');
+                option.value = formatName;
+                option.textContent = format.name || formatName;
+                if (selected) option.selected = true;
+                formatSelect.appendChild(option);
+            });
+            
+            console.log('[ModalHandler] Updated formats dropdown with', filteredFormats.length, 'formats');
+        };
+        
+        // Update formats when they're registered
+        if (this.app.eventBus) {
+            const formatRegisteredHandler = () => {
+                updateFormatsDropdown();
+            };
+            this.app.eventBus.on('format:registered', formatRegisteredHandler);
+            
+            // Store handler for cleanup
+            if (!this._formatRegisteredHandlers) {
+                this._formatRegisteredHandlers = new Map();
+            }
+            this._formatRegisteredHandlers.set(pageId, formatRegisteredHandler);
+        }
+        
+        // Update formats immediately in case they're already loaded
+        setTimeout(updateFormatsDropdown, 100);
         
         // Add event listener for format selector
         const formatSelect = modalBody.querySelector('#page-format-select');

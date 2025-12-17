@@ -461,20 +461,50 @@ export class EventHandler {
             this.app.contextMenuHandler.hideContextMenu();
         });
 
-        // Close context menu on right-click in areas without specific handlers
+        // Unified contextmenu handler - routes to appropriate ContextMenuHandler methods
         document.addEventListener('contextmenu', (e) => {
-            // Only hide if clicking in empty areas (not on interactive elements that have handlers)
             const target = e.target;
-            const isOnInteractiveElement = target.closest('.page-tab') ||
-                                          target.closest('.bin') ||
-                                          target.closest('.element') ||
-                                          target.closest('#bins-container') ||
-                                          target.closest('.page-tabs');
-
-            if (!isOnInteractiveElement) {
-                this.app.contextMenuHandler.hideContextMenu();
+            const binsContainer = document.getElementById('bins-container');
+            
+            // Find the closest element, bin, or page tab
+            const elementEl = target.closest('.element');
+            const binEl = target.closest('.bin');
+            const pageTabEl = target.closest('.page-tab');
+            
+            // Route to appropriate handler
+            if (elementEl) {
+                // Element context menu
+                const pageId = elementEl.dataset.pageId || this.app.appState.currentPageId;
+                const binId = elementEl.dataset.binId;
+                const elementIndex = parseInt(elementEl.dataset.elementIndex);
+                this.app.contextMenuHandler.showContextMenu(e, pageId, binId, elementIndex);
+                return;
             }
-        });
+            
+            if (binEl && !elementEl) {
+                // Bin context menu
+                const pageId = binEl.dataset.pageId || this.app.appState.currentPageId;
+                const binId = binEl.dataset.binId;
+                this.app.contextMenuHandler.showBinContextMenu(e, pageId, binId);
+                return;
+            }
+            
+            if (pageTabEl) {
+                // Page tab context menu
+                const pageId = pageTabEl.dataset.pageId;
+                this.app.contextMenuHandler.showPageContextMenu(e, pageId);
+                return;
+            }
+            
+            // Empty area context menu (bins container or app area)
+            if (this.app && binsContainer) {
+                this.app.contextMenuHandler.showPageContextMenu(e);
+                return;
+            }
+            
+            // If no specific handler, hide any active context menu
+            this.app.contextMenuHandler.hideContextMenu();
+        }, true); // Use capture phase
         
         // Touch gesture handlers for mobile two-finger context menu
         this.app.touchGestureHandler.setupTouchGestures();
