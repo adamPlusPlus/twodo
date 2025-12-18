@@ -19,6 +19,11 @@ export class PaneManager {
             this.app.eventBus.on(EVENTS.PAGE.SWITCHED, (data) => {
                 this.handlePageSwitch(data.pageId);
             });
+            
+            // Listen for theme updates to refresh all panes
+            this.app.eventBus.on('theme:updated', () => {
+                this.updateThemesForAllPanes();
+            });
         }
     }
     
@@ -555,8 +560,17 @@ export class PaneManager {
                 : null;
             
             if (format && format.renderPage) {
+                // Apply theme for this page/view combination
+                if (this.app.themeManager) {
+                    const viewFormat = activeTab.format || 'default';
+                    this.app.themeManager.applyPageTheme(page.id, viewFormat, content);
+                }
                 format.renderPage(content, page, { app: this.app });
             } else {
+                // Apply theme for default view
+                if (this.app.themeManager) {
+                    this.app.themeManager.applyPageTheme(page.id, 'default', content);
+                }
                 // Default rendering
                 if (page.bins && page.bins.length > 0) {
                     // Access binRenderer through appRenderer or renderService
@@ -597,6 +611,42 @@ export class PaneManager {
         
         // Emit render event
         eventBus.emit('pane:rendered', { paneId: pane.id, pageId: activeTab.pageId });
+    }
+    
+    /**
+     * Update themes for all panes when theme changes
+     */
+    updateThemesForAllPanes() {
+        if (!this.app.themeManager) return;
+        
+        // Apply global theme to root first (only once)
+        this.app.themeManager.applyTheme(this.app.themeManager.themes.global, 'root');
+        
+        const allPanes = this.getAllPanes();
+        allPanes.forEach(pane => {
+            if (!pane.container) return;
+            
+            // Find the content container for this pane
+            const content = pane.container.querySelector('.pane-content');
+            if (!content) return;
+            
+            // Get active tab
+            const activeTab = pane.tabs[pane.activeTabIndex];
+            if (!activeTab) return;
+            
+            // Get the page
+            const page = this.app.appState.pages.find(p => p.id === activeTab.pageId);
+            if (!page) return;
+            
+            // Determine view format
+            const viewFormat = activeTab.format || 'default';
+            
+            // Get effective theme for this page/view combination
+            const effectiveTheme = this.app.themeManager.getEffectiveTheme(page.id, viewFormat);
+            
+            // Apply effective theme to this pane's content container
+            this.app.themeManager.applyTheme(effectiveTheme, content);
+        });
     }
     
     /**
@@ -1321,16 +1371,19 @@ export class PaneManager {
         const pane = this.panes.get(paneId);
         if (!pane) return;
         
-        // Get all available formats
+        // Get all available formats that support pages
         const allFormats = [];
         if (this.app.formatRendererManager) {
             const formats = this.app.formatRendererManager.getAllFormats();
             formats.forEach(format => {
-                const formatName = format.formatName || format.id;
-                allFormats.push({ 
-                    id: formatName, 
-                    name: format.name || format.formatLabel || formatName 
-                });
+                // Only include formats that support pages
+                if (format.supportsPages !== false) {
+                    const formatName = format.formatName || format.id;
+                    allFormats.push({ 
+                        id: formatName, 
+                        name: format.name || format.formatLabel || formatName 
+                    });
+                }
             });
         }
         
