@@ -1,6 +1,7 @@
 // PaneManager.js - Manages multiple panes/windows for viewing pages
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
+import { DOMBuilder } from '../utils/DOMBuilder.js';
 
 /**
  * PaneManager - Manages multiple panes for viewing pages simultaneously
@@ -781,75 +782,78 @@ export class PaneManager {
      * Create a tab element with drag-and-drop support
      */
     createTabElement(pane, tab, index) {
-        const tabEl = document.createElement('div');
-        tabEl.className = 'pane-tab';
-        tabEl.dataset.tabId = tab.id;
-        tabEl.dataset.paneId = pane.id;
-        tabEl.draggable = true;
-        
         const isActive = index === pane.activeTabIndex;
-        tabEl.style.cssText = `
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: ${isActive ? '#1e1e1e' : '#2a2a2a'};
-            color: #dcddde;
-            border-right: 1px solid #3a3a3a;
-            cursor: pointer;
-            user-select: none;
-            white-space: nowrap;
-            font-size: 12px;
-            position: relative;
-        `;
-        
         const page = this.app.appState.pages.find(p => p.id === tab.pageId);
         const pageTitle = page ? (page.title || page.id) : tab.pageId;
         const formatName = tab.format 
             ? (this.app.formatRendererManager?.getFormat(tab.format)?.name || tab.format)
             : 'Default';
         
-        const title = document.createElement('span');
-        title.textContent = pageTitle;
-        title.style.cssText = 'flex: 1; overflow: hidden; text-overflow: ellipsis;';
-        tabEl.appendChild(title);
+        // Use DOMBuilder for tab creation
+        const title = DOMBuilder.create('span')
+            .style({ flex: '1', overflow: 'hidden', textOverflow: 'ellipsis' })
+            .text(pageTitle)
+            .build();
+        
+        const closeBtn = DOMBuilder.create('button')
+            .attr('title', 'Close Tab')
+            .html('×')
+            .style({
+                padding: '0',
+                background: 'transparent',
+                color: '#888',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                lineHeight: '1',
+                width: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+            })
+            .on('click', (e) => {
+                e.stopPropagation();
+                this.closeTab(pane.id, tab.id);
+            })
+            .build();
+        
+        const tabEl = DOMBuilder.create('div')
+            .class('pane-tab')
+            .dataset({ tabId: tab.id, paneId: pane.id })
+            .attr('draggable', 'true')
+            .style({
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                background: isActive ? '#1e1e1e' : '#2a2a2a',
+                color: '#dcddde',
+                borderRight: '1px solid #3a3a3a',
+                cursor: 'pointer',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+                fontSize: '12px',
+                position: 'relative'
+            })
+            .child(title)
+            .build();
         
         // Format badge
         if (tab.format) {
-            const formatBadge = document.createElement('span');
-            formatBadge.textContent = formatName;
-            formatBadge.style.cssText = `
-                padding: 2px 6px;
-                background: #3a3a3a;
-                border-radius: 3px;
-                font-size: 10px;
-                opacity: 0.7;
-            `;
+            const formatBadge = DOMBuilder.create('span')
+                .text(formatName)
+                .style({
+                    padding: '2px 6px',
+                    background: '#3a3a3a',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    opacity: '0.7'
+                })
+                .build();
             tabEl.appendChild(formatBadge);
         }
         
-        // Close tab button
-        const closeBtn = document.createElement('button');
-        closeBtn.innerHTML = '×';
-        closeBtn.title = 'Close Tab';
-        closeBtn.style.cssText = `
-            padding: 0;
-            background: transparent;
-            color: #888;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-            width: 16px;
-            height: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        `;
-        closeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.closeTab(pane.id, tab.id);
-        });
         tabEl.appendChild(closeBtn);
         
         // Click to activate tab

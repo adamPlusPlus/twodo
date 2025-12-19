@@ -1567,13 +1567,15 @@ export class UndoRedoManager {
      */
     getElementPath(pageId, binId, elementIndex, childIndex = null) {
         const path = ['pages'];
-        const pageIndex = this.app.pages.findIndex(p => p.id === pageId);
+        // Get pages from appState if available, otherwise fall back to app.pages
+        const pages = (this.app?.appState?.pages) || (this.app?.pages) || [];
+        const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return null;
         
         path.push(pageIndex);
         path.push('bins');
         
-        const page = this.app.pages[pageIndex];
+        const page = pages[pageIndex];
         const binIndex = page.bins ? page.bins.findIndex(b => b.id === binId) : -1;
         if (binIndex === -1) return null;
         

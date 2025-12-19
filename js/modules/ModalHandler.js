@@ -1,6 +1,8 @@
 // ModalHandler - Handles all modal dialogs
 import { StringUtils } from '../utils/string.js';
 import { DOMUtils } from '../utils/dom.js';
+import { ModalBuilder } from '../utils/ModalBuilder.js';
+import { DOMBuilder } from '../utils/DOMBuilder.js';
 
 export class ModalHandler {
     constructor(app) {
@@ -148,7 +150,7 @@ export class ModalHandler {
             let currentInsertIndex = capturedElementIndex; // Use captured value
             
             // Add multiple elements
-            const page = app.pages.find(p => p.id === pageId);
+            const page = (app.appState?.pages || app.pages || []).find(p => p.id === pageId);
             if (!page) return;
             const bin = page.bins?.find(b => b.id === binId);
             if (!bin) return;
@@ -479,7 +481,7 @@ export class ModalHandler {
             app.modalHandler.closeModal = originalCloseModal;
             app.modalHandler.closeModal();
             
-            const page = app.pages.find(p => p.id === pageId);
+            const page = (app.appState?.pages || app.pages || []).find(p => p.id === pageId);
             if (!page) return;
             const bin = page.bins?.find(b => b.id === binId);
             if (!bin) return;
@@ -685,27 +687,19 @@ export class ModalHandler {
      */
     async showConfirm(message) {
         return new Promise((resolve) => {
-            const modal = document.getElementById('modal');
-            const modalBody = document.getElementById('modal-body');
-            
-            modalBody.innerHTML = `
-                <div style="padding: 20px; text-align: center;">
-                    <p style="margin-bottom: 20px; color: #e0e0e0;">${this.escapeHtml(message)}</p>
-                    <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button onclick="app.modalHandler.closeModal(); app.modalHandler._confirmResolve(true);" 
-                                style="padding: 10px 20px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            OK
-                        </button>
-                        <button onclick="app.modalHandler.closeModal(); app.modalHandler._confirmResolve(false);" 
-                                style="padding: 10px 20px; background: #555; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            modal.classList.add('active');
             this._confirmResolve = resolve;
+            
+            const builder = new ModalBuilder(this.app)
+                .setTitle('Confirm')
+                .setContent(`<p style="margin-bottom: 20px; color: #e0e0e0; text-align: center;">${this.escapeHtml(message)}</p>`)
+                .addButton('OK', () => {
+                    this._confirmResolve(true);
+                }, { primary: true })
+                .addButton('Cancel', () => {
+                    this._confirmResolve(false);
+                });
+            
+            builder.show();
         });
     }
     
@@ -841,7 +835,7 @@ export class ModalHandler {
         const modalBody = document.getElementById('modal-body');
         
         // Get bin to ensure it exists
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -1013,7 +1007,7 @@ export class ModalHandler {
                                 ${(element.targetPages || []).map(pageId => `
                                     <div style="display: flex; gap: 5px; margin-bottom: 5px;">
                                         <select class="calendar-target-page" style="flex: 1;">
-                                            ${app.pages.map(p => `<option value="${p.id}" ${p.id === pageId ? 'selected' : ''}>${p.title || p.id}</option>`).join('')}
+                                            ${(app.appState?.pages || app.pages || []).map(p => `<option value="${p.id}" ${p.id === pageId ? 'selected' : ''}>${p.title || p.id}</option>`).join('')}
                                         </select>
                                         <button type="button" class="remove-target-page" style="padding: 2px 8px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer;">×</button>
                                     </div>
@@ -1356,7 +1350,7 @@ export class ModalHandler {
                     const select = document.createElement('select');
                     select.className = 'calendar-target-page';
                     select.style.flex = '1';
-                    this.app.pages.forEach(p => {
+                    (this.app.appState?.pages || this.app.pages || []).forEach(p => {
                         const option = document.createElement('option');
                         option.value = p.id;
                         option.textContent = p.title || p.id;
@@ -1593,7 +1587,7 @@ export class ModalHandler {
                 const handleMouseUp = () => {
                     clearTimeout(holdTimer);
                     const wasHolding = nextElementIsHolding;
-                    const page = this.app.pages.find(p => p.id === pageId);
+                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
                     if (!page) return;
                     const bin = page.bins?.find(b => b.id === binId);
                     if (!bin) return;
@@ -1675,7 +1669,7 @@ export class ModalHandler {
                 const handleMouseUp = () => {
                     clearTimeout(holdTimer);
                     const wasHolding = prevElementIsHolding;
-                    const page = this.app.pages.find(p => p.id === pageId);
+                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
                     if (!page) return;
                     const bin = page.bins?.find(b => b.id === binId);
                     if (!bin) return;
@@ -1786,7 +1780,7 @@ export class ModalHandler {
                 
                 // Open next element editor
                 setTimeout(() => {
-                    const page = this.app.pages.find(p => p.id === pageId);
+                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
                     const bin = page?.bins?.find(b => b.id === binId);
                     if (bin && bin.elements[nextIndex]) {
                         this.showEditModal(pageId, binId, nextIndex, bin.elements[nextIndex]);
@@ -1843,7 +1837,7 @@ export class ModalHandler {
     }
     
     saveEdit(pageId, binId, elementIndex, skipClose = false) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -2165,7 +2159,7 @@ export class ModalHandler {
         this.closeModal();
         
         // Get the element to determine the correct audioElementIndex
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -2194,7 +2188,7 @@ export class ModalHandler {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
         
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -2318,24 +2312,49 @@ export class ModalHandler {
             // Debug: log all formats to help diagnose missing formats
             console.log('[ModalHandler] All formats:', allFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
             
-            // Filter to only show default, grid, horizontal, and document formats
-            // Order: Grid Layout, Horizontal Layout, Document View (to match expected order)
-            const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
+            // Filter to only show formats that support pages
+            // Include all page-supported formats: default layouts, document view, and new views
             const filteredFormats = allFormats.filter(format => {
-                const formatName = format.formatName || format.id;
-                const isAllowed = allowedFormats.includes(formatName);
-                if (!isAllowed && format.type === 'format') {
-                    console.log(`[ModalHandler] Format filtered out: ${formatName} (${format.name || format.id})`);
-                }
-                return isAllowed;
+                // Only show formats that support pages
+                return format.supportsPages !== false;
             }).sort((a, b) => {
-                // Sort to ensure consistent order: Grid Layout, Horizontal Layout, Document View
+                // Sort formats: default first, then by preferred order, then alphabetical
                 const aName = a.formatName || a.id;
                 const bName = b.formatName || b.id;
-                const order = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
-                const aIndex = order.indexOf(aName);
-                const bIndex = order.indexOf(bName);
-                return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+                
+                // Default format first
+                if (aName === 'default' || aName === '') return -1;
+                if (bName === 'default' || bName === '') return 1;
+                
+                // Preferred order for common formats
+                const preferredOrder = [
+                    'grid-layout-format',
+                    'horizontal-layout-format',
+                    'document-view-format',
+                    'latex-editor',
+                    'mindmap',
+                    'logic-graph',
+                    'flowchart',
+                    'page-kanban-format',
+                    'trello-board'
+                ];
+                
+                const aIndex = preferredOrder.indexOf(aName);
+                const bIndex = preferredOrder.indexOf(bName);
+                
+                // If both in preferred order, sort by order
+                if (aIndex !== -1 && bIndex !== -1) {
+                    return aIndex - bIndex;
+                }
+                
+                // If only one in preferred order, it comes first
+                if (aIndex !== -1) return -1;
+                if (bIndex !== -1) return 1;
+                
+                // Otherwise, sort alphabetically by display name
+                const aDisplay = a.name || aName;
+                const bDisplay = b.name || bName;
+                return aDisplay.localeCompare(bDisplay);
             });
             
             console.log('[ModalHandler] Filtered formats:', filteredFormats.map(f => ({ id: f.id, formatName: f.formatName, name: f.name })));
@@ -2479,17 +2498,47 @@ export class ModalHandler {
             if (currentFormat === null) {
                 currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
             }
-            const allowedFormats = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
+            // Filter to only show formats that support pages
             const filteredFormats = allFormats.filter(format => {
-                const formatName = format.formatName || format.id;
-                return allowedFormats.includes(formatName);
+                // Only show formats that support pages
+                return format.supportsPages !== false;
             }).sort((a, b) => {
                 const aName = a.formatName || a.id;
                 const bName = b.formatName || b.id;
-                const order = ['grid-layout-format', 'horizontal-layout-format', 'document-view-format'];
-                const aIndex = order.indexOf(aName);
-                const bIndex = order.indexOf(bName);
-                return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+                
+                // Default format first
+                if (aName === 'default' || aName === '') return -1;
+                if (bName === 'default' || bName === '') return 1;
+                
+                // Preferred order for common formats
+                const preferredOrder = [
+                    'grid-layout-format',
+                    'horizontal-layout-format',
+                    'document-view-format',
+                    'latex-editor',
+                    'mindmap',
+                    'logic-graph',
+                    'flowchart',
+                    'page-kanban-format',
+                    'trello-board'
+                ];
+                
+                const aIndex = preferredOrder.indexOf(aName);
+                const bIndex = preferredOrder.indexOf(bName);
+                
+                // If both in preferred order, sort by order
+                if (aIndex !== -1 && bIndex !== -1) {
+                    return aIndex - bIndex;
+                }
+                
+                // If only one in preferred order, it comes first
+                if (aIndex !== -1) return -1;
+                if (bIndex !== -1) return 1;
+                
+                // Otherwise, sort alphabetically by display name
+                const aDisplay = a.name || aName;
+                const bDisplay = b.name || bName;
+                return aDisplay.localeCompare(bDisplay);
             });
             
             // Clear existing options except default
@@ -2593,6 +2642,668 @@ export class ModalHandler {
                 this.app.render();
             });
         });
+    }
+    
+    /**
+     * Show visual customization modal for an object
+     * @param {string} type - 'pane', 'page', 'bin', or 'element'
+     * @param {string} id - Object ID
+     * @param {Object} options - Additional options (pageId, viewFormat, etc.)
+     */
+    showVisualCustomizationModal(type, id, options = {}) {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+        
+        // Get current effective settings
+        let currentSettings = {};
+        if (this.app.visualSettingsManager) {
+            const pageId = options.pageId || null;
+            const viewFormat = options.viewFormat || 'default';
+            currentSettings = this.app.visualSettingsManager.getEffectiveSettings(type, id, pageId, viewFormat);
+        }
+        
+        // Get object-specific settings
+        let objectSettings = { custom: {}, preserveAll: false };
+        if (this.app.visualSettingsManager) {
+            objectSettings = this.app.visualSettingsManager.getObjectSettings(type, id);
+        }
+        
+        // Determine object name
+        let objectName = type;
+        if (type === 'pane') {
+            objectName = 'Pane';
+        } else if (type === 'page') {
+            const page = this.app.appState?.pages?.find(p => p.id === id);
+            objectName = page ? `Page: ${page.title || id}` : 'Page';
+        } else if (type === 'bin') {
+            const page = this.app.appState?.pages?.find(p => p.id === options.pageId);
+            const bin = page?.bins?.find(b => b.id === id);
+            objectName = bin ? `Bin: ${bin.title || id}` : 'Bin';
+        } else if (type === 'element') {
+            objectName = 'Element';
+        }
+        
+        let html = `<h3 style="margin-bottom: 20px; color: #ffffff;">Visual Customization: ${objectName}</h3>`;
+        
+        // Instance-specific checkbox (default: unchecked - apply to all objects of this type)
+        html += '<div class="settings-control" style="margin-bottom: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px;">';
+        html += '<label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">';
+        html += `<input type="checkbox" id="visual-instance-specific" style="width: 18px; height: 18px; cursor: pointer;">`;
+        html += '<span style="font-weight: 600; color: #ffffff;">Apply settings to this specific instance only</span>';
+        html += '</label>';
+        html += '<div style="margin-top: 10px; color: #888; font-size: 12px;">By default, settings apply to all objects of this type. Enable this to apply only to this specific instance.</div>';
+        html += '</div>';
+        
+        // Preserve all checkbox (shown when instance-specific is checked)
+        html += '<div class="settings-control" id="visual-preserve-all-container" style="margin-bottom: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; display: none;">';
+        html += '<label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">';
+        html += `<input type="checkbox" id="visual-preserve-all" ${objectSettings.preserveAll ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">`;
+        html += '<span style="font-weight: 600; color: #ffffff;">Preserve all current values</span>';
+        html += '</label>';
+        html += '<div style="margin-top: 10px; color: #888; font-size: 12px;">When enabled, all current visual values will be preserved, not just the ones you customize.</div>';
+        html += '</div>';
+        
+        // Tag-based customization section
+        html += '<div class="settings-control" style="margin-bottom: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border: 2px solid #4a9eff;">';
+        html += '<div style="font-weight: 600; color: #4a9eff; margin-bottom: 15px; font-size: 16px;">Tag-Based Customization</div>';
+        html += '<div style="color: #888; font-size: 12px; margin-bottom: 15px;">Apply visual settings to all objects with a specific tag. These settings will override theme settings but can be overridden by instance-specific settings.</div>';
+        
+        // Tag selector
+        html += '<div class="settings-control" style="margin-bottom: 10px;">';
+        html += '<label>Tag:</label>';
+        html += '<select id="visual-tag-select" style="width: 100%; padding: 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px; margin-bottom: 10px;">';
+        html += '<option value="">-- Select or Create Tag --</option>';
+        
+        // Get all available tags
+        const allTags = this.app.tagManager?.getAvailableTags() || [];
+        allTags.forEach(tag => {
+            html += `<option value="${this.escapeHtml(tag)}">${this.escapeHtml(tag)}</option>`;
+        });
+        html += '</select>';
+        html += '<input type="text" id="visual-new-tag" placeholder="Or enter new tag name" style="width: 100%; padding: 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px; margin-bottom: 10px;">';
+        html += '</div>';
+        
+        // View format selector for tag settings
+        html += '<div class="settings-control" style="margin-bottom: 10px;">';
+        html += '<label>Apply to View:</label>';
+        html += '<select id="visual-tag-view-format" style="width: 100%; padding: 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
+        html += '<option value="">All Views</option>';
+        const viewFormats = this.app.themeManager?.getViewFormats() || [];
+        viewFormats.forEach(format => {
+            const formatName = format === 'default' ? 'Default' : format.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            html += `<option value="${format}">${formatName}</option>`;
+        });
+        html += '</select>';
+        html += '</div>';
+        
+        // Load tag settings button
+        html += '<button id="visual-tag-load-btn" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-bottom: 10px;">Load Tag Settings</button>';
+        html += '<button id="visual-tag-reset-btn" style="padding: 8px 16px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 10px;">Reset Tag Settings</button>';
+        html += '</div>';
+        
+        // Visual customization controls based on type
+        if (type === 'pane' || type === 'page') {
+            html += this.createPageVisualControls(currentSettings);
+        } else if (type === 'bin') {
+            html += this.createBinVisualControls(currentSettings);
+        } else if (type === 'element') {
+            html += this.createElementVisualControls(currentSettings);
+        }
+        
+        // Export/Import buttons
+        html += '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #404040; display: flex; gap: 10px;">';
+        html += '<button id="visual-export-btn" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Export Settings</button>';
+        html += '<button id="visual-import-btn" style="padding: 8px 16px; background: #58a858; color: white; border: none; border-radius: 4px; cursor: pointer;">Import Settings</button>';
+        html += '<input type="file" id="visual-import-file" accept=".json" style="display: none;">';
+        html += '<button id="visual-reset-btn" style="padding: 8px 16px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: auto;">Reset</button>';
+        html += '</div>';
+        
+        modalBody.innerHTML = html;
+        modal.classList.add('active');
+        
+        // Show/hide preserve-all checkbox based on instance-specific
+        const instanceSpecificCheckbox = document.getElementById('visual-instance-specific');
+        const preserveAllContainer = document.getElementById('visual-preserve-all-container');
+        
+        if (instanceSpecificCheckbox && preserveAllContainer) {
+            const togglePreserveAll = () => {
+                preserveAllContainer.style.display = instanceSpecificCheckbox.checked ? 'block' : 'none';
+            };
+            instanceSpecificCheckbox.addEventListener('change', togglePreserveAll);
+            togglePreserveAll(); // Initial state
+        }
+        
+        // Real-time update function
+        const applyRealTimeUpdate = (path, value) => {
+            const instanceSpecific = instanceSpecificCheckbox?.checked || false;
+            const preserveAll = document.getElementById('visual-preserve-all')?.checked || false;
+            
+            // If not instance-specific, apply to all objects of this type via theme
+            if (!instanceSpecific) {
+                // Apply directly to global theme for real-time updates
+                if (this.app.themeManager) {
+                    const globalTheme = this.app.themeManager.themes.global || {};
+                    const pathParts = path.split('.');
+                    
+                    // Navigate/create nested structure
+                    let target = globalTheme;
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        if (!target[pathParts[i]]) target[pathParts[i]] = {};
+                        target = target[pathParts[i]];
+                    }
+                    target[pathParts[pathParts.length - 1]] = value;
+                    
+                    // Apply theme immediately
+                    this.app.themeManager.setGlobalTheme(globalTheme);
+                    
+                    // Also update settings manager for CSS variables
+                    if (this.app.settingsManager) {
+                        this.app.settingsManager.updateSetting(path, value);
+                    }
+                }
+            } else {
+                // Instance-specific: apply only to this object
+                if (this.app.visualSettingsManager) {
+                    const customSettings = {};
+                    const pathParts = path.split('.');
+                    let target = customSettings;
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        if (!target[pathParts[i]]) target[pathParts[i]] = {};
+                        target = target[pathParts[i]];
+                    }
+                    target[pathParts[pathParts.length - 1]] = value;
+                    
+                    this.app.visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
+                }
+            }
+            
+            // Apply visual changes without full render to preserve modal
+            applyVisualChangesOnly(path, value);
+        };
+        
+        // Apply visual changes without closing modal
+        const applyVisualChangesOnly = (path, value) => {
+            const isInstanceSpecific = instanceSpecificCheckbox?.checked || false;
+            
+            // Apply CSS variables directly for immediate visual feedback
+            const root = document.documentElement;
+            const cssVarName = pathToCssVar(path);
+            if (cssVarName) {
+                root.style.setProperty(cssVarName, value);
+            }
+            
+            // Apply theme to DOM directly if not instance-specific
+            if (this.app.themeManager && !isInstanceSpecific) {
+                const scope = document.documentElement;
+                this.app.themeManager.applyTheme(this.app.themeManager.themes.global, scope);
+            }
+            
+            // For instance-specific, find and update specific elements
+            if (isInstanceSpecific && this.app.visualSettingsManager) {
+                const elements = document.querySelectorAll(`[data-${type}-id="${id}"]`);
+                elements.forEach(el => {
+                    this.app.visualSettingsManager.applyVisualSettings(el, type, id);
+                });
+            }
+        };
+        
+        // Convert setting path to CSS variable name
+        const pathToCssVar = (path) => {
+            const mapping = {
+                'page.background': '--page-bg',
+                'page.margin': '--page-margin',
+                'page.padding': '--page-padding',
+                'page.borderRadius': '--page-border-radius',
+                'page.fontFamily': '--page-font-family',
+                'page.fontSize': '--page-font-size',
+                'page.opacity': '--page-opacity',
+                'page.color': '--page-color',
+                'element.background': '--element-bg',
+                'element.margin': '--element-margin',
+                'element.padding': '--element-padding',
+                'element.paddingVertical': '--element-padding-vertical',
+                'element.paddingHorizontal': '--element-padding-horizontal',
+                'element.gap': '--element-gap',
+                'element.fontFamily': '--element-font-family',
+                'element.fontSize': '--element-font-size',
+                'element.opacity': '--element-opacity',
+                'element.color': '--element-color',
+                'element.hoverBackground': '--element-hover-bg',
+                'background': '--bg-color'
+            };
+            return mapping[path] || null;
+        };
+        
+        // Add real-time listeners to all inputs
+        const allInputs = modalBody.querySelectorAll('[data-setting-path]');
+        allInputs.forEach(input => {
+            const path = input.dataset.settingPath;
+            
+            if (input.type === 'range') {
+                // Sync range slider with number input
+                const numberInput = modalBody.querySelector(`input[type="number"][data-setting-path="${path}"]`);
+                
+                input.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    if (numberInput) {
+                        numberInput.value = value;
+                    }
+                    
+                    // Convert value based on path
+                    let finalValue = value;
+                    if (path.includes('opacity')) {
+                        finalValue = (parseFloat(value) / 100).toFixed(2);
+                    } else if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size') || path.includes('gap')) {
+                        finalValue = value + 'px';
+                    }
+                    
+                    applyRealTimeUpdate(path, finalValue);
+                });
+            } else if (input.type === 'number') {
+                // Sync number input with range slider
+                const rangeInput = modalBody.querySelector(`input[type="range"][data-setting-path="${path}"]`);
+                
+                input.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    if (rangeInput) {
+                        rangeInput.value = value;
+                    }
+                    
+                    // Convert value based on path
+                    let finalValue = value;
+                    if (path.includes('opacity')) {
+                        finalValue = (parseFloat(value) / 100).toFixed(2);
+                    } else if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size') || path.includes('gap')) {
+                        finalValue = value + 'px';
+                    }
+                    
+                    applyRealTimeUpdate(path, finalValue);
+                });
+            } else if (input.type === 'color' || input.type === 'text') {
+                input.addEventListener('input', (e) => {
+                    applyRealTimeUpdate(path, e.target.value);
+                });
+            }
+        });
+        
+        // Save button handler
+        const saveVisualSettings = () => {
+            if (!this.app.visualSettingsManager) return;
+            
+            const instanceSpecific = instanceSpecificCheckbox?.checked || false;
+            const preserveAll = document.getElementById('visual-preserve-all')?.checked || false;
+            
+            if (!instanceSpecific) {
+                // Apply to all objects of this type - save to theme
+                // The real-time updates already applied to theme, just need to save
+                if (this.app.themeManager) {
+                    this.app.themeManager.saveThemes();
+                }
+                if (this.app.settingsManager) {
+                    this.app.settingsManager.saveSettings();
+                }
+                this.closeModal();
+                this.app.render();
+                return;
+            }
+            
+            // Collect all changed values from inputs
+            const customSettings = {};
+            const pageSettings = currentSettings.page || {};
+            const elementSettings = currentSettings.element || {};
+            
+            // Helper to get value from input
+            const getInputValue = (path) => {
+                // Try modalBody first, then fall back to document
+                const input = modalBody.querySelector(`[data-setting-path="${path}"]`) || 
+                             document.querySelector(`[data-setting-path="${path}"]`);
+                if (!input) return null;
+                if (input.type === 'color') return input.value;
+                if (input.type === 'range' || input.type === 'number') {
+                    const numValue = parseFloat(input.value);
+                    if (path.includes('opacity')) {
+                        return (numValue / 100).toFixed(2);
+                    } else if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size') || path.includes('gap')) {
+                        return numValue + 'px';
+                    }
+                    return input.value;
+                }
+                return input.value;
+            };
+            
+            // Page-level settings
+            if (type === 'pane' || type === 'page' || type === 'bin') {
+                const pageBg = getInputValue('page.background');
+                const pageMargin = getInputValue('page.margin');
+                const pagePadding = getInputValue('page.padding');
+                const pageBorderRadius = getInputValue('page.borderRadius');
+                const pageFontFamily = getInputValue('page.fontFamily');
+                const pageFontSize = getInputValue('page.fontSize');
+                const pageOpacity = getInputValue('page.opacity');
+                const pageColor = getInputValue('page.color');
+                
+                if (!preserveAll) {
+                    // Only store changed values
+                    if (!customSettings.page) customSettings.page = {};
+                    if (pageBg && pageBg !== pageSettings.background) customSettings.page.background = pageBg;
+                    if (pageMargin && pageMargin !== pageSettings.margin) customSettings.page.margin = pageMargin;
+                    if (pagePadding && pagePadding !== pageSettings.padding) customSettings.page.padding = pagePadding;
+                    if (pageBorderRadius && pageBorderRadius !== pageSettings.borderRadius) customSettings.page.borderRadius = pageBorderRadius;
+                    if (pageFontFamily && pageFontFamily !== pageSettings.fontFamily) customSettings.page.fontFamily = pageFontFamily;
+                    if (pageFontSize && pageFontSize !== pageSettings.fontSize) customSettings.page.fontSize = pageFontSize;
+                    if (pageOpacity && pageOpacity !== pageSettings.opacity) customSettings.page.opacity = pageOpacity;
+                    if (pageColor && pageColor !== pageSettings.color) customSettings.page.color = pageColor;
+                } else {
+                    // Store all values
+                    customSettings.page = {
+                        background: pageBg || pageSettings.background,
+                        margin: pageMargin || pageSettings.margin,
+                        padding: pagePadding || pageSettings.padding,
+                        borderRadius: pageBorderRadius || pageSettings.borderRadius,
+                        fontFamily: pageFontFamily || pageSettings.fontFamily,
+                        fontSize: pageFontSize || pageSettings.fontSize,
+                        opacity: pageOpacity || pageSettings.opacity,
+                        color: pageColor || pageSettings.color
+                    };
+                }
+            }
+            
+            // Element-level settings
+            if (type === 'element' || type === 'bin') {
+                const elementBg = getInputValue('element.background');
+                const elementMargin = getInputValue('element.margin');
+                const elementPadding = getInputValue('element.padding');
+                const elementPaddingVertical = getInputValue('element.paddingVertical');
+                const elementPaddingHorizontal = getInputValue('element.paddingHorizontal');
+                const elementGap = getInputValue('element.gap');
+                const elementFontFamily = getInputValue('element.fontFamily');
+                const elementFontSize = getInputValue('element.fontSize');
+                const elementOpacity = getInputValue('element.opacity');
+                const elementColor = getInputValue('element.color');
+                const elementHoverBg = getInputValue('element.hoverBackground');
+                
+                if (!preserveAll) {
+                    // Only store changed values
+                    if (!customSettings.element) customSettings.element = {};
+                    if (elementBg && elementBg !== elementSettings.background) customSettings.element.background = elementBg;
+                    if (elementMargin && elementMargin !== elementSettings.margin) customSettings.element.margin = elementMargin;
+                    if (elementPadding && elementPadding !== elementSettings.padding) customSettings.element.padding = elementPadding;
+                    if (elementPaddingVertical && elementPaddingVertical !== (elementSettings.paddingVertical || elementSettings.padding)) customSettings.element.paddingVertical = elementPaddingVertical;
+                    if (elementPaddingHorizontal && elementPaddingHorizontal !== (elementSettings.paddingHorizontal || elementSettings.padding)) customSettings.element.paddingHorizontal = elementPaddingHorizontal;
+                    if (elementGap && elementGap !== elementSettings.gap) customSettings.element.gap = elementGap;
+                    if (elementFontFamily && elementFontFamily !== elementSettings.fontFamily) customSettings.element.fontFamily = elementFontFamily;
+                    if (elementFontSize && elementFontSize !== elementSettings.fontSize) customSettings.element.fontSize = elementFontSize;
+                    if (elementOpacity && elementOpacity !== elementSettings.opacity) customSettings.element.opacity = elementOpacity;
+                    if (elementColor && elementColor !== elementSettings.color) customSettings.element.color = elementColor;
+                    if (elementHoverBg && elementHoverBg !== elementSettings.hoverBackground) customSettings.element.hoverBackground = elementHoverBg;
+                } else {
+                    // Store all values
+                    customSettings.element = {
+                        background: elementBg || elementSettings.background,
+                        margin: elementMargin || elementSettings.margin,
+                        padding: elementPadding || elementSettings.padding,
+                        paddingVertical: elementPaddingVertical || elementSettings.paddingVertical || elementSettings.padding,
+                        paddingHorizontal: elementPaddingHorizontal || elementSettings.paddingHorizontal || elementSettings.padding,
+                        gap: elementGap || elementSettings.gap,
+                        fontFamily: elementFontFamily || elementSettings.fontFamily,
+                        fontSize: elementFontSize || elementSettings.fontSize,
+                        opacity: elementOpacity || elementSettings.opacity,
+                        color: elementColor || elementSettings.color,
+                        hoverBackground: elementHoverBg || elementSettings.hoverBackground
+                    };
+                }
+            }
+            
+            this.app.visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
+            this.closeModal();
+            this.app.render();
+        };
+        
+        // Add save button
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.style.cssText = 'padding: 10px 20px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: 600; margin-top: 20px; width: 100%;';
+        
+        // Enhanced save handler that supports both instance-specific and tag-based settings
+        saveBtn.addEventListener('click', () => {
+            const tagSelect = document.getElementById('visual-tag-select');
+            const newTagInput = document.getElementById('visual-new-tag');
+            const tagViewFormat = document.getElementById('visual-tag-view-format');
+            
+            const selectedTag = tagSelect?.value || newTagInput?.value?.trim().toLowerCase();
+            const instanceSpecific = instanceSpecificCheckbox?.checked || false;
+            
+            // If tag is selected, save as tag settings
+            if (selectedTag) {
+                const viewFormat = tagViewFormat?.value || null;
+                const preserveAll = document.getElementById('visual-preserve-all')?.checked || false;
+                
+                // Collect settings (reuse the same logic)
+                const customSettings = {};
+                const pageSettings = currentSettings.page || {};
+                const elementSettings = currentSettings.element || {};
+                
+                const getInputValue = (path) => {
+                    const input = modalBody.querySelector(`[data-setting-path="${path}"]`) || 
+                                 document.querySelector(`[data-setting-path="${path}"]`);
+                    if (!input) return null;
+                    if (input.type === 'color') return input.value;
+                    if (input.type === 'range' || input.type === 'number') {
+                        const numValue = parseFloat(input.value);
+                        if (path.includes('opacity')) {
+                            return (numValue / 100).toFixed(2);
+                        } else if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size') || path.includes('gap')) {
+                            return numValue + 'px';
+                        }
+                        return input.value;
+                    }
+                    return input.value;
+                };
+                
+                // Collect page settings
+                if (type === 'pane' || type === 'page' || type === 'bin') {
+                    const pageBg = getInputValue('page.background');
+                    const pageMargin = getInputValue('page.margin');
+                    const pagePadding = getInputValue('page.padding');
+                    const pageBorderRadius = getInputValue('page.borderRadius');
+                    const pageFontFamily = getInputValue('page.fontFamily');
+                    const pageFontSize = getInputValue('page.fontSize');
+                    const pageOpacity = getInputValue('page.opacity');
+                    const pageColor = getInputValue('page.color');
+                    
+                    if (!preserveAll) {
+                        if (!customSettings.page) customSettings.page = {};
+                        if (pageBg && pageBg !== pageSettings.background) customSettings.page.background = pageBg;
+                        if (pageMargin && pageMargin !== pageSettings.margin) customSettings.page.margin = pageMargin;
+                        if (pagePadding && pagePadding !== pageSettings.padding) customSettings.page.padding = pagePadding;
+                        if (pageBorderRadius && pageBorderRadius !== pageSettings.borderRadius) customSettings.page.borderRadius = pageBorderRadius;
+                        if (pageFontFamily && pageFontFamily !== pageSettings.fontFamily) customSettings.page.fontFamily = pageFontFamily;
+                        if (pageFontSize && pageFontSize !== pageSettings.fontSize) customSettings.page.fontSize = pageFontSize;
+                        if (pageOpacity && pageOpacity !== pageSettings.opacity) customSettings.page.opacity = pageOpacity;
+                        if (pageColor && pageColor !== pageSettings.color) customSettings.page.color = pageColor;
+                    } else {
+                        customSettings.page = {
+                            background: pageBg || pageSettings.background,
+                            margin: pageMargin || pageSettings.margin,
+                            padding: pagePadding || pageSettings.padding,
+                            borderRadius: pageBorderRadius || pageSettings.borderRadius,
+                            fontFamily: pageFontFamily || pageSettings.fontFamily,
+                            fontSize: pageFontSize || pageSettings.fontSize,
+                            opacity: pageOpacity || pageSettings.opacity,
+                            color: pageColor || pageSettings.color
+                        };
+                    }
+                }
+                
+                // Collect element settings
+                if (type === 'element' || type === 'bin') {
+                    const elementBg = getInputValue('element.background');
+                    const elementMargin = getInputValue('element.margin');
+                    const elementPadding = getInputValue('element.padding');
+                    const elementPaddingVertical = getInputValue('element.paddingVertical');
+                    const elementPaddingHorizontal = getInputValue('element.paddingHorizontal');
+                    const elementGap = getInputValue('element.gap');
+                    const elementFontFamily = getInputValue('element.fontFamily');
+                    const elementFontSize = getInputValue('element.fontSize');
+                    const elementOpacity = getInputValue('element.opacity');
+                    const elementColor = getInputValue('element.color');
+                    const elementHoverBg = getInputValue('element.hoverBackground');
+                    
+                    if (!preserveAll) {
+                        if (!customSettings.element) customSettings.element = {};
+                        if (elementBg && elementBg !== elementSettings.background) customSettings.element.background = elementBg;
+                        if (elementMargin && elementMargin !== elementSettings.margin) customSettings.element.margin = elementMargin;
+                        if (elementPadding && elementPadding !== elementSettings.padding) customSettings.element.padding = elementPadding;
+                        if (elementPaddingVertical && elementPaddingVertical !== (elementSettings.paddingVertical || elementSettings.padding)) customSettings.element.paddingVertical = elementPaddingVertical;
+                        if (elementPaddingHorizontal && elementPaddingHorizontal !== (elementSettings.paddingHorizontal || elementSettings.padding)) customSettings.element.paddingHorizontal = elementPaddingHorizontal;
+                        if (elementGap && elementGap !== elementSettings.gap) customSettings.element.gap = elementGap;
+                        if (elementFontFamily && elementFontFamily !== elementSettings.fontFamily) customSettings.element.fontFamily = elementFontFamily;
+                        if (elementFontSize && elementFontSize !== elementSettings.fontSize) customSettings.element.fontSize = elementFontSize;
+                        if (elementOpacity && elementOpacity !== elementSettings.opacity) customSettings.element.opacity = elementOpacity;
+                        if (elementColor && elementColor !== elementSettings.color) customSettings.element.color = elementColor;
+                        if (elementHoverBg && elementHoverBg !== elementSettings.hoverBackground) customSettings.element.hoverBackground = elementHoverBg;
+                    } else {
+                        customSettings.element = {
+                            background: elementBg || elementSettings.background,
+                            margin: elementMargin || elementSettings.margin,
+                            padding: elementPadding || elementSettings.padding,
+                            paddingVertical: elementPaddingVertical || elementSettings.paddingVertical || elementSettings.padding,
+                            paddingHorizontal: elementPaddingHorizontal || elementSettings.paddingHorizontal || elementSettings.padding,
+                            gap: elementGap || elementSettings.gap,
+                            fontFamily: elementFontFamily || elementSettings.fontFamily,
+                            fontSize: elementFontSize || elementSettings.fontSize,
+                            opacity: elementOpacity || elementSettings.opacity,
+                            color: elementColor || elementSettings.color,
+                            hoverBackground: elementHoverBg || elementSettings.hoverBackground
+                        };
+                    }
+                }
+                
+                // Save tag settings
+                this.app.visualSettingsManager.setTagSettings(selectedTag, customSettings, preserveAll, viewFormat);
+                
+                // Add tag to tag manager if it's new
+                if (newTagInput?.value?.trim() && !allTags.includes(selectedTag)) {
+                    this.app.tagManager?.addTag(selectedTag);
+                }
+                
+                this.closeModal();
+                this.app.render();
+            } else if (instanceSpecific) {
+                // Save as instance-specific settings
+                saveVisualSettings();
+            } else {
+                // No tag and not instance-specific - just close
+                this.closeModal();
+            }
+        });
+        
+        modalBody.appendChild(saveBtn);
+        
+        // Export button
+        const exportBtn = document.getElementById('visual-export-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const settings = this.app.visualSettingsManager.exportSettings(type, id);
+                const blob = new Blob([settings], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `visual-settings-${type}-${id}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Import button
+        const importBtn = document.getElementById('visual-import-btn');
+        const importFile = document.getElementById('visual-import-file');
+        if (importBtn && importFile) {
+            importBtn.addEventListener('click', () => importFile.click());
+            importFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const imported = JSON.parse(event.target.result);
+                        if (imported.custom) {
+                            const preserveAll = imported.preserveAll || false;
+                            this.app.visualSettingsManager.setObjectSettings(type, id, imported.custom, preserveAll);
+                            this.closeModal();
+                            this.app.render();
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+        
+        // Reset button
+        const resetBtn = document.getElementById('visual-reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (confirm('Remove all custom visual settings for this object?')) {
+                    this.app.visualSettingsManager.removeObjectSettings(type, id);
+                    this.closeModal();
+                    this.app.render();
+                }
+            });
+        }
+    }
+    
+    createPageVisualControls(settings) {
+        const pageSettings = settings.page || {};
+        const settingsManager = this.app.settingsManager;
+        
+        let html = '<div class="settings-section">';
+        html += '<div class="settings-section-title" style="cursor: pointer; padding: 10px; background: #2a2a2a; border-radius: 4px; margin-bottom: 10px;">';
+        html += '<span style="font-weight: 600;">Page Styles</span>';
+        html += '</div>';
+        html += '<div class="settings-section-content">';
+        html += settingsManager.createColorControl('page.background', 'Background Color', pageSettings.background || '#2d2d2d');
+        html += settingsManager.createSliderControl('page.margin', 'Margin', pageSettings.margin || '0px', 0, 50, 1, 'px');
+        html += settingsManager.createSliderControl('page.padding', 'Padding', pageSettings.padding || '20px', 0, 50, 1, 'px');
+        html += settingsManager.createSliderControl('page.borderRadius', 'Border Radius', pageSettings.borderRadius || '8px', 0, 30, 1, 'px');
+        html += settingsManager.createTextControl('page.fontFamily', 'Font Family', pageSettings.fontFamily || '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif');
+        html += settingsManager.createSliderControl('page.fontSize', 'Font Size', pageSettings.fontSize || '14px', 8, 32, 1, 'px');
+        html += settingsManager.createOpacityControl('page.opacity', 'Opacity', pageSettings.opacity || '1');
+        html += settingsManager.createColorControl('page.color', 'Text Color', pageSettings.color || '#e0e0e0');
+        html += '</div>';
+        html += '</div>';
+        
+        return html;
+    }
+    
+    createBinVisualControls(settings) {
+        let html = this.createPageVisualControls(settings);
+        html += this.createElementVisualControls(settings);
+        return html;
+    }
+    
+    createElementVisualControls(settings) {
+        const elementSettings = settings.element || {};
+        const settingsManager = this.app.settingsManager;
+        
+        let html = '<div class="settings-section">';
+        html += '<div class="settings-section-title" style="cursor: pointer; padding: 10px; background: #2a2a2a; border-radius: 4px; margin-bottom: 10px; margin-top: 20px;">';
+        html += '<span style="font-weight: 600;">Element Styles</span>';
+        html += '</div>';
+        html += '<div class="settings-section-content">';
+        html += settingsManager.createColorControl('element.background', 'Background Color', elementSettings.background || 'transparent');
+        html += settingsManager.createSliderControl('element.margin', 'Margin', elementSettings.margin || '0px', 0, 30, 1, 'px');
+        html += settingsManager.createSliderControl('element.padding', 'Padding (All)', elementSettings.padding || '10px', 0, 30, 1, 'px');
+        html += settingsManager.createSliderControl('element.paddingVertical', 'Padding (Vertical)', elementSettings.paddingVertical || elementSettings.padding || '10px', 0, 30, 1, 'px');
+        html += settingsManager.createSliderControl('element.paddingHorizontal', 'Padding (Horizontal)', elementSettings.paddingHorizontal || elementSettings.padding || '10px', 0, 30, 1, 'px');
+        html += settingsManager.createSliderControl('element.gap', 'Element Gap', elementSettings.gap || '8px', 0, 30, 1, 'px');
+        html += settingsManager.createTextControl('element.fontFamily', 'Font Family', elementSettings.fontFamily || '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif');
+        html += settingsManager.createSliderControl('element.fontSize', 'Font Size', elementSettings.fontSize || '14px', 8, 32, 1, 'px');
+        html += settingsManager.createOpacityControl('element.opacity', 'Opacity', elementSettings.opacity || '1');
+        html += settingsManager.createColorControl('element.color', 'Text Color', elementSettings.color || '#e0e0e0');
+        html += settingsManager.createColorControl('element.hoverBackground', 'Hover Background', elementSettings.hoverBackground || '#363636');
+        html += '</div>';
+        html += '</div>';
+        
+        return html;
     }
 }
 

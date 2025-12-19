@@ -1,0 +1,12 @@
+Fix duplicate text rendering and UndoRedoManager path errors
+
+- Fixed duplicate text in task elements caused by DocumentFragment.innerHTML assignment
+  - DocumentFragments don't support innerHTML property
+  - Changed to properly clear fragment by removing children before appending processed content
+  - Fixes issue where task text appeared twice (e.g., "living roomliving room")
+
+- Fixed UndoRedoManager getElementPath to use appState.pages
+  - Updated to check appState.pages first, with fallback to app.pages
+  - Resolves "Failed to get element path" errors when recording element property changes
+  - Ensures compatibility with both direct app.pages and appState.pages access patterns
+

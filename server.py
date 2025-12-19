@@ -522,11 +522,37 @@ class TwodoHandler(http.server.SimpleHTTPRequestHandler):
                 filename = os.path.basename(filename)  # Prevent directory traversal
                 filename = ''.join(c for c in filename if c.isalnum() or c in '.-_')
                 
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                
+                # Handle .tex files from _test/latex/ directory
+                if filename.endswith('.tex'):
+                    test_latex_dir = os.path.join(script_dir, '_test', 'latex')
+                    file_path = os.path.join(test_latex_dir, filename)
+                    
+                    if os.path.exists(file_path):
+                        # Serve .tex file as plain text
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/plain; charset=utf-8')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.send_header('Content-Length', str(len(content.encode('utf-8'))))
+                        self.end_headers()
+                        self.wfile.write(content.encode('utf-8'))
+                        return
+                    else:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'text/plain')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(b'File not found')
+                        return
+                
                 # Accept both .json and .bak files
                 if not filename.endswith('.json') and not filename.endswith('.bak'):
                     filename += '.json'
                 
-                script_dir = os.path.dirname(os.path.abspath(__file__))
                 saved_files_dir = os.path.join(script_dir, 'saved_files')
                 file_path = os.path.join(saved_files_dir, filename)
                 

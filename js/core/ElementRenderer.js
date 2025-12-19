@@ -4,6 +4,7 @@ import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
 import { ElementTypeRegistry } from './elements/ElementTypeRegistry.js';
 import { SharedDragDrop } from '../utils/SharedDragDrop.js';
+import { EventHelper } from '../utils/EventHelper.js';
 
 /**
  * ElementRenderer - Handles rendering of elements and their children
@@ -281,6 +282,15 @@ export class ElementRenderer {
         
         div.className = classes.join(' ');
         
+        // Apply visual settings for this element (includes tag-based settings)
+        if (this.app.visualSettingsManager) {
+            const elementId = `${pageId}-${binId}-${elementIndex}`;
+            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const viewFormat = page?.format || 'default';
+            // Tags are automatically retrieved and applied in applyVisualSettings
+            this.app.visualSettingsManager.applyVisualSettings(div, 'element', elementId, pageId, viewFormat);
+        }
+        
         // Setup drag and drop - use shared functionality for text/checkbox elements in vertical/horizontal layouts
         // Check if we're in a format that supports shared drag-drop (vertical/horizontal)
         const pageFormat = this.app.formatRendererManager?.getPageFormat?.(pageId);
@@ -420,41 +430,32 @@ export class ElementRenderer {
             document.removeEventListener('mouseup', handleMouseUp);
         };
         
-        div.addEventListener('click', (e) => {
-            // Skip click handling if we were dragging or drag started
-            if (isDragging || dragStarted) {
-                isDragging = false;
-                dragStarted = false;
-                mouseDownTime = 0;
-                mouseDownPos = null;
-                return;
-            }
-            
-            // Track active page
-            this.app.appState.currentPageId = pageId;
-            
-            // Don't trigger on interactive elements (checkboxes, buttons, inputs)
-            if (e.target.closest('input') || e.target.closest('button')) {
-                return;
-            }
-            
-            const now = Date.now();
-            const timeSinceLastClick = now - lastClickTime;
-            
-            if (timeSinceLastClick < this.app.appState.doubleClickDelay && timeSinceLastClick > 0) {
-                // Double click detected
-                e.preventDefault();
-                e.stopPropagation();
-                lastClickTime = 0; // Reset to prevent triple-click
+        // Use EventHelper for double-click detection
+        EventHelper.setupDoubleClick(
+            div,
+            (e) => {
+                // Double click handler
                 this.app.showContextMenu(e, pageId, binId, elementIndex);
-            } else {
-                // Single click - wait to see if another click comes
-                lastClickTime = now;
+            },
+            this.app.appState.doubleClickDelay,
+            {
+                filter: (e) => {
+                    // Skip if we were dragging
+                    if (isDragging || dragStarted) {
+                        isDragging = false;
+                        dragStarted = false;
+                        mouseDownTime = 0;
+                        mouseDownPos = null;
+                        return false;
+                    }
+                    // Track active page
+                    this.app.appState.currentPageId = pageId;
+                    mouseDownTime = 0;
+                    mouseDownPos = null;
+                    return true;
+                }
             }
-            
-            mouseDownTime = 0;
-            mouseDownPos = null;
-        });
+        );
         
         // Drag and drop handlers for elements
         div.addEventListener('dragstart', (e) => {
@@ -1668,9 +1669,9 @@ export class ElementRenderer {
                             <div class="add-relationship-section">
                                 <h4>Add Relationship</h4>
                                 <select id="relationship-type">
-                                    <option value="dependsOn">Depends On</option>
-                                    <option value="blocks">Blocks</option>
-                                    <option value="relatedTo">Related To</option>
+                                    ${this.app.relationshipManager.getRelationshipTypes().map(relType => 
+                                        `<option value="${relType.type}">${relType.label}${relType.description ? ` - ${relType.description}` : ''}</option>`
+                                    ).join('')}
                                 </select>
                                 <select id="relationship-target">
                                     <option value="">Select element...</option>

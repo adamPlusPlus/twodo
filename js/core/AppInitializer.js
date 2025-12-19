@@ -31,6 +31,9 @@ export class AppInitializer {
                 const data = await this.app.fileManager.loadFile(fileParam);
                 if (data.pages && Array.isArray(data.pages)) {
                     this.app.pages = data.pages;
+                    if (this.app.appState) {
+                        this.app.appState.pages = data.pages;
+                    }
                     // Store as last opened file
                     localStorage.setItem('twodo-last-opened-file', fileParam);
                     console.log(`Loaded file from URL: ${fileParam}`);
@@ -131,7 +134,8 @@ export class AppInitializer {
         ];
         
         const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat'
+            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat',
+            'LaTeXEditorFormat', 'MindMapFormat', 'LogicGraphFormat', 'FlowchartFormat'
         ];
         
         // Load all plugins

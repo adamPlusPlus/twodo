@@ -1,6 +1,7 @@
 // BinRenderer.js - Handles bin rendering
 // Extracted from app.js to improve modularity
 import { eventBus } from './EventBus.js';
+import { EventHelper } from '../utils/EventHelper.js';
 
 /**
  * BinRenderer - Handles rendering of bins
@@ -25,6 +26,14 @@ export class BinRenderer {
         binDiv.dataset.pageId = pageId;
         binDiv.draggable = true;
         binDiv.dataset.dragType = 'bin';
+        
+        // Apply visual settings for this bin (includes tag-based settings)
+        if (this.app.visualSettingsManager) {
+            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const viewFormat = page?.format || 'default';
+            // Tags are automatically retrieved and applied in applyVisualSettings
+            this.app.visualSettingsManager.applyVisualSettings(binDiv, 'bin', bin.id, pageId, viewFormat);
+        }
         
         // Initialize bin state if not set (default to expanded)
         if (!(bin.id in this.app.appState.binStates)) {
@@ -89,25 +98,13 @@ export class BinRenderer {
         
         // Context menu is now handled by unified handler in EventHandler
         
-        // Custom double-click detection for bins
-        let binLastClickTime = 0;
-        binDiv.addEventListener('click', (e) => {
-            // Don't trigger on interactive elements
-            if (e.target.closest('input') || e.target.closest('button')) {
-                return;
-            }
-            
-            // Handle double-click on bin title for editing
-            const titleEl = e.target.closest('.bin-title');
-            if (titleEl) {
-                const now = Date.now();
-                const timeSinceLastClick = now - binLastClickTime;
-                
-                if (timeSinceLastClick < this.app.appState.doubleClickDelay && timeSinceLastClick > 0) {
+        // Use EventHelper for double-click detection on bin title
+        const titleEl = binDiv.querySelector('.bin-title');
+        if (titleEl) {
+            EventHelper.setupDoubleClick(
+                titleEl,
+                (e) => {
                     // Double click on title - make it editable
-                    e.preventDefault();
-                    e.stopPropagation();
-                    binLastClickTime = 0;
                     titleEl.contentEditable = 'true';
                     titleEl.focus();
                     // Select all text for easy replacement
@@ -116,25 +113,24 @@ export class BinRenderer {
                     const selection = window.getSelection();
                     selection.removeAllRanges();
                     selection.addRange(range);
-                } else {
-                    binLastClickTime = now;
+                },
+                this.app.appState.doubleClickDelay
+            );
+        }
+        
+        // Use EventHelper for double-click detection on bin (for context menu)
+        EventHelper.setupDoubleClick(
+            binDiv,
+            (e) => {
+                // Don't trigger if clicking on title (handled separately above)
+                if (e.target.closest('.bin-title')) {
+                    return;
                 }
-                return;
-            }
-            
-            const now = Date.now();
-            const timeSinceLastClick = now - binLastClickTime;
-            
-            if (timeSinceLastClick < this.app.appState.doubleClickDelay && timeSinceLastClick > 0) {
-                // Double click detected
-                e.preventDefault();
-                e.stopPropagation();
-                binLastClickTime = 0;
+                // Double click detected - show context menu
                 handleBinMenu(e);
-            } else {
-                binLastClickTime = now;
-            }
-        });
+            },
+            this.app.appState.doubleClickDelay
+        );
         
         binContent.appendChild(elementsList);
         binContent.appendChild(addElementBtn);
@@ -170,24 +166,25 @@ export class BinRenderer {
             });
         }
         
-        // Make bin title editable on double-click
-        const titleEl = header.querySelector('.bin-title');
-        titleEl.addEventListener('blur', (e) => {
+        // Make bin title editable on double-click (reuse titleEl from above)
+        if (titleEl) {
+            titleEl.addEventListener('blur', (e) => {
             // Only save if it was actually editable
             if (e.target.contentEditable === 'true') {
                 bin.title = e.target.textContent.trim() || 'Untitled Bin';
                 e.target.contentEditable = 'false';
             this.app.dataManager.saveData();
             }
-        });
-        
-        // Handle Enter key to finish editing
-        titleEl.addEventListener('keydown', (e) => {
-            if (e.target.contentEditable === 'true' && e.key === 'Enter') {
-                e.preventDefault();
-                e.target.blur();
-            }
-        });
+            });
+            
+            // Handle Enter key to finish editing
+            titleEl.addEventListener('keydown', (e) => {
+                if (e.target.contentEditable === 'true' && e.key === 'Enter') {
+                    e.preventDefault();
+                    e.target.blur();
+                }
+            });
+        }
         
         // Drag and drop handlers for bins
         binDiv.addEventListener('dragstart', (e) => {

@@ -28,12 +28,14 @@ Thumbs.db
 
 # Saved files
 saved_files/
+_test/ 
 
 # Recordings
 recordings/
 
 # Documentation
 Plan.md
+docs/
 
 # Node/Vite
 node_modules/

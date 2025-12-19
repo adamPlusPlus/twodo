@@ -1,0 +1,131 @@
+Enhanced Relationship System and New Format Views
+
+## Enhanced Relationship System
+
+- Expanded relationship types from 3 to 30+ types:
+  - Dependency: dependsOn, blocks, requiredBy, enables, prevents
+  - Temporal: precedes, follows, causes, triggers
+  - Hierarchical: contains, partOf, parentOf, childOf
+  - Reference: references, referencedBy, linksTo, linkedFrom
+  - Similarity: relatedTo, similarTo, oppositeTo, conflictsWith, complements
+  - Flow: leadsTo, flowsInto, branchesTo, mergesWith
+  - Logical: implies, contradicts, supports, opposes
+
+- Each relationship type has metadata:
+  - directional: whether relationship has direction
+  - cyclic: whether cycles are allowed
+  - label: human-readable name
+  - description: explanation of relationship
+
+- Backward compatible with existing relationships (blocks, dependsOn, relatedTo)
+- Updated RelationshipManager to support all new types
+- Updated UI components to show all relationship types in dropdowns
+
+## New Format Views (All Completed)
+
+### LaTeX Editor Format
+- Edit/Preview/Split view modes (similar to Document View)
+- Live LaTeX rendering using KaTeX (loaded from CDN)
+- Converts page elements to LaTeX automatically
+- Supports equations (display $$...$$ and inline $...$), sections, text
+- Auto-saves LaTeX content to page metadata
+- Real-time preview updates with debouncing
+
+### Mind Map View
+- Visual node-based representation with central node and branches
+- Uses all relationships to determine connections
+- Hierarchical layout with levels radiating from center
+- Interactive zoom (mouse wheel) and pan (drag)
+- Click nodes to edit elements
+- SVG-based edge rendering with arrows
+- Hover effects on nodes
+
+### Logic Graph View
+- Graph visualization of logical relationships only
+- Shows implies, contradicts, supports, opposes relationships
+- Force-directed layout algorithm for optimal node positioning
+- Color-coded edges by relationship type:
+  - implies: blue
+  - contradicts: red
+  - supports: green
+  - opposes: orange
+- Edge labels showing relationship type
+- Interactive zoom and pan
+
+### Flowchart/Diagram View
+- Box/diamond/circle shapes for different element types:
+  - Box: tasks, notes, audio, image, time-log, tracker
+  - Diamond: decision points (can be configured)
+  - Circle: timers, counters, ratings, calendars
+  - Rounded: headers
+- Uses flow relationships (leadsTo, flowsInto, branchesTo, mergesWith)
+- Hierarchical top-to-bottom layout
+- Automatic level assignment based on flow relationships
+- Interactive zoom and pan
+- Click nodes to edit elements
+
+## Technical Details
+
+- All format views use the enhanced relationship system
+- All views support zoom and pan for navigation
+- All views are interactive - click nodes to edit elements
+- All views use SVG for edge rendering and HTML for nodes
+- All views are responsive and work with the theme system
+- All views integrate with the existing app architecture
+
+## Code Refactoring - Shared Logic
+
+### GraphVisualization Utility Class
+- Created `js/utils/GraphVisualization.js` with shared utilities:
+  - `buildGraph()`: Builds graph structure from page elements and relationships
+  - `setupZoomPan()`: Handles zoom (mouse wheel) and pan (drag) for all graph views
+  - `renderEdges()`: Renders SVG edges with arrows and optional labels
+  - `createNodeElement()`: Creates interactive node elements with common styling
+
+### Refactored Views
+- **MindMapFormat**: Now uses shared utilities (reduced from ~400 to ~200 lines)
+- **LogicGraphFormat**: Now uses shared utilities (reduced from ~350 to ~200 lines)
+- **FlowchartFormat**: Now uses shared utilities (reduced from ~400 to ~250 lines)
+- All graph views now share the same zoom/pan logic and node creation
+
+### Shared Element Interactions Across All Views
+- **New utility: `ElementInteraction.js`**: Centralized utility for element interactions
+  - `setupElementInteractions()`: One-call setup for drag-drop, context menu, visual settings
+  - `setupStandardDragDrop()`: Standard drag-and-drop implementation
+  - `setupContextMenu()`: Context menu handler for elements
+  - `setupBinInteractions()`: Bin-level interactions (context menu, visual settings)
+  - `setupPageInteractions()`: Page-level interactions
+  - `renderElement()`: Helper to render elements with all interactions
+- **Integration in new views**:
+  - Mind Map: All nodes now have drag-drop, context menu, visual customization
+  - Logic Graph: All nodes support full interactions
+  - Flowchart: All nodes support full interactions
+- **Integration in existing views**:
+  - PageKanbanFormat: Uses shared interactions
+  - TrelloBoardFormat: Uses shared interactions
+  - KanbanBoard (bin plugin): Uses shared interactions
+- **Benefits**:
+  - Consistent behavior across all views
+  - Right-click context menu works everywhere
+  - Visual customization applies to all views
+  - Drag-and-drop works consistently
+  - Element relationships accessible from all views
+
+### LaTeX Editor Improvements
+- **Real-time rendering**: KaTeX loads once and renders incrementally
+- **No script reloading**: Updates existing DOM elements instead of recreating
+- **Immediate preview**: 100ms debounce for real-time feel (like Overleaf)
+- **Chunked rendering system**: 
+  - Parses LaTeX into chunks (equations, inline math, text blocks)
+  - Tracks position information for each chunk (startIndex, endIndex)
+  - Only re-renders chunks that have changed (by content hash comparison)
+  - Detects cursor position to re-render chunk at cursor for accuracy
+  - Falls back to full re-render if >30% of chunks changed (for accuracy)
+  - Removes deleted chunks automatically
+  - Maintains correct order when inserting/updating chunks
+- **Performance optimizations**:
+  - Caches rendered chunks to avoid unnecessary re-rendering
+  - Character-by-character parsing for accurate position tracking
+  - Smart diff algorithm to detect minimal changes
+  - Handles very long documents efficiently (only renders what changed)
+

@@ -31,9 +31,23 @@ export class AppRenderer {
      * Renders the entire application UI
      */
     render() {
-        // Ensure modals are closed (in case one got stuck open)
+        // Preserve active modals (like visual customization modal) during render
+        const activeModals = [];
         const modals = document.querySelectorAll('.modal');
         modals.forEach(modal => {
+            if (modal.classList.contains('active')) {
+                // Check if this is a modal we want to preserve (settings or visual customization)
+                const modalBody = modal.querySelector('#modal-body, #settings-body');
+                if (modalBody) {
+                    const isVisualCustomization = modalBody.querySelector('#visual-instance-specific') !== null;
+                    const isSettings = modalBody.querySelector('#settings-reset') !== null;
+                    if (isVisualCustomization || isSettings) {
+                        activeModals.push(modal);
+                        return; // Skip closing this modal
+                    }
+                }
+            }
+            // Close other modals
             modal.classList.remove('active');
             modal.style.display = 'none';
         });
@@ -107,6 +121,12 @@ export class AppRenderer {
         
         // If we have a format renderer, use it
         if (shouldUseFormat) {
+            // Apply theme for this page/view combination
+            if (this.app.themeManager) {
+                const viewFormat = pageFormat || 'default';
+                this.app.themeManager.applyPageTheme(activePage.id, viewFormat, container);
+            }
+            
             // If format view is already rendered, update it instead of clearing
             if (this._preservingFormat && container.children.length > 0) {
                 // Update existing format view
@@ -135,6 +155,11 @@ export class AppRenderer {
         // Preserve scroll position before rendering
         const scrollTop = container.scrollTop;
         const scrollLeft = container.scrollLeft;
+        
+        // Apply theme for default view
+        if (this.app.themeManager) {
+            this.app.themeManager.applyPageTheme(activePage.id, 'default', container);
+        }
         
         // Default rendering - reset container CSS to default vertical layout
         // Clear any format-specific CSS that was applied
@@ -227,30 +252,28 @@ export class AppRenderer {
             }
         });
         
-        // Get element positions - use a combination of pageId, binId, element data to create stable keys
+        // Get element positions - use ElementFinder for consistency
         document.querySelectorAll('.element').forEach(elementEl => {
-            const pageId = elementEl.dataset.pageId;
-            const binId = elementEl.dataset.binId;
-            const elementIndex = elementEl.dataset.elementIndex;
-            if (pageId && binId && elementIndex !== undefined) {
+            const data = ElementFinder.getElementData(elementEl);
+            if (data.pageId && data.binId && data.elementIndex !== null) {
                 // Create a stable key using element's text/content
-                let elementKey = `${pageId}-${binId}-${elementIndex}`;
+                let elementKey = `${data.pageId}-${data.binId}-${data.elementIndex}`;
                 
                 // Try to get element text for more stable matching
                 const textEl = elementEl.querySelector('.task-text, .header-text, .audio-status');
                 if (textEl) {
                     const text = textEl.textContent || textEl.innerText || '';
                     // Use first 20 chars of text as part of key for stability
-                    elementKey = `${pageId}-${binId}-${text.substring(0, 20)}-${elementIndex}`;
+                    elementKey = `${data.pageId}-${data.binId}-${text.substring(0, 20)}-${data.elementIndex}`;
                 }
                 
                 const rect = elementEl.getBoundingClientRect();
                 positions.elements[elementKey] = {
                     top: rect.top,
                     left: rect.left,
-                    pageId: pageId,
-                    binId: binId,
-                    elementIndex: elementIndex
+                    pageId: data.pageId,
+                    binId: data.binId,
+                    elementIndex: data.elementIndex
                 };
             }
         });

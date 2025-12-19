@@ -101,6 +101,13 @@ export class ContextMenuHandler {
             }
         });
         
+        // Show customize visuals for elements
+        const customizeVisualsItem = document.getElementById('context-customize-visuals');
+        if (customizeVisualsItem) {
+            customizeVisualsItem.style.display = 'block';
+            customizeVisualsItem.textContent = 'Customize Visuals';
+        }
+        
         // Show/hide menu items based on whether it's a child/subtask
         const editMenuItem = document.getElementById('context-edit');
         const addElementMenuItem = document.getElementById('context-add-element');
@@ -183,7 +190,7 @@ export class ContextMenuHandler {
         const menu = document.getElementById('context-menu');
         
         // Show bin-level menu items (edit bin, add element, add bin, delete bin, etc.)
-        const binLevelItems = ['context-edit', 'context-add-element', 'context-add-bin', 'context-delete-bin'];
+        const binLevelItems = ['context-edit', 'context-customize-visuals', 'context-add-element', 'context-add-bin', 'context-delete-bin'];
         const elementLevelItems = ['context-add-child-element', 'context-delete-element', 'context-view-data'];
         const pageLevelItems = ['context-add-page', 'context-add-element-page', 'context-delete-page', 'context-toggle-subtasks', 'context-collapse-all-pages', 'context-reset-day', 'context-collapse-page'];
         
@@ -199,6 +206,12 @@ export class ContextMenuHandler {
         const editMenuItem = document.getElementById('context-edit');
         if (editMenuItem) {
             editMenuItem.textContent = 'Edit Bin';
+        }
+        
+        // Update customize visuals menu item text for bins
+        const customizeVisualsItem = document.getElementById('context-customize-visuals');
+        if (customizeVisualsItem) {
+            customizeVisualsItem.textContent = 'Customize Visuals';
         }
 
         this.positionMenu(menu, e.clientX, e.clientY);
@@ -239,7 +252,7 @@ export class ContextMenuHandler {
         const menu = document.getElementById('context-menu');
         
         // Show only page-level menu items (including edit for pages)
-        const pageLevelItems = ['context-add-page', 'context-add-element-page', 'context-delete-page', 'context-toggle-subtasks', 'context-collapse-all-pages', 'context-reset-day', 'context-edit', 'context-paste-markdown'];
+        const pageLevelItems = ['context-add-page', 'context-add-element-page', 'context-delete-page', 'context-toggle-subtasks', 'context-collapse-all-pages', 'context-reset-day', 'context-edit', 'context-customize-visuals', 'context-paste-markdown'];
         menu.querySelectorAll('.context-menu-item').forEach(item => {
             if (pageLevelItems.includes(item.id)) {
                 item.style.display = 'block';
@@ -252,6 +265,12 @@ export class ContextMenuHandler {
         const editMenuItem = document.getElementById('context-edit');
         if (editMenuItem) {
             editMenuItem.textContent = 'Edit Page';
+        }
+        
+        // Update customize visuals menu item text for pages
+        const customizeVisualsItem = document.getElementById('context-customize-visuals');
+        if (customizeVisualsItem) {
+            customizeVisualsItem.textContent = 'Customize Visuals';
         }
         
         // Determine which page to use (parameter, the one being right-clicked on, or active page)

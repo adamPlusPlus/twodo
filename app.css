@@ -20,6 +20,9 @@
     --element-bg: transparent;
     --element-margin: 0px;
     --element-padding: 10px;
+    --element-padding-vertical: 10px;
+    --element-padding-horizontal: 10px;
+    --element-gap: 8px;
     --element-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     --element-font-size: 14px;
     --element-opacity: 1;
@@ -29,15 +32,32 @@
     --header-color: #b8b8b8;
     --header-margin: 10px 0;
     --checkbox-size: 18px;
+    --page-texture: none;
+    --page-shadow: none;
+    --element-texture: none;
+    --element-shadow: none;
+    --background-texture: none;
 }
 
 body {
     font-family: var(--page-font-family);
     background: var(--bg-color);
     background-color: #1a1a1a !important;
+    background-image: var(--background-texture, none);
+    background-size: 100px 100px;
     color: var(--page-color);
     color: #e0e0e0 !important;
     line-height: 1.6;
+    animation: textureMove 20s linear infinite;
+}
+
+@keyframes textureMove {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 100px 100px;
+    }
 }
 
 #app {
@@ -413,15 +433,16 @@ header h1 {
 }
 
 .bin {
-    background: #2d2d2d !important;
-    background-color: #2d2d2d !important;
+    background: var(--page-bg) !important;
+    background-color: var(--page-bg) !important;
+    background-image: var(--page-texture, none);
+    box-shadow: var(--page-shadow, 0 2px 4px rgba(0,0,0,0.3)) !important;
     border-radius: var(--page-border-radius);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
     padding: var(--page-padding);
     position: relative;
     z-index: 10 !important;
     margin: var(--page-margin);
-    color: #e0e0e0 !important;
+    color: var(--page-color) !important;
     border: 1px solid #3d3d3d !important;
     min-height: 50px;
     cursor: grab;
@@ -429,6 +450,23 @@ header h1 {
     opacity: 1 !important;
     font-family: var(--page-font-family);
     font-size: var(--page-font-size);
+    background-size: 100px 100px;
+    animation: textureMove 20s linear infinite;
+}
+
+.bin::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: var(--page-texture, none);
+    opacity: 0.3;
+    pointer-events: none;
+    border-radius: var(--page-border-radius);
+    background-size: 100px 100px;
+    animation: textureMove 20s linear infinite;
 }
 
 .page:active {
@@ -500,23 +538,41 @@ header h1 {
 .elements-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--element-gap, 8px);
 }
 
 .element {
     position: relative;
-    padding: var(--element-padding);
+    padding: var(--element-padding-vertical, var(--element-padding)) var(--element-padding-horizontal, var(--element-padding));
     margin: var(--element-margin);
     border-radius: 4px;
     transition: background 0.2s, opacity 0.2s, border-color 0.2s, box-shadow 0.2s, transform 2.5s ease-out, scale 0.3s ease-out;
     cursor: grab;
     background: var(--element-bg);
+    background-image: var(--element-texture, none);
+    box-shadow: var(--element-shadow, none);
     font-family: var(--element-font-family);
     font-size: var(--element-font-size);
     opacity: var(--element-opacity);
     color: var(--element-color);
     -webkit-user-select: none;
     user-select: none;
+    background-size: 50px 50px;
+}
+
+.element::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: var(--element-texture, none);
+    opacity: 0.25;
+    pointer-events: none;
+    border-radius: 4px;
+    background-size: 50px 50px;
+    animation: textureMove 15s linear infinite;
 }
 
 .element:active {

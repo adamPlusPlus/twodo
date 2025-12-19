@@ -1,14 +1,29 @@
 // SettingsManager.js - Handles all settings loading, saving, and UI
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { ThemePresets } from './ThemePresets.js';
+import { StringUtils } from '../utils/string.js';
 
 export class SettingsManager {
     constructor(app) {
         this.app = app;
         this.storageKey = 'twodo-settings';
+        // ThemeManager may not be initialized yet, so we check at runtime
+        this.themePresets = new ThemePresets();
+    }
+    
+    // Check if themes are available at runtime
+    get useThemes() {
+        return !!this.app.themeManager;
     }
     
     loadSettings() {
+        // If ThemeManager is available, use it for global theme
+        if (this.useThemes && this.app.themeManager) {
+            return this.app.themeManager.themes.global;
+        }
+        
+        // Legacy: load from localStorage
         const stored = localStorage.getItem(this.storageKey);
         if (stored) {
             try {
@@ -59,6 +74,9 @@ export class SettingsManager {
                 background: 'transparent',
                 margin: '0px',
                 padding: '10px',
+                paddingVertical: '10px',
+                paddingHorizontal: '10px',
+                gap: '8px',
                 fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
                 fontSize: '14px',
                 opacity: '1',
@@ -99,6 +117,9 @@ export class SettingsManager {
                 background: 'transparent',
                 margin: '0px',
                 padding: '10px',
+                paddingVertical: '10px',
+                paddingHorizontal: '10px',
+                gap: '8px',
                 fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
                 fontSize: '14px',
                 opacity: '1',
@@ -116,11 +137,26 @@ export class SettingsManager {
         };
     }
     
-    saveSettings(settings) {
-        localStorage.setItem(this.storageKey, JSON.stringify(settings));
-        this.applySettings(settings);
+    saveSettings(settings, themeType = 'global', viewFormat = null, pageId = null) {
+        // If ThemeManager is available, use it
+        if (this.useThemes && this.app.themeManager) {
+            if (themeType === 'global') {
+                this.app.themeManager.setGlobalTheme(settings);
+            } else if (themeType === 'view' && viewFormat) {
+                this.app.themeManager.setViewTheme(viewFormat, settings);
+            } else if (themeType === 'page' && pageId) {
+                this.app.themeManager.setPageTheme(pageId, settings);
+            }
+            // Apply the effective theme
+            this.applySettings(settings);
+        } else {
+            // Legacy: save to localStorage
+            localStorage.setItem(this.storageKey, JSON.stringify(settings));
+            this.applySettings(settings);
+        }
+        
         // Also update the main data structure to include settings
-        if (this.app.pages && this.app.pages.length > 0) {
+        if (this.app.appState?.pages && this.app.appState.pages.length > 0) {
             eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
         }
     }
@@ -142,6 +178,9 @@ export class SettingsManager {
         root.style.setProperty('--element-bg', settings.element.background);
         root.style.setProperty('--element-margin', settings.element.margin);
         root.style.setProperty('--element-padding', settings.element.padding);
+        root.style.setProperty('--element-padding-vertical', settings.element.paddingVertical || settings.element.padding);
+        root.style.setProperty('--element-padding-horizontal', settings.element.paddingHorizontal || settings.element.padding);
+        root.style.setProperty('--element-gap', settings.element.gap || '8px');
         root.style.setProperty('--element-font-family', settings.element.fontFamily);
         root.style.setProperty('--element-font-size', settings.element.fontSize);
         root.style.setProperty('--element-opacity', settings.element.opacity);
@@ -186,6 +225,93 @@ export class SettingsManager {
         
         let html = '<h3 style="margin-bottom: 20px; color: #ffffff;">Settings</h3>';
         html += qrCodeHtml;
+        
+        // Theme Management Section (if ThemeManager is available)
+        if (this.useThemes && this.app.themeManager) {
+            html += '<div class="settings-section">';
+            html += '<div class="settings-section-title" data-collapse-target="settings-content-theme">';
+            html += '<span class="settings-toggle-arrow">▶</span>';
+            html += '<span>Theme Management</span>';
+            html += '</div>';
+            html += '<div class="settings-section-content" id="settings-content-theme" style="display: none;">';
+            html += '<div class="settings-subsection">';
+            
+            // Theme type selector
+            html += '<div class="settings-control">';
+            html += '<label>Theme Scope:</label>';
+            html += '<select id="theme-scope-select" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
+            html += '<option value="global">Global (All Views)</option>';
+            html += '<option value="view">View-Specific</option>';
+            html += '<option value="page">Page-Specific</option>';
+            html += '</select>';
+            html += '</div>';
+            
+            // View format selector (shown when view-specific is selected)
+            html += '<div class="settings-control" id="theme-view-selector" style="display: none;">';
+            html += '<label>View Format:</label>';
+            html += '<select id="theme-view-format" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
+            const viewFormats = this.app.themeManager.getViewFormats();
+            viewFormats.forEach(format => {
+                const formatName = format === 'default' ? 'Default' : format.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                html += `<option value="${format}">${formatName}</option>`;
+            });
+            html += '</select>';
+            html += '</div>';
+            
+            // Page selector (shown when page-specific is selected)
+            html += '<div class="settings-control" id="theme-page-selector" style="display: none;">';
+            html += '<label>Page:</label>';
+            html += '<select id="theme-page-id" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
+            const pages = this.app.appState?.pages || [];
+            pages.forEach(page => {
+                html += `<option value="${page.id}">${page.title || page.id}</option>`;
+            });
+            html += '</select>';
+            html += '</div>';
+            
+            // Theme Presets Section
+            html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #404040; margin-bottom: 20px;">';
+            html += '<div style="font-weight: 600; color: #ffffff; margin-bottom: 10px; font-size: 14px;">Theme Presets</div>';
+            html += '<div style="color: #888; font-size: 12px; margin-bottom: 15px;">Quick-apply pre-designed themes across all views and elements</div>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">';
+            
+            const presets = this.themePresets.getAllPresets();
+            presets.forEach(preset => {
+                html += `<div style="padding: 12px; background: #1a1a1a; border-radius: 6px; border: 1px solid #404040; cursor: pointer; transition: all 0.2s;" class="theme-preset-item" data-preset-id="${preset.id}">`;
+                html += `<div style="font-weight: 600; color: #ffffff; margin-bottom: 4px; font-size: 13px;">${StringUtils.escapeHtml(preset.name)}</div>`;
+                html += `<div style="color: #888; font-size: 11px;">${StringUtils.escapeHtml(preset.description)}</div>`;
+                html += `</div>`;
+            });
+            
+            html += '</div>';
+            html += '<button id="theme-preset-apply-btn" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 15px; display: none;">Apply Selected Preset</button>';
+            html += '</div>';
+            
+            html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #404040;">';
+            html += '<div style="color: #888; font-size: 12px; margin-bottom: 10px;">';
+            html += 'Theme inheritance: Page-specific > View-specific > Global';
+            html += '</div>';
+            html += '<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">';
+            html += '<button id="theme-load-btn" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Load Theme</button>';
+            html += '<button id="theme-export-btn" style="padding: 8px 16px; background: #58a858; color: white; border: none; border-radius: 4px; cursor: pointer;">Export Theme</button>';
+            html += '<button id="theme-import-btn" style="padding: 8px 16px; background: #58a858; color: white; border: none; border-radius: 4px; cursor: pointer;">Import Theme</button>';
+            html += '<input type="file" id="theme-import-file" accept=".json" style="display: none;">';
+            html += '<button id="theme-export-all-btn" style="padding: 8px 16px; background: #9e58a8; color: white; border: none; border-radius: 4px; cursor: pointer;">Export All Themes</button>';
+            html += '<button id="theme-import-all-btn" style="padding: 8px 16px; background: #9e58a8; color: white; border: none; border-radius: 4px; cursor: pointer;">Import All Themes</button>';
+            html += '<input type="file" id="theme-import-all-file" accept=".json" style="display: none;">';
+            html += '<button id="theme-save-custom-btn" style="padding: 8px 16px; background: #d4a574; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Custom Theme</button>';
+            html += '<button id="theme-load-custom-btn" style="padding: 8px 16px; background: #d4a574; color: white; border: none; border-radius: 4px; cursor: pointer;">Load Custom Theme</button>';
+            html += '<input type="file" id="theme-load-custom-file" accept=".json" style="display: none;">';
+            html += '</div>';
+            html += '<div style="display: flex; gap: 10px;">';
+            html += '<button id="theme-reset-view-btn" style="padding: 8px 16px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Reset View Theme</button>';
+            html += '<button id="theme-reset-page-btn" style="padding: 8px 16px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Reset Page Theme</button>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        }
         
         // Background Section
         html += '<div class="settings-section">';
@@ -241,7 +367,10 @@ export class SettingsManager {
         html += '<div class="settings-subsection">';
         html += this.createColorControl('element.background', 'Background Color', settings.element.background);
         html += this.createSliderControl('element.margin', 'Margin', settings.element.margin, 0, 30, 1, 'px');
-        html += this.createSliderControl('element.padding', 'Padding', settings.element.padding, 0, 30, 1, 'px');
+        html += this.createSliderControl('element.padding', 'Padding (All)', settings.element.padding, 0, 30, 1, 'px');
+        html += this.createSliderControl('element.paddingVertical', 'Padding (Vertical)', settings.element.paddingVertical || settings.element.padding, 0, 30, 1, 'px');
+        html += this.createSliderControl('element.paddingHorizontal', 'Padding (Horizontal)', settings.element.paddingHorizontal || settings.element.padding, 0, 30, 1, 'px');
+        html += this.createSliderControl('element.gap', 'Element Gap', settings.element.gap || '8px', 0, 30, 1, 'px');
         html += this.createTextControl('element.fontFamily', 'Font Family', settings.element.fontFamily);
         html += this.createSliderControl('element.fontSize', 'Font Size', settings.element.fontSize, 8, 32, 1, 'px');
         html += this.createOpacityControl('element.opacity', 'Opacity', settings.element.opacity);
@@ -432,16 +561,55 @@ export class SettingsManager {
                 } else {
                     value = e.target.value;
                 }
-                this.updateSetting(path, value);
+                // Determine theme scope for saving
+                let themeType = 'global';
+                let viewFormat = null;
+                let pageId = null;
+                
+                if (this.useThemes && this.app.themeManager) {
+                    const themeScopeSelect = document.getElementById('theme-scope-select');
+                    const themeViewFormat = document.getElementById('theme-view-format');
+                    const themePageId = document.getElementById('theme-page-id');
+                    const scope = themeScopeSelect?.value || 'global';
+                    
+                    if (scope === 'view' && themeViewFormat) {
+                        themeType = 'view';
+                        viewFormat = themeViewFormat.value;
+                    } else if (scope === 'page' && themePageId) {
+                        themeType = 'page';
+                        pageId = themePageId.value;
+                    }
+                }
+                
+                this.updateSetting(path, value, themeType, viewFormat, pageId);
             });
         });
         
         // Reset button
-        document.getElementById('settings-reset').addEventListener('click', () => {
-            const defaultSettings = this.getDefaultSettings();
-            this.saveSettings(defaultSettings);
-            this.showSettingsModal(); // Refresh the modal
-        });
+        const resetBtn = document.getElementById('settings-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                const defaultSettings = this.getDefaultSettings();
+                if (this.useThemes && this.app.themeManager) {
+                    // Get current theme scope
+                    const themeScopeSelect = document.getElementById('theme-scope-select');
+                    const themeViewFormat = document.getElementById('theme-view-format');
+                    const themePageId = document.getElementById('theme-page-id');
+                    const scope = themeScopeSelect?.value || 'global';
+                    
+                    if (scope === 'global') {
+                        this.saveSettings(defaultSettings, 'global');
+                    } else if (scope === 'view' && themeViewFormat) {
+                        this.saveSettings(defaultSettings, 'view', themeViewFormat.value);
+                    } else if (scope === 'page' && themePageId) {
+                        this.saveSettings(defaultSettings, 'page', null, themePageId.value);
+                    }
+                } else {
+                    this.saveSettings(defaultSettings);
+                }
+                this.showSettingsModal(); // Refresh the modal
+            });
+        }
         
         // Set to Default button (original values)
         document.getElementById('settings-set-default').addEventListener('click', () => {
@@ -496,6 +664,269 @@ export class SettingsManager {
                     fileIntegrityBtn.textContent = 'Run File Integrity Check';
                 }
             });
+        }
+        
+        // Theme management event listeners
+        if (this.useThemes && this.app.themeManager) {
+            const themeScopeSelect = document.getElementById('theme-scope-select');
+            const themeViewSelector = document.getElementById('theme-view-selector');
+            const themePageSelector = document.getElementById('theme-page-selector');
+            const themeViewFormat = document.getElementById('theme-view-format');
+            const themePageId = document.getElementById('theme-page-id');
+            const themeLoadBtn = document.getElementById('theme-load-btn');
+            const themeResetViewBtn = document.getElementById('theme-reset-view-btn');
+            const themeResetPageBtn = document.getElementById('theme-reset-page-btn');
+            
+            // Theme preset selection
+            let selectedPresetId = null;
+            const presetItems = settingsBody.querySelectorAll('.theme-preset-item');
+            const presetApplyBtn = document.getElementById('theme-preset-apply-btn');
+            
+            presetItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    // Remove previous selection
+                    presetItems.forEach(i => {
+                        i.style.border = '1px solid #404040';
+                        i.style.background = '#1a1a1a';
+                    });
+                    // Select this one
+                    item.style.border = '2px solid #4a9eff';
+                    item.style.background = '#2a3a4a';
+                    selectedPresetId = item.dataset.presetId;
+                    if (presetApplyBtn) {
+                        presetApplyBtn.style.display = 'inline-block';
+                    }
+                });
+            });
+            
+            // Apply preset button
+            if (presetApplyBtn) {
+                presetApplyBtn.addEventListener('click', () => {
+                    if (selectedPresetId) {
+                        const preset = this.themePresets.getPreset(selectedPresetId);
+                        if (preset) {
+                            // Apply to global theme
+                            this.app.themeManager.setGlobalTheme(preset.theme);
+                            // Apply settings
+                            this.applySettings(preset.theme);
+                            alert(`Applied "${preset.name}" theme globally!`);
+                            this.showSettingsModal();
+                        }
+                    }
+                });
+            }
+            
+            // Save custom theme button
+            const themeSaveCustomBtn = document.getElementById('theme-save-custom-btn');
+            if (themeSaveCustomBtn) {
+                themeSaveCustomBtn.addEventListener('click', () => {
+                    const themeName = prompt('Enter a name for this custom theme:');
+                    if (themeName && themeName.trim()) {
+                        const currentTheme = this.app.themeManager.themes.global;
+                        const customTheme = {
+                            name: themeName.trim(),
+                            description: 'Custom theme',
+                            theme: currentTheme
+                        };
+                        const json = JSON.stringify(customTheme, null, 2);
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `theme-${themeName.trim().toLowerCase().replace(/\s+/g, '-')}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                });
+            }
+            
+            // Load custom theme button
+            const themeLoadCustomBtn = document.getElementById('theme-load-custom-btn');
+            const themeLoadCustomFile = document.getElementById('theme-load-custom-file');
+            if (themeLoadCustomBtn && themeLoadCustomFile) {
+                themeLoadCustomBtn.addEventListener('click', () => themeLoadCustomFile.click());
+                themeLoadCustomFile.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const imported = JSON.parse(event.target.result);
+                                if (imported.theme) {
+                                    // It's a preset format
+                                    this.app.themeManager.setGlobalTheme(imported.theme);
+                                    this.applySettings(imported.theme);
+                                    alert(`Loaded custom theme: ${imported.name || 'Unnamed'}`);
+                                    this.showSettingsModal();
+                                } else {
+                                    // It's a raw theme
+                                    this.app.themeManager.setGlobalTheme(imported);
+                                    this.applySettings(imported);
+                                    alert('Loaded custom theme!');
+                                    this.showSettingsModal();
+                                }
+                            } catch (error) {
+                                alert('Failed to load theme. Please check the file format.');
+                                console.error('Theme load error:', error);
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
+            
+            if (themeScopeSelect) {
+                themeScopeSelect.addEventListener('change', () => {
+                    const scope = themeScopeSelect.value;
+                    themeViewSelector.style.display = scope === 'view' ? 'block' : 'none';
+                    themePageSelector.style.display = scope === 'page' ? 'block' : 'none';
+                    themeResetViewBtn.style.display = scope === 'view' ? 'inline-block' : 'none';
+                    themeResetPageBtn.style.display = scope === 'page' ? 'inline-block' : 'none';
+                });
+            }
+            
+            if (themeLoadBtn) {
+                themeLoadBtn.addEventListener('click', () => {
+                    const scope = themeScopeSelect?.value || 'global';
+                    let theme = null;
+                    
+                    if (scope === 'global') {
+                        theme = this.app.themeManager.themes.global;
+                    } else if (scope === 'view' && themeViewFormat) {
+                        const viewFormat = themeViewFormat.value;
+                        theme = this.app.themeManager.getViewTheme(viewFormat) || this.app.themeManager.themes.global;
+                    } else if (scope === 'page' && themePageId) {
+                        const pageId = themePageId.value;
+                        theme = this.app.themeManager.getPageTheme(pageId) || this.app.themeManager.getEffectiveTheme(pageId);
+                    }
+                    
+                    if (theme) {
+                        // Reload settings modal with the selected theme
+                        this.showSettingsModal();
+                        // Expand all sections
+                        settingsBody.querySelectorAll('.settings-section-content').forEach(content => {
+                            content.style.display = 'block';
+                        });
+                        settingsBody.querySelectorAll('.settings-toggle-arrow').forEach(arrow => {
+                            arrow.textContent = '▼';
+                        });
+                    }
+                });
+            }
+            
+            if (themeResetViewBtn && themeViewFormat) {
+                themeResetViewBtn.addEventListener('click', () => {
+                    const viewFormat = themeViewFormat.value;
+                    this.app.themeManager.setViewTheme(viewFormat, null);
+                    alert(`View theme for "${viewFormat}" reset to inherit from global.`);
+                    this.showSettingsModal();
+                });
+            }
+            
+            if (themeResetPageBtn && themePageId) {
+                themeResetPageBtn.addEventListener('click', () => {
+                    const pageId = themePageId.value;
+                    this.app.themeManager.setPageTheme(pageId, null);
+                    alert(`Page theme for "${pageId}" reset to inherit from view/global.`);
+                    this.showSettingsModal();
+                });
+            }
+            
+            // Export theme button
+            const themeExportBtn = document.getElementById('theme-export-btn');
+            if (themeExportBtn) {
+                themeExportBtn.addEventListener('click', () => {
+                    const scope = themeScopeSelect?.value || 'global';
+                    let theme = null;
+                    let filename = 'theme';
+                    
+                    if (scope === 'global') {
+                        theme = this.app.themeManager.themes.global;
+                        filename = 'theme-global';
+                    } else if (scope === 'view' && themeViewFormat) {
+                        theme = this.app.themeManager.getViewTheme(themeViewFormat.value) || this.app.themeManager.themes.global;
+                        filename = `theme-view-${themeViewFormat.value}`;
+                    } else if (scope === 'page' && themePageId) {
+                        theme = this.app.themeManager.getPageTheme(themePageId.value) || this.app.themeManager.getEffectiveTheme(themePageId.value);
+                        filename = `theme-page-${themePageId.value}`;
+                    }
+                    
+                    if (theme) {
+                        const json = this.app.themeManager.exportTheme(theme);
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${filename}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                });
+            }
+            
+            // Import theme button
+            const themeImportBtn = document.getElementById('theme-import-btn');
+            const themeImportFile = document.getElementById('theme-import-file');
+            if (themeImportBtn && themeImportFile) {
+                themeImportBtn.addEventListener('click', () => themeImportFile.click());
+                themeImportFile.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const scope = themeScopeSelect?.value || 'global';
+                            const viewFormat = themeViewFormat?.value || null;
+                            const pageId = themePageId?.value || null;
+                            const success = this.app.themeManager.importTheme(event.target.result, scope, viewFormat, pageId);
+                            if (success) {
+                                alert('Theme imported successfully!');
+                                this.showSettingsModal();
+                            } else {
+                                alert('Failed to import theme. Please check the file format.');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
+            
+            // Export all themes button
+            const themeExportAllBtn = document.getElementById('theme-export-all-btn');
+            if (themeExportAllBtn) {
+                themeExportAllBtn.addEventListener('click', () => {
+                    const json = this.app.themeManager.exportAllThemes();
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'themes-all.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            }
+            
+            // Import all themes button
+            const themeImportAllBtn = document.getElementById('theme-import-all-btn');
+            const themeImportAllFile = document.getElementById('theme-import-all-file');
+            if (themeImportAllBtn && themeImportAllFile) {
+                themeImportAllBtn.addEventListener('click', () => themeImportAllFile.click());
+                themeImportAllFile.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const success = this.app.themeManager.importAllThemes(event.target.result);
+                            if (success) {
+                                alert('All themes imported successfully!');
+                                this.showSettingsModal();
+                            } else {
+                                alert('Failed to import themes. Please check the file format.');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
         }
         
         // Add collapse/expand functionality to section titles
@@ -580,8 +1011,36 @@ export class SettingsManager {
         `;
     }
     
-    updateSetting(path, value) {
-        const settings = this.loadSettings();
+    updateSetting(path, value, themeType = 'global', viewFormat = null, pageId = null) {
+        let settings;
+        
+        // Load settings from appropriate theme scope
+        if (this.useThemes && this.app.themeManager) {
+            if (themeType === 'global') {
+                settings = this.app.themeManager.themes.global;
+            } else if (themeType === 'view' && viewFormat) {
+                let viewTheme = this.app.themeManager.getViewTheme(viewFormat);
+                if (!viewTheme) {
+                    // Create new view theme based on global
+                    viewTheme = { ...this.app.themeManager.themes.global };
+                    this.app.themeManager.setViewTheme(viewFormat, viewTheme);
+                }
+                settings = viewTheme;
+            } else if (themeType === 'page' && pageId) {
+                let pageTheme = this.app.themeManager.getPageTheme(pageId);
+                if (!pageTheme) {
+                    // Create new page theme based on effective theme
+                    pageTheme = { ...this.app.themeManager.getEffectiveTheme(pageId) };
+                    this.app.themeManager.setPageTheme(pageId, pageTheme);
+                }
+                settings = pageTheme;
+            } else {
+                settings = this.loadSettings();
+            }
+        } else {
+            settings = this.loadSettings();
+        }
+        
         const keys = path.split('.');
         let obj = settings;
         for (let i = 0; i < keys.length - 1; i++) {
@@ -619,7 +1078,7 @@ export class SettingsManager {
         }
         
         // Sync slider inputs (extract numeric value and sync range/number inputs)
-        if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size')) {
+        if (path.includes('Size') || path.includes('margin') || path.includes('padding') || path.includes('borderRadius') || path.includes('size') || path.includes('gap')) {
             const numValue = parseFloat(value) || 0;
             const allInputs = document.querySelectorAll(`[data-setting-path="${path}"]`);
             allInputs.forEach(input => {
@@ -629,7 +1088,7 @@ export class SettingsManager {
             });
         }
         
-        this.saveSettings(settings);
+        this.saveSettings(settings, themeType, viewFormat, pageId);
     }
     
     closeSettingsModal() {

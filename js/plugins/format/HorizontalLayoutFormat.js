@@ -38,14 +38,18 @@ export default class HorizontalLayoutFormat extends BaseFormatRenderer {
             flex-direction: row;
             overflow-x: auto;
             gap: 20px;
-            padding: 20px;
-            background: #1a1a1a;
+            padding: var(--page-padding, 20px);
+            background: var(--bg-color, #1a1a1a);
+            background-image: var(--background-texture, none);
+            background-size: 100px 100px;
             min-height: calc(100vh - 100px);
+            font-family: var(--page-font-family);
+            color: var(--page-color);
         `;
         
         if (!page.bins || page.bins.length === 0) {
             if (!app._preservingFormat) {
-                container.innerHTML = '<p style="color: #888; padding: 20px;">No bins available. Add bins to see them in horizontal layout.</p>';
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them in horizontal layout.</p>`;
             }
             return;
         }

@@ -47,12 +47,16 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             padding: 20px;
             overflow-x: auto;
             min-height: calc(100vh - 100px);
-            background: #1a1a1a;
+            background: var(--bg-color, #1a1a1a);
+            background-image: var(--background-texture, none);
+            background-size: 100px 100px;
+            font-family: var(--page-font-family);
+            color: var(--page-color);
         `;
         
         if (!page.bins || page.bins.length === 0) {
             if (!app._preservingFormat) {
-                container.innerHTML = '<p style="color: #888; padding: 20px;">No bins available. Add bins to see them as Trello columns.</p>';
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them as Trello columns.</p>`;
             }
             return;
         }
@@ -76,13 +80,18 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         
         column.style.cssText = `
             flex: 0 0 300px;
-            background: #2a2a2a;
-            border-radius: 8px;
-            padding: 15px;
+            background: var(--page-bg, #2a2a2a);
+            background-image: var(--page-texture, none);
+            background-size: 100px 100px;
+            box-shadow: var(--page-shadow, none);
+            border-radius: var(--page-border-radius, 8px);
+            padding: var(--page-padding, 15px);
             display: flex;
             flex-direction: column;
             gap: 10px;
             max-height: calc(100vh - 150px);
+            font-family: var(--page-font-family);
+            color: var(--page-color);
         `;
         
         // Column header
@@ -99,12 +108,12 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         `;
         
         const title = DOMUtils.createElement('h3', {
-            style: 'color: #e0e0e0; margin: 0; font-size: 16px; font-weight: 600;'
+            style: `color: var(--page-title-color, #e0e0e0); margin: 0; font-size: var(--page-title-font-size, 16px); font-weight: 600;`
         }, StringUtils.escapeHtml(bin.title || 'Untitled'));
         
         const count = DOMUtils.createElement('span', {
             class: 'trello-column-count',
-            style: 'background: #1a1a1a; padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #888;'
+            style: `background: var(--bg-color, #1a1a1a); padding: 4px 10px; border-radius: 12px; font-size: var(--element-font-size, 12px); color: var(--header-color, #888);`
         }, (bin.elements?.length || 0).toString());
         
         header.appendChild(title);
@@ -140,22 +149,24 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         addCardBtn.style.cssText = `
             padding: 10px;
             background: transparent;
-            color: #888;
+            color: var(--header-color, #888);
             border: none;
             border-radius: 4px;
             cursor: pointer;
             text-align: left;
             margin-top: 5px;
+            font-family: var(--element-font-family);
+            font-size: var(--element-font-size);
         `;
         
         addCardBtn.addEventListener('mouseenter', () => {
-            addCardBtn.style.background = '#1a1a1a';
-            addCardBtn.style.color = '#e0e0e0';
+            addCardBtn.style.background = 'var(--bg-color, #1a1a1a)';
+            addCardBtn.style.color = 'var(--element-color, #e0e0e0)';
         });
         
         addCardBtn.addEventListener('mouseleave', () => {
             addCardBtn.style.background = 'transparent';
-            addCardBtn.style.color = '#888';
+            addCardBtn.style.color = 'var(--header-color, #888)';
         });
         
         addCardBtn.addEventListener('click', () => {
@@ -170,7 +181,9 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         return column;
     }
     
-    renderCard(element, pageId, binId, elementIndex) {
+    renderCard(element, pageId, binId, elementIndex, app) {
+        const elementInteraction = new ElementInteraction(app);
+        
         const card = DOMUtils.createElement('div', {
             class: 'trello-card',
             draggable: 'true',
@@ -179,15 +192,23 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             'data-element-index': elementIndex
         });
         
-        card.style.cssText = `
-            background: #1a1a1a;
-            border-left: 4px solid #4a9eff;
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 10px;
-            cursor: move;
-            transition: transform 0.2s, box-shadow 0.2s;
-        `;
+        // Use StyleHelper for style application
+        StyleHelper.mergeStyles(card, {
+            background: 'var(--element-bg, #1a1a1a)',
+            backgroundImage: 'var(--element-texture, none)',
+            backgroundSize: '50px 50px',
+            boxShadow: 'var(--element-shadow, none)',
+            borderLeft: '4px solid #4a9eff',
+            borderRadius: 'var(--page-border-radius, 4px)',
+            padding: 'var(--element-padding, 12px)',
+            marginBottom: 'var(--element-gap, 10px)',
+            cursor: 'move',
+            transition: 'transform 0.2s, box-shadow 0.2s, transform 2.5s ease-out',
+            fontFamily: 'var(--element-font-family)',
+            fontSize: 'var(--element-font-size)',
+            color: 'var(--element-color)',
+            opacity: 'var(--element-opacity, 1)'
+        });
         
         card.addEventListener('mouseenter', () => {
             card.style.transform = 'translateY(-2px)';
@@ -199,18 +220,40 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             card.style.boxShadow = '';
         });
         
-        // Card text
+        // Card text with inline editing support
         const text = DOMUtils.createElement('div', {
             class: 'trello-card-text',
-            style: 'color: #e0e0e0; font-size: 14px; margin-bottom: 8px; line-height: 1.4;'
-        }, StringUtils.escapeHtml(element.text || 'Untitled'));
+            style: `color: var(--element-color, #e0e0e0); font-size: var(--element-font-size, 14px); margin-bottom: 8px; line-height: 1.4; cursor: text; user-select: text;`
+        });
+        
+        // Use parseLinks to handle HTML formatting consistently
+        const textFragment = app && app.parseLinks ? app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+        if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+            while (textFragment.firstChild) {
+                text.appendChild(textFragment.firstChild);
+            }
+        } else {
+            text.appendChild(textFragment);
+        }
+        
+        // Enable inline editing on text click
+        text.addEventListener('click', (e) => {
+            // Don't enable editing if clicking on a link
+            if (e.target.tagName === 'A') {
+                return;
+            }
+            e.stopPropagation();
+            if (app && app.enableInlineEditing) {
+                app.enableInlineEditing(text, pageId, binId, elementIndex, element);
+            }
+        });
         
         card.appendChild(text);
         
         // Card metadata
         const metadata = DOMUtils.createElement('div', {
             class: 'trello-card-metadata',
-            style: 'display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 11px; color: #888;'
+            style: `display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 11px; color: var(--header-color, #888);`
         });
         
         // Checkbox if applicable
@@ -274,10 +317,13 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
                 elementIndex
             }));
             card.style.opacity = '0.5';
+            card.style.transition = 'opacity 0.2s';
         });
         
         card.addEventListener('dragend', (e) => {
             card.style.opacity = '1';
+            // Enable smooth transitions for movement
+            card.style.transition = 'transform 0.2s, box-shadow 0.2s, transform 2.5s ease-out, opacity 0.2s';
         });
     }
     

@@ -1,6 +1,8 @@
 // Daily Todo Tracker App
 import { DataManager } from './js/modules/DataManager.js';
 import { SettingsManager } from './js/modules/SettingsManager.js';
+import { ThemeManager } from './js/modules/ThemeManager.js';
+import { VisualSettingsManager } from './js/modules/VisualSettingsManager.js';
 import { PageManager } from './js/modules/PageManager.js';
 import { BinManager } from './js/modules/BinManager.js';
 import { ElementManager } from './js/modules/ElementManager.js';
@@ -38,6 +40,7 @@ import { AppInitializer } from './js/core/AppInitializer.js';
 import { StringUtils } from './js/utils/string.js';
 import { DailyResetManager } from './js/modules/DailyResetManager.js';
 import { InlineEditor } from './js/modules/InlineEditor.js';
+import { LinkHandler } from './js/utils/LinkHandler.js';
 
 class TodoApp {
     constructor() {
@@ -47,6 +50,8 @@ class TodoApp {
         // Initialize managers
         this.dataManager = new DataManager(this);
         this.settingsManager = new SettingsManager(this);
+        this.themeManager = new ThemeManager(this);
+        this.visualSettingsManager = new VisualSettingsManager(this);
         this.pageManager = new PageManager(this);
         this.binManager = new BinManager(this);
         this.elementManager = new ElementManager(this);
@@ -106,6 +111,9 @@ class TodoApp {
         
         // Initialize inline editor
         this.inlineEditor = new InlineEditor(this);
+        
+        // Initialize link handler
+        this.linkHandler = new LinkHandler(this);
         
         // Initialize plugin system managers
         this.pagePluginManager = new PagePluginManager(this);
@@ -414,7 +422,8 @@ class TodoApp {
         ];
         
         const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat'
+            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat',
+            'LaTeXEditorFormat', 'MindMapFormat', 'LogicGraphFormat', 'FlowchartFormat'
         ];
         
         // Load all plugins
@@ -737,7 +746,12 @@ class TodoApp {
         return StringUtils.escapeHtml(text);
     }
     
-    parseLinks(text) {
+    parseLinks(text, context = {}) {
+        // Use LinkHandler for unified link parsing (supports internal and external links)
+        if (this.linkHandler) {
+            return this.linkHandler.parseLinks(text, context);
+        }
+        // Fallback to StringUtils for backward compatibility
         return StringUtils.parseLinks(text);
     }
     
@@ -811,6 +825,61 @@ class TodoApp {
         } else {
             // Edit page - show page edit modal
             this.modalHandler.showEditPageModal(pageId);
+        }
+    }
+    
+    handleContextCustomizeVisuals() {
+        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        this.hideContextMenu();
+        
+        // Determine what we're customizing:
+        // - If elementIndex is not null → element visual customization
+        // - If elementIndex is null and binId is explicitly set (not undefined) → bin visual customization
+        // - If elementIndex is null and binId is undefined → page visual customization
+        // - Check for pane customization (from pane context menu)
+        
+        if (elementIndex !== null && elementIndex !== undefined && pageId) {
+            // Customize element visuals
+            const page = this.appState.pages.find(p => p.id === pageId);
+            if (!page) return;
+            
+            let targetBinId = binId || this.appState.activeBinId;
+            if (!targetBinId) {
+                for (const bin of page.bins || []) {
+                    if (bin.elements && bin.elements[elementIndex]) {
+                        targetBinId = bin.id;
+                        break;
+                    }
+                }
+            }
+            
+            if (targetBinId) {
+                // Create unique element ID (pageId-binId-elementIndex)
+                const elementId = `${pageId}-${targetBinId}-${elementIndex}`;
+                const pageFormat = page.format || 'default';
+                this.modalHandler.showVisualCustomizationModal('element', elementId, {
+                    pageId: pageId,
+                    viewFormat: pageFormat
+                });
+            }
+        } else if (binId !== null && binId !== undefined && pageId) {
+            // Customize bin visuals
+            const pageFormat = this.appState.pages.find(p => p.id === pageId)?.format || 'default';
+            this.modalHandler.showVisualCustomizationModal('bin', binId, {
+                pageId: pageId,
+                viewFormat: pageFormat
+            });
+        } else if (pageId) {
+            // Customize page visuals
+            const page = this.appState.pages.find(p => p.id === pageId);
+            const pageFormat = page?.format || 'default';
+            this.modalHandler.showVisualCustomizationModal('page', pageId, {
+                viewFormat: pageFormat
+            });
+        } else {
+            // Could be pane customization - check if we have pane context
+            // For now, if no pageId, we can't customize
+            console.warn('Cannot customize visuals: no pageId provided');
         }
     }
     

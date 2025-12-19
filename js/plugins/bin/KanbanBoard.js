@@ -239,12 +239,12 @@ export default class KanbanBoard extends BasePlugin {
         `;
         
         const title = DOMUtils.createElement('h3', {
-            style: `color: ${column.color || '#4a9eff'}; margin: 0; font-size: 16px;`
+            style: `color: ${column.color || 'var(--page-title-color, #4a9eff)'}; margin: 0; font-size: var(--page-title-font-size, 16px);`
         }, column.title);
         
         const count = DOMUtils.createElement('span', {
             class: 'kanban-column-count',
-            style: 'background: #1a1a1a; padding: 2px 8px; border-radius: 12px; font-size: 12px;'
+            style: `background: var(--bg-color, #1a1a1a); padding: 2px 8px; border-radius: 12px; font-size: var(--element-font-size, 12px); color: var(--header-color, #888);`
         }, '0');
         
         header.appendChild(title);
@@ -417,6 +417,7 @@ export default class KanbanBoard extends BasePlugin {
     }
     
     renderCard(element, pageId, binId, elementIndex, columnId, columnIndex) {
+        const elementInteraction = new ElementInteraction(this.app);
         if (!this.app) return DOMUtils.createElement('div');
         
         const card = DOMUtils.createElement('div', {
@@ -437,16 +438,24 @@ export default class KanbanBoard extends BasePlugin {
         const isCompleted = element.completed === true;
         const borderColor = isCompleted ? '#4caf50' : '#4a9eff';
         
-        card.style.cssText = `
-            background: #1a1a1a;
-            border-left: 4px solid ${borderColor};
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 10px;
-            cursor: move;
-            transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-        `;
+        // Use StyleHelper for style application
+        StyleHelper.mergeStyles(card, {
+            background: 'var(--element-bg, #1a1a1a)',
+            backgroundImage: 'var(--element-texture, none)',
+            backgroundSize: '50px 50px',
+            boxShadow: 'var(--element-shadow, none)',
+            borderLeft: `4px solid ${borderColor}`,
+            borderRadius: 'var(--page-border-radius, 4px)',
+            padding: 'var(--element-padding, 12px)',
+            marginBottom: 'var(--element-gap, 10px)',
+            cursor: 'move',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            position: 'relative',
+            fontFamily: 'var(--element-font-family)',
+            fontSize: 'var(--element-font-size)',
+            color: 'var(--element-color)',
+            opacity: 'var(--element-opacity, 1)'
+        });
         
         card.addEventListener('mouseenter', () => {
             card.style.transform = 'translateY(-2px)';
@@ -496,30 +505,72 @@ export default class KanbanBoard extends BasePlugin {
             cardContent.appendChild(checkbox);
         }
         
-        // Element text
-        const text = DOMUtils.createElement('div', {
-            style: `flex: 1; color: ${isCompleted ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${isCompleted ? 'text-decoration: line-through;' : ''}`
-        });
-        
-        // Use parseLinks to handle HTML formatting (strong, links, etc.) consistently with other views
-        const textFragment = this.app && this.app.parseLinks ? this.app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
-        if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-            // Fragment - append all children
-            while (textFragment.firstChild) {
-                text.appendChild(textFragment.firstChild);
+        // For special element types, render them using their renderers
+        const specialElementTypes = ['timer', 'counter', 'tracker', 'rating', 'audio', 'image', 'time-log', 'calendar'];
+        if (specialElementTypes.includes(element.type) && this.app && this.app.elementRenderer && this.app.elementRenderer.typeRegistry) {
+            // Render special element using its renderer
+            const elementDiv = document.createElement('div');
+            elementDiv.className = 'element ' + element.type;
+            if (element.completed) elementDiv.classList.add('completed');
+            elementDiv.style.margin = '0';
+            elementDiv.style.padding = '0';
+            elementDiv.style.border = 'none';
+            elementDiv.style.background = 'transparent';
+            elementDiv.style.flex = '1';
+            
+            // Apply visual settings
+            if (this.app.visualSettingsManager) {
+                const elementId = `${pageId}-${binId}-${elementIndex}`;
+                const page = this.app.appState?.pages?.find(p => p.id === pageId);
+                const viewFormat = page?.format || 'default';
+                this.app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
+            }
+            
+            const renderer = this.app.elementRenderer.typeRegistry.getRenderer(element.type);
+            if (renderer && renderer.render) {
+                renderer.render(elementDiv, pageId, binId, element, elementIndex, 0, () => null);
+                cardContent.appendChild(elementDiv);
+            } else {
+                // Fallback to text display
+                const text = DOMUtils.createElement('div', {
+                    style: `flex: 1; color: ${isCompleted ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${isCompleted ? 'text-decoration: line-through;' : ''}`
+                });
+                const textFragment = this.app && this.app.parseLinks ? this.app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+                if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+                    while (textFragment.firstChild) {
+                        text.appendChild(textFragment.firstChild);
+                    }
+                } else {
+                    text.appendChild(textFragment);
+                }
+                cardContent.appendChild(text);
             }
         } else {
-            // Single node or text
-            text.appendChild(textFragment);
-        }
-        
-        text.addEventListener('click', () => {
-            if (this.app && this.app.modalHandler) {
-                this.app.modalHandler.showEditModal(pageId, binId, elementIndex, element);
+            // Regular element - show text
+            const text = DOMUtils.createElement('div', {
+                style: `flex: 1; color: ${isCompleted ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${isCompleted ? 'text-decoration: line-through;' : ''}`
+            });
+            
+            // Use parseLinks to handle HTML formatting (strong, links, etc.) consistently with other views
+            const textFragment = this.app && this.app.parseLinks ? this.app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+            if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+                // Fragment - append all children
+                while (textFragment.firstChild) {
+                    text.appendChild(textFragment.firstChild);
+                }
+            } else {
+                // Single node or text
+                text.appendChild(textFragment);
             }
-        });
-        
-        cardContent.appendChild(text);
+            
+            text.addEventListener('click', () => {
+                if (this.app && this.app.modalHandler) {
+                    this.app.modalHandler.showEditModal(pageId, binId, elementIndex, element);
+                }
+            });
+            
+            cardContent.appendChild(text);
+        }
         card.appendChild(cardContent);
         
         // Add context menu support

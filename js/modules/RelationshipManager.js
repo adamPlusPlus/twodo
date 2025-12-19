@@ -26,8 +26,8 @@ export class RelationshipManager {
             return false;
         }
         
-        // Check for circular dependencies
-        if (type === 'dependsOn' || type === 'blocks') {
+        // Check for circular dependencies (only for non-cyclic relationship types)
+        if (!this.allowsCycles(type)) {
             if (this.wouldCreateCycle(fromElementId, toElementId, type)) {
                 console.error('Would create circular dependency');
                 return false;
@@ -132,12 +132,94 @@ export class RelationshipManager {
     }
     
     /**
+     * Get all available relationship types
+     * @returns {Array<Object>} - Array of {type, label, description, directional, cyclic}
+     */
+    getRelationshipTypes() {
+        return [
+            // Dependency relationships (directional, non-cyclic)
+            { type: 'dependsOn', label: 'Depends On', description: 'This element depends on the target', directional: true, cyclic: false },
+            { type: 'blocks', label: 'Blocks', description: 'This element blocks the target', directional: true, cyclic: false },
+            { type: 'requiredBy', label: 'Required By', description: 'This element is required by the target', directional: true, cyclic: false },
+            { type: 'enables', label: 'Enables', description: 'This element enables the target', directional: true, cyclic: false },
+            { type: 'prevents', label: 'Prevents', description: 'This element prevents the target', directional: true, cyclic: false },
+            
+            // Temporal relationships (directional, can be cyclic)
+            { type: 'precedes', label: 'Precedes', description: 'This element comes before the target', directional: true, cyclic: true },
+            { type: 'follows', label: 'Follows', description: 'This element comes after the target', directional: true, cyclic: true },
+            { type: 'causes', label: 'Causes', description: 'This element causes the target', directional: true, cyclic: false },
+            { type: 'triggers', label: 'Triggers', description: 'This element triggers the target', directional: true, cyclic: false },
+            
+            // Hierarchical relationships (directional, can be cyclic)
+            { type: 'contains', label: 'Contains', description: 'This element contains the target', directional: true, cyclic: false },
+            { type: 'partOf', label: 'Part Of', description: 'This element is part of the target', directional: true, cyclic: false },
+            { type: 'parentOf', label: 'Parent Of', description: 'This element is parent of the target', directional: true, cyclic: false },
+            { type: 'childOf', label: 'Child Of', description: 'This element is child of the target', directional: true, cyclic: false },
+            
+            // Reference relationships (directional, can be cyclic)
+            { type: 'references', label: 'References', description: 'This element references the target', directional: true, cyclic: true },
+            { type: 'referencedBy', label: 'Referenced By', description: 'This element is referenced by the target', directional: true, cyclic: true },
+            { type: 'linksTo', label: 'Links To', description: 'This element links to the target', directional: true, cyclic: true },
+            { type: 'linkedFrom', label: 'Linked From', description: 'This element is linked from the target', directional: true, cyclic: true },
+            
+            // Similarity relationships (bidirectional, can be cyclic)
+            { type: 'relatedTo', label: 'Related To', description: 'This element is related to the target', directional: false, cyclic: true },
+            { type: 'similarTo', label: 'Similar To', description: 'This element is similar to the target', directional: false, cyclic: true },
+            { type: 'oppositeTo', label: 'Opposite To', description: 'This element is opposite to the target', directional: false, cyclic: true },
+            { type: 'conflictsWith', label: 'Conflicts With', description: 'This element conflicts with the target', directional: false, cyclic: true },
+            { type: 'complements', label: 'Complements', description: 'This element complements the target', directional: false, cyclic: true },
+            
+            // Flow relationships (directional, can be cyclic)
+            { type: 'leadsTo', label: 'Leads To', description: 'This element leads to the target', directional: true, cyclic: true },
+            { type: 'flowsInto', label: 'Flows Into', description: 'This element flows into the target', directional: true, cyclic: true },
+            { type: 'branchesTo', label: 'Branches To', description: 'This element branches to the target', directional: true, cyclic: true },
+            { type: 'mergesWith', label: 'Merges With', description: 'This element merges with the target', directional: true, cyclic: true },
+            
+            // Logical relationships (directional, can be cyclic)
+            { type: 'implies', label: 'Implies', description: 'This element implies the target', directional: true, cyclic: false },
+            { type: 'contradicts', label: 'Contradicts', description: 'This element contradicts the target', directional: false, cyclic: true },
+            { type: 'supports', label: 'Supports', description: 'This element supports the target', directional: true, cyclic: false },
+            { type: 'opposes', label: 'Opposes', description: 'This element opposes the target', directional: false, cyclic: true }
+        ];
+    }
+    
+    /**
+     * Get relationship type metadata
+     * @param {string} type - Relationship type
+     * @returns {Object|null} - Relationship type metadata
+     */
+    getRelationshipTypeMetadata(type) {
+        const types = this.getRelationshipTypes();
+        return types.find(t => t.type === type) || null;
+    }
+    
+    /**
      * Check if relationship type is valid
      * @param {string} type - Relationship type
      * @returns {boolean}
      */
     isValidRelationshipType(type) {
-        return ['blocks', 'dependsOn', 'relatedTo'].includes(type);
+        return this.getRelationshipTypes().some(t => t.type === type);
+    }
+    
+    /**
+     * Check if relationship type allows cycles
+     * @param {string} type - Relationship type
+     * @returns {boolean}
+     */
+    allowsCycles(type) {
+        const metadata = this.getRelationshipTypeMetadata(type);
+        return metadata ? metadata.cyclic : false;
+    }
+    
+    /**
+     * Check if relationship type is directional
+     * @param {string} type - Relationship type
+     * @returns {boolean}
+     */
+    isDirectional(type) {
+        const metadata = this.getRelationshipTypeMetadata(type);
+        return metadata ? metadata.directional : true;
     }
     
     /**
@@ -206,30 +288,32 @@ export class RelationshipManager {
         const element = bin.elements[parseInt(elementIndex)];
         if (!element) return;
         
-        // Initialize relationships object
+        // Initialize relationships object with all relationship types
         if (!element.relationships) {
-            element.relationships = {
-                blocks: [],
-                dependsOn: [],
-                relatedTo: []
-            };
+            element.relationships = {};
+            this.getRelationshipTypes().forEach(relType => {
+                element.relationships[relType.type] = [];
+            });
         }
         
         // Get all relationships
         const relationships = this.getRelationships(elementId);
         
-        // Group by type
-        element.relationships.blocks = relationships
-            .filter(rel => rel.type === 'blocks')
-            .map(rel => rel.to);
+        // Group by type - dynamically create arrays for all relationship types
+        const allTypes = this.getRelationshipTypes().map(t => t.type);
+        allTypes.forEach(relType => {
+            if (!element.relationships[relType]) {
+                element.relationships[relType] = [];
+            }
+            element.relationships[relType] = relationships
+                .filter(rel => rel.type === relType)
+                .map(rel => rel.to);
+        });
         
-        element.relationships.dependsOn = relationships
-            .filter(rel => rel.type === 'dependsOn')
-            .map(rel => rel.to);
-        
-        element.relationships.relatedTo = relationships
-            .filter(rel => rel.type === 'relatedTo')
-            .map(rel => rel.to);
+        // Keep backward compatibility with old structure
+        if (!element.relationships.blocks) element.relationships.blocks = [];
+        if (!element.relationships.dependsOn) element.relationships.dependsOn = [];
+        if (!element.relationships.relatedTo) element.relationships.relatedTo = [];
         
         // Save data
         this.app.dataManager.saveData();
@@ -245,36 +329,18 @@ export class RelationshipManager {
         
         const relSet = new Set();
         
-        // Load blocks
-        if (Array.isArray(element.relationships.blocks)) {
-            element.relationships.blocks.forEach(toId => {
-                relSet.add({
-                    to: toId,
-                    type: 'blocks',
-                    createdAt: Date.now()
-                });
-            });
-        }
-        
-        // Load dependsOn
-        if (Array.isArray(element.relationships.dependsOn)) {
-            element.relationships.dependsOn.forEach(toId => {
-                relSet.add({
-                    to: toId,
-                    type: 'dependsOn',
-                    createdAt: Date.now()
-                });
-            });
-        }
-        
-        // Load relatedTo
-        if (Array.isArray(element.relationships.relatedTo)) {
-            element.relationships.relatedTo.forEach(toId => {
-                relSet.add({
-                    to: toId,
-                    type: 'relatedTo',
-                    createdAt: Date.now()
-                });
+        // Load all relationship types dynamically
+        if (element.relationships && typeof element.relationships === 'object') {
+            Object.keys(element.relationships).forEach(relType => {
+                if (this.isValidRelationshipType(relType) && Array.isArray(element.relationships[relType])) {
+                    element.relationships[relType].forEach(toId => {
+                        relSet.add({
+                            to: toId,
+                            type: relType,
+                            createdAt: Date.now()
+                        });
+                    });
+                }
             });
         }
         

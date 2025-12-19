@@ -190,10 +190,14 @@ export class DataManager {
                 
                 if (isNewFormat) {
                     // Already in new format
-                    this.app.pages = migratedData.pages;
+                    const pages = migratedData.pages;
+                    this.app.pages = pages;
+                    if (this.app.appState) {
+                        this.app.appState.pages = pages;
+                    }
                 } else {
                     // Old format: migrate pages to bins under Page 1
-                    this.app.pages = [{
+                    const pages = [{
                         id: 'page-1',
                         bins: migratedData.pages.map((oldPage, index) => ({
                             id: `bin-${index}`,
@@ -201,10 +205,14 @@ export class DataManager {
                             elements: oldPage.elements || []
                         }))
                     }];
+                    this.app.pages = pages;
+                    if (this.app.appState) {
+                        this.app.appState.pages = pages;
+                    }
                 }
             } else {
                 // No pages, create default
-                this.app.pages = [{
+                const pages = [{
                     id: 'page-1',
                     bins: [{
                         id: 'bin-0',
@@ -212,11 +220,19 @@ export class DataManager {
                         elements: []
                     }]
                 }];
+                this.app.pages = pages;
+                if (this.app.appState) {
+                    this.app.appState.pages = pages;
+                }
             }
             
             // Set current page to first page
             if (this.app.pages.length > 0) {
-                this.app.currentPageId = this.app.pages[0].id;
+                const firstPageId = this.app.pages[0].id;
+                this.app.currentPageId = firstPageId;
+                if (this.app.appState) {
+                    this.app.appState.currentPageId = firstPageId;
+                }
             }
             
             // Restore collapse states if they exist (migrate pageStates to binStates)

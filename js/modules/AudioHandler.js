@@ -1,4 +1,6 @@
 // AudioHandler.js - Handles audio recording and playback
+import { ElementFinder } from '../utils/ElementFinder.js';
+
 export class AudioHandler {
     constructor(app) {
         this.app = app;
@@ -544,15 +546,14 @@ export class AudioHandler {
     }
     
     updateAudioStatus(pageId, binId, elementIndex, text, color) {
-        // Find audio element - handle both regular and nested children
-        let selector = `[data-page-id="${pageId}"][data-bin-id="${binId}"]`;
+        // Find audio element using ElementFinder - handle both regular and nested children
+        let element = null;
         if (typeof elementIndex === 'string' && elementIndex.includes('-')) {
             const parts = elementIndex.split('-');
-            selector += `[data-element-index="${parts[0]}"][data-child-index="${parts[1]}"]`;
+            element = ElementFinder.findElement(pageId, binId, parseInt(parts[0]), document, parseInt(parts[1]));
         } else {
-            selector += `[data-element-index="${elementIndex}"]`;
+            element = ElementFinder.findElement(pageId, binId, elementIndex);
         }
-        const element = document.querySelector(selector);
         if (element) {
             const statusDiv = element.querySelector('.audio-status');
             if (statusDiv) {

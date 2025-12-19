@@ -1,6 +1,7 @@
 // EventHandler.js - Sets up all event listeners
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { EventHelper } from '../utils/EventHelper.js';
 
 export class EventHandler {
     constructor(app) {
@@ -187,6 +188,13 @@ export class EventHandler {
             this.app.handleContextEdit();
         });
         
+        const customizeVisualsBtn = document.getElementById('context-customize-visuals');
+        if (customizeVisualsBtn) {
+            customizeVisualsBtn.addEventListener('click', () => {
+                this.app.handleContextCustomizeVisuals();
+            });
+        }
+        
         document.getElementById('context-view-data').addEventListener('click', () => {
             this.app.handleContextViewData();
         });
@@ -329,26 +337,26 @@ export class EventHandler {
         };
         binsContainer.addEventListener('contextmenu', handleBinsContainerMenu);
         
-        // Custom double-click detection for bins container
-        let containerLastClickTime = 0;
-        binsContainer.addEventListener('click', (e) => {
-            // Only trigger on empty area, not on interactive elements
-            if (!e.target.closest('.page') && !e.target.closest('.element') && 
-                !e.target.closest('input') && !e.target.closest('button')) {
-                const now = Date.now();
-                const timeSinceLastClick = now - containerLastClickTime;
-                
-                if (timeSinceLastClick < this.app.doubleClickDelay && timeSinceLastClick > 0) {
+        // Use EventHelper for double-click detection on bins container
+        EventHelper.setupDoubleClick(
+            binsContainer,
+            (e) => {
+                // Only trigger on empty area, not on interactive elements
+                if (!e.target.closest('.page') && !e.target.closest('.element') && 
+                    !e.target.closest('input') && !e.target.closest('button')) {
                     // Double click detected
-                    e.preventDefault();
-                    e.stopPropagation();
-                    containerLastClickTime = 0;
                     handlePageContainerMenu(e);
-                } else {
-                    containerLastClickTime = now;
+                }
+            },
+            this.app.doubleClickDelay,
+            {
+                filter: (e) => {
+                    // Only process clicks on empty area
+                    return !e.target.closest('.page') && !e.target.closest('.element') && 
+                           !e.target.closest('input') && !e.target.closest('button');
                 }
             }
-        });
+        );
         
         // Drag and drop handlers for bins-container
         binsContainer.addEventListener('dragover', (e) => {

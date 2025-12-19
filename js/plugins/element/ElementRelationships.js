@@ -138,9 +138,9 @@ export default class ElementRelationships extends BaseElementType {
                 <div class="add-relationship-section">
                     <h4>Add Relationship</h4>
                     <select id="relationship-type">
-                        <option value="dependsOn">Depends On</option>
-                        <option value="blocks">Blocks</option>
-                        <option value="relatedTo">Related To</option>
+                        ${this.app.relationshipManager.getRelationshipTypes().map(relType => 
+                            `<option value="${relType.type}">${relType.label}${relType.description ? ` - ${relType.description}` : ''}</option>`
+                        ).join('')}
                     </select>
                     <select id="relationship-target">
                         <option value="">Select element...</option>
@@ -252,22 +252,15 @@ export default class ElementRelationships extends BaseElementType {
                     }, target.element.text || 'Untitled');
                     targetSpan.style.cursor = 'pointer';
                     targetSpan.addEventListener('click', () => {
-                        // Navigate to related element
-                        this.app.currentPageId = target.pageId;
-                        this.app.render();
-                        // Scroll to element
-                        setTimeout(() => {
-                            const targetElement = document.querySelector(
-                                `[data-page-id="${target.pageId}"][data-bin-id="${target.binId}"][data-element-index="${target.elementIndex}"]`
+                        // Navigate to related element using NavigationHelper
+                        import('../../utils/NavigationHelper.js').then(({ NavigationHelper }) => {
+                            NavigationHelper.navigateToElement(
+                                target.pageId, 
+                                target.binId, 
+                                target.elementIndex, 
+                                this.app
                             );
-                            if (targetElement) {
-                                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                targetElement.style.background = 'rgba(74, 158, 255, 0.3)';
-                                setTimeout(() => {
-                                    targetElement.style.background = '';
-                                }, 2000);
-                            }
-                        }, 100);
+                        });
                         this.app.modalHandler.closeModal();
                     });
                     item.appendChild(targetSpan);

@@ -333,25 +333,12 @@ export default class SearchFilter extends BasePlugin {
                         const binId = item.dataset.binId;
                         const elementIndex = parseInt(item.dataset.elementIndex);
                         
-                        // Navigate to element
-                        this.app.currentPageId = pageId;
-                        this.app.activeBinId = binId;
-                        this.app.render();
-                        
-                        // Scroll to element
-                        setTimeout(() => {
-                            const element = document.querySelector(
-                                `[data-page-id="${pageId}"][data-bin-id="${binId}"][data-element-index="${elementIndex}"]`
-                            );
-                            if (element) {
-                                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                element.style.background = '#4a9eff';
-                                element.style.transition = 'background 0.3s';
-                                setTimeout(() => {
-                                    element.style.background = '';
-                                }, 2000);
-                            }
-                        }, 100);
+                        // Navigate to element using NavigationHelper
+                        import('../../utils/NavigationHelper.js').then(({ NavigationHelper }) => {
+                            NavigationHelper.navigateToElement(pageId, binId, elementIndex, this.app, {
+                                highlightColor: '#4a9eff'
+                            });
+                        });
                         
                         // Close results
                         if (resultsContainer) {

@@ -158,6 +158,23 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 }
                 break;
                 
+            case 'time-log':
+                const timeLogText = this.processFormattedText(element.text || 'Time Log');
+                markdown = `${indent}⏰ ${timeLogText}`;
+                if (element.entries && Array.isArray(element.entries) && element.entries.length > 0) {
+                    markdown += `\n${indent}  Entries: ${element.entries.length}`;
+                }
+                markdown += '\n';
+                break;
+                
+            case 'calendar':
+                const calendarText = this.processFormattedText(element.text || 'Calendar');
+                markdown = `${indent}📅 ${calendarText}\n`;
+                if (element.events && Array.isArray(element.events) && element.events.length > 0) {
+                    markdown += `${indent}  Events: ${element.events.length}\n`;
+                }
+                break;
+                
             default:
                 // For unknown types, render as plain text (not bullet point)
                 const defaultText = this.processFormattedText(element.text || 'Untitled');
@@ -374,6 +391,22 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             const trimmed = line.trim();
             const originalLine = line;
             
+            // Check for element placeholder (before code block check)
+            if (trimmed.includes('__ELEMENT_')) {
+                if (inList) {
+                    result.push('</ul>');
+                    inList = false;
+                    currentListDepth = 0;
+                }
+                if (inQuote) {
+                    result.push('</blockquote>');
+                    inQuote = false;
+                }
+                // Leave placeholder as-is for later replacement
+                result.push(trimmed);
+                return;
+            }
+            
             // Check for code block placeholder
             if (trimmed.includes('__CODE_BLOCK_')) {
                 const codeBlock = codeBlocks[codeBlockPlaceholderIndex];
@@ -509,6 +542,13 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 currentListDepth = 0;
             }
             
+            // Check for element placeholder
+            if (trimmed.includes('__ELEMENT_')) {
+                // This is an element placeholder - leave it as-is for later replacement
+                result.push(trimmed);
+                return;
+            }
+            
             // Regular paragraphs
             if (trimmed) {
                 const processedContent = this.processInlineFormatting(this.unescapeMarkdown(trimmed));
@@ -595,8 +635,24 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         // Images (before links, as images can contain brackets)
         html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0;">');
         
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #4a9eff; text-decoration: none;">$1</a>');
+        // Links - use app.parseLinks if available for internal references
+        // Otherwise, handle markdown links
+        if (this.app && this.app.parseLinks) {
+            // Use LinkHandler for unified link parsing
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const textContent = tempDiv.textContent || tempDiv.innerText || '';
+            const context = { pageId: this.currentPageId };
+            const linkFragment = this.app.parseLinks(textContent, context);
+            
+            // Replace links in HTML
+            tempDiv.innerHTML = '';
+            tempDiv.appendChild(linkFragment);
+            html = tempDiv.innerHTML;
+        } else {
+            // Fallback: markdown links only
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #4a9eff; text-decoration: none;">$1</a>');
+        }
         
         // Code (before bold/italic to avoid conflicts)
         html = html.replace(/`([^`]+)`/g, '<code style="background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #e06c75;">$1</code>');
@@ -651,6 +707,8 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
      * @param {Object} options - Options with app reference
      */
     renderPage(container, page, options = {}) {
+        this.app = options.app;
+        this.currentPageId = page.id;
         const app = options.app;
         if (!app) return;
         
@@ -664,12 +722,15 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             width: 100%;
             max-width: 100%;
             margin: 0;
-            padding: 40px 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: var(--page-padding, 40px 20px);
+            font-family: var(--page-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
             font-size: ${this.config.fontSize || 16}px;
             line-height: ${this.config.lineHeight || 1.3};
-            color: #dcddde;
-            background: #1e1e1e;
+            color: var(--page-color, #dcddde);
+            background: var(--page-bg, #1e1e1e);
+            background-image: var(--page-texture, none);
+            background-size: 100px 100px;
+            box-shadow: var(--page-shadow, none);
             min-height: calc(100vh - 100px);
             box-sizing: border-box;
         `;
@@ -680,8 +741,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         docWrapper.style.cssText = `
             width: 100%;
             max-width: 100%;
-            background: #1e1e1e;
-            color: #dcddde;
+            background: var(--page-bg, #1e1e1e);
+            background-image: var(--page-texture, none);
+            color: var(--page-color, #dcddde);
             box-sizing: border-box;
         `;
         
@@ -689,12 +751,12 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         const title = document.createElement('h1');
         title.textContent = page.title || page.id;
         title.style.cssText = `
-            font-size: 2.5em;
+            font-size: var(--page-title-font-size, 2.5em);
             font-weight: 700;
-            margin: 0 0 0.5em 0;
+            margin: 0 0 var(--page-title-margin-bottom, 0.5em) 0;
             padding-bottom: 0.3em;
-            border-bottom: 1px solid #3a3a3a;
-            color: #ffffff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--page-title-color, #ffffff);
         `;
         docWrapper.appendChild(title);
         
@@ -810,6 +872,13 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             return;
         }
         
+        // Store element references for interactive rendering
+        const elementMap = new Map(); // Maps placeholder IDs to element data
+        let elementPlaceholderIndex = 0;
+        
+        // Special element types that should be rendered interactively
+        const interactiveElementTypes = ['timer', 'counter', 'tracker', 'rating', 'audio', 'image', 'time-log', 'calendar'];
+        
         // Convert bins and elements to markdown, then to HTML
         let markdown = '';
         
@@ -824,11 +893,24 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             // Elements in bin
             if (bin.elements && Array.isArray(bin.elements) && bin.elements.length > 0) {
                 bin.elements.forEach((element, elIndex) => {
-                    const elementMarkdown = this.elementToMarkdown(element, 0);
-                    markdown += elementMarkdown;
-                    // Only add extra newline if not last element and element doesn't already end with newlines
-                    if (elIndex < bin.elements.length - 1 && !elementMarkdown.endsWith('\n\n')) {
-                        markdown += '\n';
+                    // For interactive elements, use placeholder instead of markdown
+                    if (interactiveElementTypes.includes(element.type)) {
+                        const placeholderId = `__ELEMENT_${elementPlaceholderIndex}__`;
+                        elementMap.set(placeholderId, {
+                            element,
+                            pageId: page.id,
+                            binId: bin.id,
+                            elementIndex: elIndex
+                        });
+                        markdown += `${placeholderId}\n\n`;
+                        elementPlaceholderIndex++;
+                    } else {
+                        const elementMarkdown = this.elementToMarkdown(element, 0);
+                        markdown += elementMarkdown;
+                        // Only add extra newline if not last element and element doesn't already end with newlines
+                        if (elIndex < bin.elements.length - 1 && !elementMarkdown.endsWith('\n\n')) {
+                            markdown += '\n';
+                        }
                     }
                 });
             } else {
@@ -986,9 +1068,69 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         splitContainer.appendChild(splitEdit);
         splitContainer.appendChild(splitPreview);
         
+        // Function to render interactive elements
+        const renderInteractiveElement = (elementData) => {
+            const { element, pageId, binId, elementIndex } = elementData;
+            const elementDiv = document.createElement('div');
+            elementDiv.className = 'element document-view-element';
+            elementDiv.style.margin = '10px 0';
+            elementDiv.style.padding = '10px';
+            elementDiv.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            elementDiv.style.borderRadius = '4px';
+            
+            // Use the same renderers as the default view
+            if (app.elementRenderer && app.elementRenderer.typeRegistry) {
+                const renderer = app.elementRenderer.typeRegistry.getRenderer(element.type);
+                if (renderer && renderer.render) {
+                    // Create a temporary container for the renderer
+                    const tempDiv = document.createElement('div');
+                    tempDiv.className = 'element ' + element.type;
+                    if (element.completed) tempDiv.classList.add('completed');
+                    
+                    // Apply visual settings
+                    if (app.visualSettingsManager) {
+                        const elementId = `${pageId}-${binId}-${elementIndex}`;
+                        const page = app.appState?.pages?.find(p => p.id === pageId);
+                        const viewFormat = page?.format || 'default';
+                        app.visualSettingsManager.applyVisualSettings(tempDiv, 'element', elementId, pageId, viewFormat);
+                    }
+                    
+                    // Render the element
+                    renderer.render(tempDiv, pageId, binId, element, elementIndex, 0, () => null);
+                    
+                    // Move content to our container
+                    while (tempDiv.firstChild) {
+                        elementDiv.appendChild(tempDiv.firstChild);
+                    }
+                } else {
+                    // Fallback: render as text
+                    elementDiv.textContent = element.text || element.type;
+                }
+            } else {
+                // Fallback: render as text
+                elementDiv.textContent = element.text || element.type;
+            }
+            
+            return elementDiv;
+        };
+        
         // Function to update preview from markdown
         const updatePreview = (markdownText, targetElement, isEditable = false) => {
-            targetElement.innerHTML = this.markdownToHTML(markdownText);
+            let html = this.markdownToHTML(markdownText);
+            
+            // Replace element placeholders with interactive components
+            elementMap.forEach((elementData, placeholderId) => {
+                const placeholderRegex = new RegExp(placeholderId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                if (html.includes(placeholderId)) {
+                    const interactiveElement = renderInteractiveElement(elementData);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.appendChild(interactiveElement);
+                    const elementHtml = tempDiv.innerHTML;
+                    html = html.replace(placeholderRegex, elementHtml);
+                }
+            });
+            
+            targetElement.innerHTML = html;
             
             // Make preview editable if requested
             if (isEditable) {

@@ -56,12 +56,16 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             padding: 20px;
             overflow-x: auto;
             min-height: calc(100vh - 100px);
-            background: #1a1a1a;
+            background: var(--bg-color, #1a1a1a);
+            background-image: var(--background-texture, none);
+            background-size: 100px 100px;
+            font-family: var(--page-font-family);
+            color: var(--page-color);
         `;
         
         if (!page.bins || page.bins.length === 0) {
             if (!app._preservingFormat) {
-                container.innerHTML = '<p style="color: #888; padding: 20px;">No bins available. Add bins to see them as Kanban columns.</p>';
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them as Kanban columns.</p>`;
             }
             return;
         }
@@ -83,7 +87,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                             });
                         } else {
                             const emptyState = DOMUtils.createElement('div', {
-                                style: 'text-align: center; color: #666; padding: 20px; font-size: 12px;'
+                                style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px); font-family: var(--element-font-family);`
                             }, 'No elements');
                             content.appendChild(emptyState);
                         }
@@ -137,13 +141,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         
         column.style.cssText = `
             flex: 0 0 300px;
-            background: #2a2a2a;
-            border-radius: 8px;
-            padding: 15px;
+            background: var(--page-bg, #2a2a2a);
+            background-image: var(--page-texture, none);
+            background-size: 100px 100px;
+            box-shadow: var(--page-shadow, none);
+            border-radius: var(--page-border-radius, 8px);
+            padding: var(--page-padding, 15px);
             display: flex;
             flex-direction: column;
             gap: 10px;
             max-height: calc(100vh - 150px);
+            font-family: var(--page-font-family);
+            color: var(--page-color);
         `;
         
         // Column header
@@ -161,12 +170,12 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         `;
         
         const title = DOMUtils.createElement('h3', {
-            style: 'color: #e0e0e0; margin: 0; font-size: 16px; font-weight: 600;'
+            style: `color: var(--page-title-color, #e0e0e0); margin: 0; font-size: var(--page-title-font-size, 16px); font-weight: 600;`
         }, StringUtils.escapeHtml(bin.title || 'Untitled'));
         
         const count = DOMUtils.createElement('span', {
             class: 'kanban-column-count',
-            style: 'background: #1a1a1a; padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #888;'
+            style: `background: var(--bg-color, #1a1a1a); padding: 4px 10px; border-radius: 12px; font-size: 12px; color: var(--header-color, #888);`
         }, (bin.elements?.length || 0).toString());
         
         header.appendChild(title);
@@ -197,7 +206,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         } else {
             // Empty state
             const emptyState = DOMUtils.createElement('div', {
-                style: 'text-align: center; color: #666; padding: 20px; font-size: 12px;'
+                style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px);`
             }, 'No elements');
             content.appendChild(emptyState);
         }
@@ -210,7 +219,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         // Add element button
         const addBtn = DOMUtils.createElement('button', {
             class: 'kanban-add-element-btn',
-            style: 'padding: 8px; background: #1a1a1a; color: #888; border: 1px dashed #555; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 5px;'
+            style: `padding: 8px; background: var(--bg-color, #1a1a1a); color: var(--header-color, #888); border: 1px dashed #555; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 5px; font-family: var(--element-font-family); font-size: var(--element-font-size);`
         }, '+ Add Element');
         
         addBtn.addEventListener('click', () => {
@@ -233,6 +242,8 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
      * @param {Object} app - App instance
      */
     renderCard(element, pageId, binId, elementIndex, app) {
+        const elementInteraction = new ElementInteraction(app);
+        
         const card = DOMUtils.createElement('div', {
             class: 'kanban-card',
             draggable: 'true',
@@ -257,16 +268,24 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             }
         }
         
-        card.style.cssText = `
-            background: #1a1a1a;
-            border-left: 4px solid ${borderColor};
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 10px;
-            cursor: move;
-            transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-        `;
+        // Use StyleHelper for style application
+        StyleHelper.mergeStyles(card, {
+            background: 'var(--element-bg, #1a1a1a)',
+            backgroundImage: 'var(--element-texture, none)',
+            backgroundSize: '50px 50px',
+            boxShadow: 'var(--element-shadow, none)',
+            borderLeft: `4px solid ${borderColor}`,
+            borderRadius: 'var(--page-border-radius, 4px)',
+            padding: 'var(--element-padding, 12px)',
+            marginBottom: 'var(--element-gap, 10px)',
+            cursor: 'move',
+            transition: 'transform 0.2s, box-shadow 0.2s, transform 2.5s ease-out',
+            position: 'relative',
+            fontFamily: 'var(--element-font-family)',
+            fontSize: 'var(--element-font-size)',
+            color: 'var(--element-color)',
+            opacity: 'var(--element-opacity, 1)'
+        });
         
         card.addEventListener('mouseenter', () => {
             card.style.transform = 'translateY(-2px)';
@@ -317,37 +336,86 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             style: 'flex: 1; min-width: 0;'
         });
         
-        // Element type indicator
-        if (element.type && element.type !== 'task') {
-            const typeBadge = DOMUtils.createElement('span', {
-                style: 'display: inline-block; background: #2a2a2a; color: #888; font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-right: 6px; text-transform: uppercase;'
-            }, element.type);
-            textContainer.appendChild(typeBadge);
-        }
-        
-        const text = DOMUtils.createElement('div', {
-            style: `color: ${element.completed ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${element.completed ? 'text-decoration: line-through;' : ''}; word-wrap: break-word;`
-        });
-        
-        // Use parseLinks to handle HTML formatting (strong, links, etc.) consistently with other views
-        const textFragment = app.parseLinks ? app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
-        if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-            // Fragment - append all children
-            while (textFragment.firstChild) {
-                text.appendChild(textFragment.firstChild);
+        // For special element types, render them using their renderers
+        const specialElementTypes = ['timer', 'counter', 'tracker', 'rating', 'audio', 'image', 'time-log', 'calendar'];
+        if (specialElementTypes.includes(element.type) && app.elementRenderer && app.elementRenderer.typeRegistry) {
+            // Render special element using its renderer
+            const elementDiv = document.createElement('div');
+            elementDiv.className = 'element ' + element.type;
+            if (element.completed) elementDiv.classList.add('completed');
+            elementDiv.style.margin = '0';
+            elementDiv.style.padding = '0';
+            elementDiv.style.border = 'none';
+            elementDiv.style.background = 'transparent';
+            
+            // Apply visual settings
+            if (app.visualSettingsManager) {
+                const elementId = `${pageId}-${binId}-${elementIndex}`;
+                const page = app.appState?.pages?.find(p => p.id === pageId);
+                const viewFormat = page?.format || 'default';
+                app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
+            }
+            
+            const renderer = app.elementRenderer.typeRegistry.getRenderer(element.type);
+            if (renderer && renderer.render) {
+                renderer.render(elementDiv, pageId, binId, element, elementIndex, 0, () => null);
+                textContainer.appendChild(elementDiv);
+            } else {
+                // Fallback to text display
+                const text = DOMUtils.createElement('div', {
+                    style: `color: ${element.completed ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${element.completed ? 'text-decoration: line-through;' : ''}; word-wrap: break-word;`
+                });
+                const textFragment = app.parseLinks ? app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+                if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+                    while (textFragment.firstChild) {
+                        text.appendChild(textFragment.firstChild);
+                    }
+                } else {
+                    text.appendChild(textFragment);
+                }
+                textContainer.appendChild(text);
             }
         } else {
-            // Single node or text
-            text.appendChild(textFragment);
+            // Regular element - show type badge and text
+            // Element type indicator
+            if (element.type && element.type !== 'task') {
+                const typeBadge = DOMUtils.createElement('span', {
+                    style: 'display: inline-block; background: var(--bg-color, #2a2a2a); color: var(--header-color, #888); font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-right: 6px; text-transform: uppercase;'
+                }, element.type);
+                textContainer.appendChild(typeBadge);
+            }
+            
+            const text = DOMUtils.createElement('div', {
+                style: `color: ${element.completed ? '#888' : '#e0e0e0'}; font-size: 14px; line-height: 1.4; ${element.completed ? 'text-decoration: line-through;' : ''}; word-wrap: break-word; cursor: text; user-select: text;`
+            });
+            
+            // Use parseLinks to handle HTML formatting (strong, links, etc.) consistently with other views
+            const textFragment = app.parseLinks ? app.parseLinks(element.text || 'Untitled') : document.createTextNode(element.text || 'Untitled');
+            if (textFragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+                // Fragment - append all children
+                while (textFragment.firstChild) {
+                    text.appendChild(textFragment.firstChild);
+                }
+            } else {
+                // Single node or text
+                text.appendChild(textFragment);
+            }
+            
+            // Enable inline editing on text click (like default view)
+            text.addEventListener('click', (e) => {
+                // Don't enable editing if clicking on a link
+                if (e.target.tagName === 'A') {
+                    return;
+                }
+                e.stopPropagation();
+                if (app && app.enableInlineEditing) {
+                    app.enableInlineEditing(text, pageId, binId, elementIndex, element);
+                }
+            });
+            
+            textContainer.appendChild(text);
         }
         
-        text.addEventListener('click', () => {
-            if (app.modalHandler) {
-                app.modalHandler.showEditModal(pageId, binId, elementIndex, element);
-            }
-        });
-        
-        textContainer.appendChild(text);
         mainRow.appendChild(textContainer);
         cardContent.appendChild(mainRow);
         
@@ -494,6 +562,8 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         
         card.addEventListener('dragend', (e) => {
             card.style.opacity = '1';
+            // Enable smooth transitions for movement
+            card.style.transition = 'transform 0.2s, box-shadow 0.2s, transform 2.5s ease-out, opacity 0.2s';
         });
     }
     
