@@ -1,8 +1,8 @@
 // ModalHandler - Handles all modal dialogs
 import { StringUtils } from '../utils/string.js';
 import { DOMUtils } from '../utils/dom.js';
-import { ModalBuilder } from '../utils/ModalBuilder.js';
-import { DOMBuilder } from '../utils/DOMBuilder.js';
+import { ModalBuilder } from '../utils/ModalBuilder.js?v=103';
+import { DOMBuilder } from '../utils/DOMBuilder.js?v=103';
 
 export class ModalHandler {
     constructor(app) {

@@ -352,10 +352,15 @@ export class DataManager {
     async _autosaveToServer() {
         // Only autosave if a file is currently open
         if (!this.app.fileManager || !this.app.fileManager.currentFilename) {
+            console.log('[DataManager] Autosave skipped - no currentFilename:', {
+                hasFileManager: !!this.app.fileManager,
+                currentFilename: this.app.fileManager?.currentFilename
+            });
             return;
         }
         
         const currentFilename = this.app.fileManager.currentFilename;
+        console.log('[DataManager] Autosaving to:', currentFilename);
         
         try {
             const data = {
@@ -364,10 +369,11 @@ export class DataManager {
             
             // Use FileManager's saveFile method to save to server (silent mode for autosave)
             await this.app.fileManager.saveFile(currentFilename, data, true);
+            console.log('[DataManager] Autosave successful:', currentFilename);
             // Silently save - don't show alerts for autosave
         } catch (error) {
             // Silently fail for autosave - don't interrupt user workflow
-            console.warn('Autosave failed:', error);
+            console.warn('[DataManager] Autosave failed:', error);
         }
     }
     

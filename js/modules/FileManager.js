@@ -458,7 +458,9 @@ export class FileManager {
                 pages: this.app.pages
             };
             
+            console.log('[FileManager] Manual save - currentFilename:', this.currentFilename);
             await this.saveFile(this.currentFilename, data);
+            console.log('[FileManager] Manual save successful');
             
             // If we just saved and had a temp file, clean it up and reset state
             if (this.isBackupLoaded && this.tempFilename && this.currentFilename === this.tempFilename) {
@@ -783,6 +785,17 @@ export class FileManager {
             };
             
             await this.saveAsFile(filename, newFileData);
+            
+            // Verify currentFilename was set
+            if (!this.currentFilename) {
+                console.error('[FileManager] currentFilename not set after saveAsFile!');
+                if (this.app && this.app.modalHandler) {
+                    await this.app.modalHandler.showAlert('Error: File was created but currentFilename was not set. Please reload the page.');
+                }
+                return;
+            }
+            
+            console.log('[FileManager] New file created, currentFilename:', this.currentFilename);
             
             // Load the new file into the UI
             const loadedData = await this.loadFile(this.currentFilename);

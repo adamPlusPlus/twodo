@@ -1,7 +1,8 @@
 // ModalBuilder.js - Standardized modal creation utility
 // Reduces boilerplate in modal creation code
+// Version: 1766175000
 
-import { DOMBuilder } from './DOMBuilder.js';
+import { DOMBuilder } from './DOMBuilder.js?v=103';
 import { StringUtils } from './string.js';
 
 export class ModalBuilder {
@@ -57,10 +58,43 @@ export class ModalBuilder {
             closeOnClick = true
         } = options;
         
+        console.log('[ModalBuilder.addButton] Entry - text:', text, 'className:', className, 'type:', typeof className, 'primary:', primary, 'options:', options);
+        
+        // Clean up className - remove empty strings and whitespace-only strings
+        // CRITICAL: Never allow empty string to be stored - always use null
+        let finalClassName = null; // Use null instead of empty string
+        
+        if (primary) {
+            // If className is empty or whitespace, just use 'primary'
+            if (className && typeof className === 'string' && className.trim()) {
+                const combined = `primary ${className.trim()}`.trim();
+                finalClassName = combined || 'primary';
+            } else {
+                finalClassName = 'primary';
+            }
+        } else if (className && typeof className === 'string') {
+            const trimmed = className.trim();
+            // Only set if trimmed has actual content - NEVER set to empty string
+            if (trimmed && trimmed.length > 0) {
+                finalClassName = trimmed;
+            }
+            // If trimmed is empty, finalClassName stays null (not empty string)
+        }
+        // If className is empty string '', finalClassName stays null
+        // If className is null/undefined, finalClassName stays null
+        
+        console.log('[ModalBuilder.addButton] finalClassName:', finalClassName, 'type:', typeof finalClassName, 'isNull:', finalClassName === null, 'isEmptyString:', finalClassName === '', 'willStore:', finalClassName);
+        
+        // FINAL SAFETY CHECK: Never push empty string
+        if (finalClassName === '') {
+            console.error('[ModalBuilder.addButton] CRITICAL: finalClassName is empty string! Setting to null.');
+            finalClassName = null;
+        }
+        
         this.buttons.push({
             text,
             handler,
-            className: primary ? `primary ${className}`.trim() : className,
+            className: finalClassName, // Store null if no valid class, NEVER empty string
             closeOnClick
         });
         return this;
@@ -234,10 +268,36 @@ export class ModalBuilder {
                 .class('modal-buttons')
                 .build();
             
-            this.buttons.forEach(button => {
-                const btn = DOMBuilder.create('button')
-                    .class(button.className || '')
-                    .text(button.text)
+            this.buttons.forEach((button, index) => {
+                console.log('[ModalBuilder.show] Processing button', index, '- text:', button.text, 'className:', button.className, 'type:', typeof button.className, 'isNull:', button.className === null, 'isEmptyString:', button.className === '');
+                
+                const btn = DOMBuilder.create('button');
+                
+                // CRITICAL: Only add class if it exists, is not empty, and has non-whitespace content
+                // Multiple safety checks to prevent any empty strings from reaching DOMBuilder
+                const className = button.className;
+                
+                // SAFETY CHECK: If somehow we got an empty string, convert to null
+                if (className === '') {
+                    console.error('[ModalBuilder.show] CRITICAL: button.className is empty string! Skipping class addition.');
+                    // Don't call btn.class() at all
+                } else if (className && 
+                    typeof className === 'string' && 
+                    className !== '' &&
+                    className.trim().length > 0) {
+                    const trimmed = className.trim();
+                    // Final check before calling class()
+                    if (trimmed && trimmed.length > 0) {
+                        console.log('[ModalBuilder.show] Calling btn.class() with:', trimmed);
+                        btn.class(trimmed);
+                    } else {
+                        console.warn('[ModalBuilder.show] Skipping btn.class() - trimmed is empty');
+                    }
+                } else {
+                    console.log('[ModalBuilder.show] Skipping btn.class() - className is null/undefined/empty');
+                }
+                
+                const btnElement = btn.text(button.text)
                     .on('click', (e) => {
                         if (button.handler) {
                             button.handler(e);
@@ -247,7 +307,7 @@ export class ModalBuilder {
                         }
                     })
                     .build();
-                buttonContainer.appendChild(btn);
+                buttonContainer.appendChild(btnElement);
             });
             
             modalBody.appendChild(buttonContainer);

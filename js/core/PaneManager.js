@@ -1,7 +1,7 @@
 // PaneManager.js - Manages multiple panes/windows for viewing pages
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
-import { DOMBuilder } from '../utils/DOMBuilder.js';
+import { DOMBuilder } from '../utils/DOMBuilder.js?v=103';
 
 /**
  * PaneManager - Manages multiple panes for viewing pages simultaneously
