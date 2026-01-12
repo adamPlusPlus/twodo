@@ -1,7 +1,15 @@
 // ContextMenuHandler.js - Handles context menu display and interaction
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
+
 export class ContextMenuHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
 
     // Position menu within viewport bounds
@@ -46,14 +54,15 @@ export class ContextMenuHandler {
     
     showContextMenu(e, pageId, binId, elementIndex, subtaskIndex = null) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
+        const appState = this._getAppState();
+        const timeSinceLastClick = now - (appState.lastRightClickTime || 0);
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
+        if (timeSinceLastClick < (appState.doubleClickThreshold || 500) && appState.contextMenuState && appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -63,26 +72,28 @@ export class ContextMenuHandler {
         
         // If binId not provided, try to find it
         if (!binId) {
-            binId = this.app.appState.activeBinId;
+            binId = appState.activeBinId;
             if (!binId) {
-                const page = this.app.appState.pages.find(p => p.id === pageId);
+                const page = appState.pages.find(p => p.id === pageId);
                 if (page && page.bins && page.bins.length > 0) {
                     binId = page.bins[0].id;
                 }
             }
         }
         
-        this.app.appState.lastRightClickTime = now;
+        appState.lastRightClickTime = now;
         
-        this.app.appState.setContextMenuState({
-            visible: true,
-            pageId: pageId,
-            binId: binId,
-            elementIndex: elementIndex,
-            subtaskIndex: subtaskIndex,
-            x: e.clientX,
-            y: e.clientY
-        });
+        if (appState.setContextMenuState) {
+            appState.setContextMenuState({
+                visible: true,
+                pageId: pageId,
+                binId: binId,
+                elementIndex: elementIndex,
+                subtaskIndex: subtaskIndex,
+                x: e.clientX,
+                y: e.clientY
+            });
+        }
         
         const menu = document.getElementById('context-menu');
 
@@ -120,7 +131,8 @@ export class ContextMenuHandler {
         }
         
         // Check if element already has children (one-level limit)
-        const page = this.app.pages.find(p => p.id === pageId);
+        // Reuse appState from line 57
+        const page = appState.pages.find(p => p.id === pageId);
         const bin = page?.bins?.find(b => b.id === binId);
         const element = bin && bin.elements && bin.elements[elementIndex] ? bin.elements[elementIndex] : null;
         const hasChildren = element && element.children && element.children.length > 0;
@@ -143,7 +155,12 @@ export class ContextMenuHandler {
         
         // Update "Collapse Page" / "Expand Page" text based on current state
         if (collapsePageMenuItem && pageId && subtaskIndex === null) {
-            const isExpanded = this.app.pageStates && this.app.pageStates[pageId] !== false; // default to true
+            // Check bin states for page collapse state (pages are collapsed if all bins are collapsed)
+            const page = appState.pages.find(p => p.id === pageId);
+            const isExpanded = page && page.bins && page.bins.some(bin => {
+                const binState = appState.getBinState(bin.id);
+                return binState !== 'collapsed';
+            });
             collapsePageMenuItem.textContent = isExpanded ? 'Collapse Page' : 'Expand Page';
         }
 
@@ -159,8 +176,9 @@ export class ContextMenuHandler {
             return;
         }
         menu.classList.remove('active');
-        if (this.app.appState.contextMenuState) {
-            this.app.appState.setContextMenuState({ visible: false });
+        const appState = this._getAppState();
+        if (appState.contextMenuState && appState.setContextMenuState) {
+            appState.setContextMenuState({ visible: false });
         }
         // Hide all menu items, they will be shown/hidden as needed
         menu.querySelectorAll('.context-menu-item').forEach(item => {
@@ -170,14 +188,15 @@ export class ContextMenuHandler {
     
     showBinContextMenu(e, pageId, binId) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
+        const appState = this._getAppState();
+        const timeSinceLastClick = now - (appState.lastRightClickTime || 0);
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
+        if (timeSinceLastClick < (appState.doubleClickThreshold || 500) && appState.contextMenuState && appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -185,7 +204,7 @@ export class ContextMenuHandler {
         e.preventDefault();
         e.stopPropagation();
         
-        this.app.appState.lastRightClickTime = now;
+        appState.lastRightClickTime = now;
         
         const menu = document.getElementById('context-menu');
         
@@ -220,26 +239,29 @@ export class ContextMenuHandler {
         menu.style.display = '';
         
         // Set context menu state with the correct pageId and binId
-        this.app.appState.setContextMenuState({
-            visible: true,
-            pageId: pageId,
-            binId: binId,
-            elementIndex: null,
-            x: e.clientX,
-            y: e.clientY
-        });
+        if (appState.setContextMenuState) {
+            appState.setContextMenuState({
+                visible: true,
+                pageId: pageId,
+                binId: binId,
+                elementIndex: null,
+                x: e.clientX,
+                y: e.clientY
+            });
+        }
     }
     
     showPageContextMenu(e, pageId = null) {
         const now = Date.now();
-        const timeSinceLastClick = now - this.app.appState.lastRightClickTime;
+        const appState = this._getAppState();
+        const timeSinceLastClick = now - (appState.lastRightClickTime || 0);
         
         // Check if this is a double right-click
-        if (timeSinceLastClick < this.app.appState.doubleClickThreshold && this.app.appState.contextMenuState && this.app.appState.contextMenuState.visible) {
+        if (timeSinceLastClick < (appState.doubleClickThreshold || 500) && appState.contextMenuState && appState.contextMenuState.visible) {
             // Double right-click - hide custom menu and allow browser menu
             this.hideContextMenu();
             // Don't prevent default - let browser show its context menu
-            this.app.appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
+            appState.lastRightClickTime = 0; // Reset to prevent triple-click issues
             return;
         }
         
@@ -247,7 +269,7 @@ export class ContextMenuHandler {
         e.preventDefault();
         e.stopPropagation();
         
-        this.app.appState.lastRightClickTime = now;
+        appState.lastRightClickTime = now;
         
         const menu = document.getElementById('context-menu');
         
@@ -288,13 +310,13 @@ export class ContextMenuHandler {
             }
         }
         if (!pageIdToUse) {
-            pageIdToUse = this.app.activePageId;
+            pageIdToUse = appState.currentPageId;
         }
         
         // Update "Toggle All Subtasks" text based on current state
         const toggleSubtasksItem = document.getElementById('context-toggle-subtasks');
         if (toggleSubtasksItem) {
-            toggleSubtasksItem.textContent = this.app.allSubtasksExpanded ? '🔽 Collapse All Subtasks' : '▶️ Expand All Subtasks';
+            toggleSubtasksItem.textContent = appState.allSubtasksExpanded ? '🔽 Collapse All Subtasks' : '▶️ Expand All Subtasks';
         }
 
         this.positionMenu(menu, e.clientX, e.clientY);
@@ -303,13 +325,16 @@ export class ContextMenuHandler {
         menu.style.display = '';
         
         // Set context menu state with the correct pageId (binId explicitly set to null for page context)
-        this.app.appState.setContextMenuState({
-            visible: true,
-            pageId: pageIdToUse,
-            binId: null,
-            elementIndex: null,
-            x: e.clientX,
-            y: e.clientY
-        });
+        // Reuse appState from line 256
+        if (appState.setContextMenuState) {
+            appState.setContextMenuState({
+                visible: true,
+                pageId: pageIdToUse,
+                binId: null,
+                elementIndex: null,
+                x: e.clientX,
+                y: e.clientY
+            });
+        }
     }
 }

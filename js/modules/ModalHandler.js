@@ -3,10 +3,35 @@ import { StringUtils } from '../utils/string.js';
 import { DOMUtils } from '../utils/dom.js';
 import { ModalBuilder } from '../utils/ModalBuilder.js?v=103';
 import { DOMBuilder } from '../utils/DOMBuilder.js?v=103';
+import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class ModalHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getElementTypeManager() {
+        return getService(SERVICES.ELEMENT_TYPE_MANAGER);
+    }
+    
+    _getElementManager() {
+        return getService(SERVICES.ELEMENT_MANAGER);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
     }
     
     escapeHtml(text) {
@@ -35,8 +60,9 @@ export class ModalHandler {
         // Get all registered element types from ElementTypeManager
         // Convert baseTypes object to Map entries
         const allElementTypes = new Map(Object.entries(baseTypes));
-        if (this.app.elementTypeManager) {
-            const registeredTypes = this.app.elementTypeManager.getAllElementTypes();
+        const elementTypeManager = this._getElementTypeManager();
+        if (elementTypeManager) {
+            const registeredTypes = elementTypeManager.getAllElementTypes();
             registeredTypes.forEach(plugin => {
                 if (plugin.keyboardShortcut && plugin.elementType) {
                     allElementTypes.set(plugin.keyboardShortcut.toLowerCase(), plugin.elementType);
@@ -63,8 +89,9 @@ export class ModalHandler {
         
         // Add registered element types
         const registeredOptions = [];
-        if (this.app.elementTypeManager) {
-            const registeredTypes = this.app.elementTypeManager.getAllElementTypes();
+        // Reuse elementTypeManager from line 63
+        if (elementTypeManager) {
+            const registeredTypes = elementTypeManager.getAllElementTypes();
             registeredTypes.forEach(plugin => {
                 if (plugin.keyboardShortcut && plugin.elementType && plugin.name) {
                     // Check if not already in base types
@@ -186,7 +213,7 @@ export class ModalHandler {
             
             // Save and render
             app.dataManager.saveData();
-            app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
             // Open edit modal for the first element (if any were created)
             if (firstElementIndex !== null && firstElement) {
@@ -500,7 +527,7 @@ export class ModalHandler {
             }
             
             app.dataManager.saveData();
-            app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         };
         
         // Drag state tracking
@@ -765,23 +792,33 @@ export class ModalHandler {
     
     closeModal() {
         const modal = document.getElementById('modal');
-        modal.classList.remove('active');
-        this.app.currentEdit = null;
+        if (modal) {
+            modal.classList.remove('active');
+        }
+        
+        // Clear current edit from app state
+        const appState = this._getAppState();
+        if (appState) {
+            if (appState.currentEdit !== undefined) {
+                appState.currentEdit = null;
+            }
+            if (appState.currentEditModal !== undefined) {
+                appState.currentEditModal = null;
+            }
+        }
         
         // Clean up format:registered event listeners
         if (this._formatRegisteredHandlers && this._formatRegisteredHandlers.size > 0) {
             this._formatRegisteredHandlers.forEach((handler, pageId) => {
-                if (this.app.eventBus) {
-                    this.app.eventBus.off('format:registered', handler);
-                }
+                eventBus.off('format:registered', handler);
             });
             this._formatRegisteredHandlers.clear();
         }
         
         // Remove Enter key handler if it exists
-        if (this.app.currentEnterKeyHandler) {
-            document.removeEventListener('keydown', this.app.currentEnterKeyHandler, true);
-            this.app.currentEnterKeyHandler = null;
+        if (this._currentEnterKeyHandler) {
+            document.removeEventListener('keydown', this._currentEnterKeyHandler, true);
+            this._currentEnterKeyHandler = null;
         }
     }
     
@@ -823,11 +860,17 @@ export class ModalHandler {
                 e.preventDefault();
                 this.closeModal();
                 document.removeEventListener('keydown', handleEnterKey);
-                this.app.currentEnterKeyHandler = null;
+                const appState = this._getAppState();
+                if (appState) {
+                    appState.currentEnterKeyHandler = null;
+                }
             }
         };
         document.addEventListener('keydown', handleEnterKey);
-        this.app.currentEnterKeyHandler = handleEnterKey;
+        const appState = this._getAppState();
+        if (appState) {
+            appState.currentEnterKeyHandler = handleEnterKey;
+        }
     }
     
     showEditModal(pageId, binId, elementIndex, element) {
@@ -835,7 +878,8 @@ export class ModalHandler {
         const modalBody = document.getElementById('modal-body');
         
         // Get bin to ensure it exists
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -1085,7 +1129,8 @@ export class ModalHandler {
         `;
         
         // Custom Properties section (if element has custom properties or plugin is enabled)
-        if (element.customProperties || this.app.elementTypeManager) {
+        const elementTypeManager = this._getElementTypeManager();
+        if (element.customProperties || elementTypeManager) {
             html += `
                 <div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 4px; border: 1px solid #444;">
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Custom Properties:</label>
@@ -1350,7 +1395,8 @@ export class ModalHandler {
                     const select = document.createElement('select');
                     select.className = 'calendar-target-page';
                     select.style.flex = '1';
-                    (this.app.appState?.pages || this.app.pages || []).forEach(p => {
+                    const appState = this._getAppState();
+                    appState.pages.forEach(p => {
                         const option = document.createElement('option');
                         option.value = p.id;
                         option.textContent = p.title || p.id;
@@ -1387,7 +1433,10 @@ export class ModalHandler {
                     if (!element.targetTags) element.targetTags = [];
                     if (!element.targetTags.includes(tag)) {
                         element.targetTags.push(tag);
-                        this.app.dataManager.saveData();
+                        const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
                         this.showEditModal(pageId, binId, elementIndex, element);
                     }
                 });
@@ -1399,7 +1448,10 @@ export class ModalHandler {
                     const tag = e.target.dataset.tag;
                     if (element.targetTags) {
                         element.targetTags = element.targetTags.filter(t => t !== tag);
-                        this.app.dataManager.saveData();
+                        const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
                         this.showEditModal(pageId, binId, elementIndex, element);
                     }
                 });
@@ -1414,7 +1466,10 @@ export class ModalHandler {
                     if (tag && !element.targetTags?.includes(tag)) {
                         if (!element.targetTags) element.targetTags = [];
                         element.targetTags.push(tag);
-                        this.app.dataManager.saveData();
+                        const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
                         this.showEditModal(pageId, binId, elementIndex, element);
                     }
                 });
@@ -1436,7 +1491,10 @@ export class ModalHandler {
                     if (this.app.tagManager) {
                         this.app.tagManager.addTag(tag);
                     }
-                    this.app.dataManager.saveData();
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
                     this.showEditModal(pageId, binId, elementIndex, element);
                 }
             });
@@ -1447,7 +1505,10 @@ export class ModalHandler {
                 const tag = e.target.dataset.tag;
                 if (element.tags) {
                     element.tags = element.tags.filter(t => t !== tag);
-                    this.app.dataManager.saveData();
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
                     this.showEditModal(pageId, binId, elementIndex, element);
                 }
             });
@@ -1464,7 +1525,10 @@ export class ModalHandler {
                     if (this.app.tagManager) {
                         this.app.tagManager.addTag(tag);
                     }
-                    this.app.dataManager.saveData();
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
                     this.showEditModal(pageId, binId, elementIndex, element);
                 }
             });
@@ -1504,14 +1568,16 @@ export class ModalHandler {
             });
         });
         
-        // Store current editing state
-        this.app.currentEdit = {
-            pageId: pageId,
-            binId: binId,
-            elementIndex: elementIndex,
-            itemCount: element.items ? element.items.length : 0,
-            elementType: element.type
-        };
+        // Store current editing state (appState already declared at line 881)
+        if (appState) {
+            appState.currentEditModal = {
+                pageId: pageId,
+                binId: binId,
+                elementIndex: elementIndex,
+                itemCount: element.items ? element.items.length : 0,
+                elementType: element.type
+            };
+        }
         
         // Update modal close button to show it's a save button and add navigation arrow buttons
         const modalClose = document.querySelector('.modal-close');
@@ -1587,7 +1653,8 @@ export class ModalHandler {
                 const handleMouseUp = () => {
                     clearTimeout(holdTimer);
                     const wasHolding = nextElementIsHolding;
-                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+                    const appState = this._getAppState();
+                    const page = appState?.pages?.find(p => p.id === pageId);
                     if (!page) return;
                     const bin = page.bins?.find(b => b.id === binId);
                     if (!bin) return;
@@ -1596,13 +1663,17 @@ export class ModalHandler {
                         // Create new element of matching type
                         const currentElement = bin.elements[elementIndex];
                         if (currentElement) {
-                            const newElement = this.app.elementManager.createElementTemplate(currentElement.type);
+                            const elementManager = this._getElementManager();
+                            const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
                             const insertIndex = elementIndex + 1;
                             if (!bin.elements) bin.elements = [];
                             bin.elements.splice(insertIndex, 0, newElement);
                             this.saveEdit(pageId, binId, elementIndex, true); // Skip close
-                            this.app.dataManager.saveData();
-                            this.app.render();
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open new element editor without visible transition
                             setTimeout(() => {
                                 this.showEditModal(pageId, binId, insertIndex, newElement);
@@ -1614,8 +1685,11 @@ export class ModalHandler {
                         if (nextIndex < bin.elements.length) {
                             // Next element exists
                             this.saveEdit(pageId, binId, elementIndex, true); // Skip close
-                            this.app.dataManager.saveData();
-                            this.app.render();
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open next element editor without visible transition
                             setTimeout(() => {
                                 const nextElement = bin.elements[nextIndex];
@@ -1625,12 +1699,16 @@ export class ModalHandler {
                             // No next element, create new one
                             const currentElement = bin.elements[elementIndex];
                             if (currentElement) {
-                                const newElement = this.app.elementManager.createElementTemplate(currentElement.type);
+                                const elementManager = this._getElementManager();
+                                const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
                                 if (!bin.elements) bin.elements = [];
                                 bin.elements.push(newElement);
                                 this.saveEdit(pageId, binId, elementIndex, true); // Skip close
-                                this.app.dataManager.saveData();
-                                this.app.render();
+                                const dataManager = this._getDataManager();
+                                if (dataManager) {
+                                    dataManager.saveData();
+                                }
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                                 // Open new element editor without visible transition
                                 setTimeout(() => {
                                     this.showEditModal(pageId, binId, bin.elements.length - 1, newElement);
@@ -1669,7 +1747,8 @@ export class ModalHandler {
                 const handleMouseUp = () => {
                     clearTimeout(holdTimer);
                     const wasHolding = prevElementIsHolding;
-                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+                    const appState = this._getAppState();
+                    const page = appState?.pages?.find(p => p.id === pageId);
                     if (!page) return;
                     const bin = page.bins?.find(b => b.id === binId);
                     if (!bin) return;
@@ -1678,12 +1757,16 @@ export class ModalHandler {
                         // Create new element of matching type before current
                         const currentElement = bin.elements[elementIndex];
                         if (currentElement) {
-                            const newElement = this.app.elementManager.createElementTemplate(currentElement.type);
+                            const elementManager = this._getElementManager();
+                            const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
                             if (!bin.elements) bin.elements = [];
                             bin.elements.splice(elementIndex, 0, newElement);
                             this.saveEdit(pageId, binId, elementIndex + 1, true); // Skip close (elementIndex shifted)
-                            this.app.dataManager.saveData();
-                            this.app.render();
+                            const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open new element editor without visible transition
                             setTimeout(() => {
                                 this.showEditModal(pageId, binId, elementIndex, newElement);
@@ -1695,8 +1778,11 @@ export class ModalHandler {
                         if (prevIndex >= 0) {
                             // Previous element exists
                             this.saveEdit(pageId, binId, elementIndex, true); // Skip close
-                            this.app.dataManager.saveData();
-                            this.app.render();
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open previous element editor without visible transition
                             setTimeout(() => {
                                 const prevElement = bin.elements[prevIndex];
@@ -1706,12 +1792,16 @@ export class ModalHandler {
                             // No previous element, create new one at start
                             const currentElement = bin.elements[elementIndex];
                             if (currentElement) {
-                                const newElement = this.app.elementManager.createElementTemplate(currentElement.type);
+                                const elementManager = this._getElementManager();
+                            const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
                                 if (!bin.elements) bin.elements = [];
                                 bin.elements.unshift(newElement);
                                 this.saveEdit(pageId, binId, elementIndex + 1, true); // Skip close (elementIndex shifted)
-                                this.app.dataManager.saveData();
-                                this.app.render();
+                                const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                                 // Open new element editor without visible transition
                                 setTimeout(() => {
                                     this.showEditModal(pageId, binId, 0, newElement);
@@ -1760,27 +1850,35 @@ export class ModalHandler {
             }
         };
         document.addEventListener('keydown', handleEnterKey, true); // Use capture phase to catch before inputs
-        this.app.currentEnterKeyHandler = handleEnterKey;
+        // appState already declared at line 881
+        if (appState) {
+            appState.currentEnterKeyHandler = handleEnterKey;
+        }
     }
     
     handleEnterKeyAction(pageId, binId, elementIndex, handleEnterKey) {
         // Check if we're in a multi-edit session
-        const multiEdit = this.app.multiEditState;
+        const appState = this._getAppState();
+        const multiEdit = appState?.multiEditState;
         if (multiEdit && multiEdit.pageId === pageId && multiEdit.binId === binId) {
             // Check if there's a next element to edit
             const nextIndex = elementIndex + 1;
             if (nextIndex <= multiEdit.endIndex) {
                 // Save current and advance to next
-                this.saveEdit(pageId, binId, elementIndex, true); // Skip close
-                this.app.dataManager.saveData();
-                this.app.render();
+                            this.saveEdit(pageId, binId, elementIndex, true); // Skip close
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 
                 // Update multi-edit state
                 multiEdit.currentIndex = nextIndex;
                 
                 // Open next element editor
                 setTimeout(() => {
-                    const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+                    const nextAppState = this._getAppState();
+                    const page = nextAppState?.pages?.find(p => p.id === pageId);
                     const bin = page?.bins?.find(b => b.id === binId);
                     if (bin && bin.elements[nextIndex]) {
                         this.showEditModal(pageId, binId, nextIndex, bin.elements[nextIndex]);
@@ -1797,21 +1895,24 @@ export class ModalHandler {
                 
                 // Remove old handler
                 document.removeEventListener('keydown', handleEnterKey, true);
-                if (this.app.currentEnterKeyHandler === handleEnterKey) {
-                    this.app.currentEnterKeyHandler = null;
+                if (appState && appState.currentEnterKeyHandler === handleEnterKey) {
+                    appState.currentEnterKeyHandler = null;
                 }
                 return;
             } else {
                 // Last element - clear multi-edit state and close
-                this.app.multiEditState = null;
+                if (appState) {
+                    appState.multiEditState = null;
+                }
             }
         }
         
         // Normal save and close
         this.saveEdit(pageId, binId, elementIndex);
         document.removeEventListener('keydown', handleEnterKey, true);
-        if (this.app.currentEnterKeyHandler === handleEnterKey) {
-            this.app.currentEnterKeyHandler = null;
+        const finalAppState = this._getAppState();
+        if (finalAppState && finalAppState.currentEnterKeyHandler === handleEnterKey) {
+            finalAppState.currentEnterKeyHandler = null;
         }
     }
     
@@ -1837,7 +1938,8 @@ export class ModalHandler {
     }
     
     saveEdit(pageId, binId, elementIndex, skipClose = false) {
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -1855,8 +1957,12 @@ export class ModalHandler {
             // Views will handle rendering via parseLinks which supports both markdown and HTML
             // This allows users to edit raw formatting text in modals
             
-            if (oldText !== newText && this.app.undoRedoManager) {
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, oldText);
+            const undoRedoManager = this._getUndoRedoManager();
+            if (oldText !== newText && undoRedoManager) {
+                const undoRedoManager = this._getUndoRedoManager();
+                if (undoRedoManager) {
+                    undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, oldText);
+                }
             }
             element.text = newText;
         }
@@ -2079,7 +2185,7 @@ export class ModalHandler {
         if (!skipClose) {
         this.closeModal();
         }
-        this.app.render();
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
     }
     
     addEditChildModal() {
@@ -2137,7 +2243,8 @@ export class ModalHandler {
         if (!archiveView) return;
         
         if (archiveView.style.display === 'none') {
-            const archived = this.app.dataManager.getArchivedRecordings(pageId, elementIndex);
+            const dataManager = this._getDataManager();
+            const archived = dataManager ? dataManager.getArchivedRecordings(pageId, elementIndex) : [];
             if (archived.length === 0) {
                 archiveView.innerHTML = '<div style="padding: 10px; color: #888;">No archived recordings</div>';
             } else {
@@ -2159,7 +2266,8 @@ export class ModalHandler {
         this.closeModal();
         
         // Get the element to determine the correct audioElementIndex
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -2181,14 +2289,15 @@ export class ModalHandler {
         
         // Start recording with overwrite flag
         await this.app.startInlineRecording(pageId, binId, audioElementIndex, elementIndex, true);
-        this.app.render(); // Re-render to update UI
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED); // Re-render to update UI
     }
     
     showEditBinModal(pageId, binId) {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
         
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         const bin = page.bins?.find(b => b.id === binId);
         if (!bin) return;
@@ -2255,7 +2364,7 @@ export class ModalHandler {
                 } else {
                     await this.app.binPluginManager.disablePlugin(pageId, binId, pluginId);
                 }
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
         });
     }
@@ -2265,7 +2374,8 @@ export class ModalHandler {
         const modalBody = document.getElementById('modal-body');
         
         // Use appState.pages (source of truth) with fallback to app.pages for backward compatibility
-        const pages = this.app.appState?.pages || this.app.pages || [];
+        const appState = this._getAppState();
+        const pages = appState.pages || [];
         const page = pages.find(p => p.id === pageId);
         if (!page) {
             console.error('[ModalHandler] Page not found:', pageId, 'Available pages:', pages.map(p => p.id));
@@ -2287,7 +2397,8 @@ export class ModalHandler {
             // Check if we're editing a tab (from pane context menu)
             let currentFormat = null;
             let editingTabInfo = null;
-            if (this.app.appState && this.app.appState._editingTabInfo) {
+            const appState = this._getAppState();
+            if (appState && appState._editingTabInfo) {
                 editingTabInfo = this.app.appState._editingTabInfo;
                 // Get format from the tab being edited
                 if (this.app.renderService && this.app.renderService.getRenderer) {
@@ -2639,7 +2750,7 @@ export class ModalHandler {
                 } else {
                     await this.app.pagePluginManager.disablePlugin(pageId, pluginId);
                 }
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
         });
     }
@@ -2943,7 +3054,7 @@ export class ModalHandler {
                     this.app.settingsManager.saveSettings();
                 }
                 this.closeModal();
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 return;
             }
             
@@ -3056,7 +3167,7 @@ export class ModalHandler {
             
             this.app.visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
             this.closeModal();
-            this.app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         };
         
         // Add save button
@@ -3188,7 +3299,7 @@ export class ModalHandler {
                 }
                 
                 this.closeModal();
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             } else if (instanceSpecific) {
                 // Save as instance-specific settings
                 saveVisualSettings();
@@ -3230,7 +3341,7 @@ export class ModalHandler {
                             const preserveAll = imported.preserveAll || false;
                             this.app.visualSettingsManager.setObjectSettings(type, id, imported.custom, preserveAll);
                             this.closeModal();
-                            this.app.render();
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                         }
                     };
                     reader.readAsText(file);
@@ -3245,7 +3356,7 @@ export class ModalHandler {
                 if (confirm('Remove all custom visual settings for this object?')) {
                     this.app.visualSettingsManager.removeObjectSettings(type, id);
                     this.closeModal();
-                    this.app.render();
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
             });
         }

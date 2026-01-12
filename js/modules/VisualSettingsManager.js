@@ -1,12 +1,23 @@
 // VisualSettingsManager.js - Manages granular visual settings for individual objects
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class VisualSettingsManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.storageKey = 'twodo-visual-settings';
         this.settings = this.loadSettings();
+    }
+    
+    /**
+     * Get services
+     */
+    _getThemeManager() {
+        return getService(SERVICES.THEME_MANAGER);
+    }
+    
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     loadSettings() {
@@ -186,8 +197,9 @@ export class VisualSettingsManager {
         let baseTheme = {};
         
         // Start with global theme
-        if (this.app.themeManager) {
-            baseTheme = this.app.themeManager.getEffectiveTheme(pageId || id, viewFormat);
+        const themeManager = this._getThemeManager();
+        if (themeManager) {
+            baseTheme = themeManager.getEffectiveTheme(pageId || id, viewFormat);
         }
         
         // Apply tag-based settings (view-specific first, then global)
@@ -255,18 +267,20 @@ export class VisualSettingsManager {
                 const elementPageId = parts[0];
                 const binId = parts[1];
                 const elementIndex = parseInt(parts[2]);
-                const page = this.app.appState?.pages?.find(p => p.id === elementPageId);
+                const appState = this._getAppState();
+                const page = appState.pages?.find(p => p.id === elementPageId);
                 const bin = page?.bins?.find(b => b.id === binId);
                 const element = bin?.elements?.[elementIndex];
                 return element?.tags || [];
             }
         } else if (type === 'bin' && pageId) {
-            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const appState = this._getAppState();
+            const page = appState.pages?.find(p => p.id === pageId);
             const bin = page?.bins?.find(b => b.id === id);
             // Bins may have tags property, if not, return empty array
             return bin?.tags || [];
         } else if (type === 'page') {
-            const page = this.app.appState?.pages?.find(p => p.id === id);
+            const page = appState.pages?.find(p => p.id === id);
             // Pages may have tags property, if not, return empty array
             return page?.tags || [];
         } else if (type === 'pane') {

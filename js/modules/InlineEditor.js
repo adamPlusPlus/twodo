@@ -1,10 +1,25 @@
 // InlineEditor.js - Handles inline text editing functionality
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class InlineEditor {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     /**
@@ -59,22 +74,27 @@ export class InlineEditor {
             // Store as plain text (inline editing extracts plain text, which is correct)
             // Users can use markdown/HTML syntax which will be rendered by parseLinks
             if (newText !== originalText) {
-                const page = this.app.appState.pages.find(p => p.id === pageId);
+                const appState = this._getAppState();
+                const page = appState.pages.find(p => p.id === pageId);
                 const bin = page?.bins?.find(b => b.id === binId);
                 const el = bin?.elements[elementIndex];
                 if (el) {
                     // Record undo/redo change
-                    if (this.app.undoRedoManager) {
-                        this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, originalText);
+                    const undoRedoManager = this._getUndoRedoManager();
+                    if (undoRedoManager) {
+                        undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, originalText);
                     }
                     el.text = newText;
-                    this.app.dataManager.saveData();
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
                     // Re-render to update links and formatting
                     eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
             } else {
                 // Restore original formatting even if text didn't change
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             }
             
             textElement.removeEventListener('blur', handleBlur);

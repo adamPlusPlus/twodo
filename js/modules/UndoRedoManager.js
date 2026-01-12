@@ -1,20 +1,11 @@
 // UndoRedoManager.js - Handles undo/redo functionality with change tracking
 import { serviceLocator } from '../core/ServiceLocator.js';
-import { SERVICES } from '../core/AppServices.js';
+import { SERVICES, getService, hasService } from '../core/AppServices.js';
 import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
 
 export class UndoRedoManager {
-    constructor(appOrServiceLocator) {
-        // Support both app instance (backward compatibility) and ServiceLocator
-        if (appOrServiceLocator && typeof appOrServiceLocator.get === 'function') {
-            // It's a ServiceLocator
-            this.serviceLocator = appOrServiceLocator;
-            this.app = null; // Will be removed in later phases
-        } else {
-            // It's the app instance (backward compatibility)
-            this.app = appOrServiceLocator;
-            this.serviceLocator = serviceLocator;
-        }
+    constructor() {
         this.undoStack = [];
         this.redoStack = [];
         this.maxStackSize = 100;
@@ -28,6 +19,28 @@ export class UndoRedoManager {
         this.bufferSaveTimer = null; // Debounce timer for buffer saves
         this.changeCounter = 0; // Track number of changes for snapshot intervals
         this.snapshots = []; // Array of {changeIndex, data} snapshots
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
+     * Get pages array from AppState
+     */
+    _getPages() {
+        const appState = this._getAppState();
+        return appState.pages || [];
+    }
+    
+    /**
+     * Get DataManager service
+     */
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     /**
@@ -63,8 +76,9 @@ export class UndoRedoManager {
         this._debouncedSaveBuffer();
         
         // Send to sync manager for real-time sync
-        if (this.app.syncManager) {
-            this.app.syncManager.sendChange(change);
+        const syncManager = getService(SERVICES.SYNC_MANAGER);
+        if (syncManager) {
+            syncManager.sendChange(change);
         }
     }
     
@@ -85,15 +99,16 @@ export class UndoRedoManager {
      * Get element counts for logging
      */
     _getElementCounts() {
-        if (!this.app || !this.app.pages) {
+        const pages = this._getPages();
+        if (!pages || pages.length === 0) {
             return { pages: 0, bins: 0, elements: 0 };
         }
         
-        let pages = this.app.pages.length;
+        let pagesLength = pages.length;
         let bins = 0;
         let elements = 0;
         
-        this.app.pages.forEach(page => {
+        pages.forEach(page => {
             if (page.bins && Array.isArray(page.bins)) {
                 bins += page.bins.length;
                 page.bins.forEach(bin => {
@@ -131,7 +146,8 @@ export class UndoRedoManager {
             // Log array state if applicable
             if (path.length > 0) {
                 try {
-                    let target = this.app.pages;
+                    const pages = this._getPages();
+                    let target = pages;
                     let pathStartIndex = path[0] === 'pages' ? 1 : 0;
                     const navigationEnd = (type === 'insert' || type === 'add') ? path.length : path.length - 1;
                     
@@ -163,8 +179,8 @@ export class UndoRedoManager {
                 const appState = this.serviceLocator.get(SERVICES.APP_STATE);
                 pages = appState.getPages();
             } catch (e) {
-                if (this.app && this.app.pages) {
-                    pages = this.app.pages;
+                const pages = this._getPages();
+                if (pages && pages.length > 0) {
                 } else {
                     console.error('[UNDO] Cannot access pages');
                     return false;
@@ -174,7 +190,7 @@ export class UndoRedoManager {
             let target = pages;
             let pathStartIndex = 0;
             
-            // If path starts with 'pages', skip it since we're already at this.app.pages
+            // If path starts with 'pages', skip it since we're already at pages
             if (path[0] === 'pages') {
                 pathStartIndex = 1;
             }
@@ -360,7 +376,8 @@ export class UndoRedoManager {
                     }
                     
                     // First, find and delete from source
-                    let sourceTarget = this.app.pages;
+                    let pages = this._getPages();
+                    let sourceTarget = pages;
                     const sourcePath = change.sourcePath;
                     let sourcePathStart = sourcePath[0] === 'pages' ? 1 : 0;
                     
@@ -427,18 +444,13 @@ export class UndoRedoManager {
                     }
                     
                     // Now insert at target
-                    // Get pages from app state service
-                    let pages;
-                    try {
-                        const appState = this.serviceLocator.get(SERVICES.APP_STATE);
-                        pages = appState.getPages();
-                    } catch (e) {
-                        if (this.app && this.app.pages) {
-                            pages = this.app.pages;
-                        } else {
-                            console.error('[UNDO] Cannot access pages');
-                            return false;
-                        }
+                    // Reuse pages variable already declared above
+                    // Get fresh pages reference for target navigation
+                    pages = this._getPages();
+                    if (!pages || pages.length === 0) {
+                        console.error('[UNDO] Cannot access pages');
+                        this.isApplyingChange = false;
+                        return false;
                     }
                     let targetArray = pages;
                     const targetArrayPath = change.targetPath;
@@ -615,7 +627,8 @@ export class UndoRedoManager {
                 }
                 
                 // Found by ID - construct path directly and delete
-                const pageIndex = this.app.pages.findIndex(p => p.id === found.pageId);
+                const pages = this._getPages();
+                const pageIndex = pages.findIndex(p => p.id === found.pageId);
                 if (pageIndex === -1) {
                     console.error(`[UNDO] Page ${found.pageId} not found`);
                     this.undoStack.push(pairedChange);
@@ -623,7 +636,7 @@ export class UndoRedoManager {
                     return false;
                 }
                 
-                const page = this.app.pages[pageIndex];
+                const page = pages[pageIndex];
                 const binIndex = page.bins.findIndex(b => b.id === found.binId);
                 if (binIndex === -1) {
                     console.error(`[UNDO] Bin ${found.binId} not found`);
@@ -695,14 +708,12 @@ export class UndoRedoManager {
                 }
                 
                 // Save data and re-render
-                if (this.app) {
-                    if (this.app.dataManager) {
-                        this.app.dataManager.saveData();
-                    }
-                    if (typeof this.app.render === 'function') {
-                        this.app.render();
-                    }
+                const dataManager = this._getDataManager();
+                if (dataManager) {
+                    dataManager.saveData();
                 }
+                // Render is handled via EventBus now
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 
                 const afterCounts = this._getElementCounts();
                 console.log(`[UNDO] After counts - Pages: ${afterCounts.pages}, Bins: ${afterCounts.bins}, Elements: ${afterCounts.elements}`);
@@ -744,7 +755,8 @@ export class UndoRedoManager {
             // For delete, we need path to the element (e.g., ['pages', 0, 'bins', 0, 'elements', 3])
             // Always find the element by comparing properties, not by index, since the array may have changed
             const arrayPath = [...inversePath];
-            let arrayTarget = this.app.pages;
+            const pages = this._getPages();
+            let arrayTarget = pages;
             if (arrayPath[0] === 'pages') {
                 for (let i = 1; i < arrayPath.length; i++) {
                     const key = arrayPath[i];
@@ -893,9 +905,8 @@ export class UndoRedoManager {
                                 const appState = this.serviceLocator.get(SERVICES.APP_STATE);
                                 pages = appState.getPages();
                             } catch (e) {
-                                if (this.app && this.app.pages) {
-                                    pages = this.app.pages;
-                                } else {
+                                pages = this._getPages();
+                                if (!pages || pages.length === 0) {
                                     console.error('[UNDO] Cannot access pages');
                                     this.undoStack.push(change);
                                     return false;
@@ -963,7 +974,8 @@ export class UndoRedoManager {
             // For add, path points to array, for delete we need the element index
             // Find the element in the array
             const arrayPath = [...inversePath];
-            let arrayTarget = this.app.pages;
+            const pages = this._getPages();
+            let arrayTarget = pages;
             if (arrayPath[0] === 'pages') {
                 for (let i = 1; i < arrayPath.length; i++) {
                     const key = arrayPath[i];
@@ -1024,7 +1036,8 @@ export class UndoRedoManager {
         // Validate element exists before deleting (for delete operations)
         if (inverseType === 'delete' && inversePath.length > 0) {
             try {
-                let target = this.app.pages;
+                const pages = this._getPages();
+                let target = pages;
                 let pathStartIndex = inversePath[0] === 'pages' ? 1 : 0;
                 
                 // Navigate to the element
@@ -1039,7 +1052,7 @@ export class UndoRedoManager {
                             if (recoveryResult && recoveryResult.success) {
                                 console.log(`[UNDO] Recovered from snapshot, retrying...`);
                                 // Retry navigation after recovery
-                                target = this.app.pages;
+                                target = pages;
                                 for (let j = pathStartIndex; j < inversePath.length - 1; j++) {
                                     const retryKey = inversePath[j];
                                     if (Array.isArray(target)) {
@@ -1116,19 +1129,17 @@ export class UndoRedoManager {
         }
         
         // Send undo to server if not a remote change
-        if (!change.isRemote && this.app.syncManager) {
-            this.app.syncManager.sendUndo(change.changeId);
+        const syncManager = getService(SERVICES.SYNC_MANAGER);
+        if (!change.isRemote && syncManager) {
+            syncManager.sendUndo(change.changeId);
         }
         
         // Save data and re-render to reflect changes
-        if (this.app) {
-            if (this.app.dataManager) {
-                this.app.dataManager.saveData();
-            }
-            if (typeof this.app.render === 'function') {
-                this.app.render();
-            }
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
         }
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
         console.log(`[UNDO] Undo applied successfully: ${change.type} at path:`, change.path);
         return true;
@@ -1239,19 +1250,17 @@ export class UndoRedoManager {
         }
         
         // Send redo to server if not a remote change
-        if (!change.isRemote && this.app.syncManager) {
-            this.app.syncManager.sendRedo(change.changeId);
+        const syncManager = getService(SERVICES.SYNC_MANAGER);
+        if (!change.isRemote && syncManager) {
+            syncManager.sendRedo(change.changeId);
         }
         
         // Save data and re-render to reflect changes
-        if (this.app) {
-            if (this.app.dataManager) {
-                this.app.dataManager.saveData();
-            }
-            if (typeof this.app.render === 'function') {
-                this.app.render();
-            }
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
         }
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
         console.log('Redo applied:', change.type, 'at path:', change.path);
         return true;
@@ -1334,7 +1343,8 @@ export class UndoRedoManager {
             // Check if path still exists in current data structure
             if (change.path && Array.isArray(change.path) && change.path.length > 0) {
                 try {
-                    let target = this.app.pages;
+                    const pages = this._getPages();
+                    let target = pages;
                     let pathStartIndex = change.path[0] === 'pages' ? 1 : 0;
                     const navigationEnd = (change.type === 'insert' || change.type === 'add') 
                         ? change.path.length 
@@ -1437,9 +1447,10 @@ export class UndoRedoManager {
      * This is the professional way to locate elements for undo/redo
      */
     findElementById(elementId) {
-        if (!elementId || !this.app || !this.app.pages) return null;
+        const pages = this._getPages();
+        if (!elementId || !pages || pages.length === 0) return null;
         
-        for (const page of this.app.pages) {
+        for (const page of pages) {
             if (!page || !page.bins) continue;
             
             for (const bin of page.bins) {
@@ -1489,7 +1500,8 @@ export class UndoRedoManager {
         const errors = [];
         const warnings = [];
         
-        if (!this.app || !this.app.pages) {
+        const pages = this._getPages();
+        if (!pages || pages.length === 0) {
             errors.push('app.pages is not available');
             return {
                 valid: false,
@@ -1498,7 +1510,7 @@ export class UndoRedoManager {
             };
         }
         
-        if (!Array.isArray(this.app.pages)) {
+        if (!Array.isArray(pages)) {
             errors.push('app.pages is not an array');
             return {
                 valid: false,
@@ -1508,7 +1520,7 @@ export class UndoRedoManager {
         }
         
         // Check each page
-        this.app.pages.forEach((page, pageIndex) => {
+        pages.forEach((page, pageIndex) => {
             if (!page) {
                 errors.push(`Page at index ${pageIndex} is null or undefined`);
                 return;
@@ -1568,7 +1580,8 @@ export class UndoRedoManager {
     getElementPath(pageId, binId, elementIndex, childIndex = null) {
         const path = ['pages'];
         // Get pages from appState if available, otherwise fall back to app.pages
-        const pages = (this.app?.appState?.pages) || (this.app?.pages) || [];
+        const appState = this._getAppState();
+        const pages = appState.pages || [];
         const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return null;
         
@@ -1721,7 +1734,8 @@ export class UndoRedoManager {
      * Helper: Record bin addition
      */
     recordBinAdd(pageId, binIndex, bin) {
-        const pageIndex = this.app.pages.findIndex(p => p.id === pageId);
+        const pages = this._getPages();
+        const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
         const path = ['pages', pageIndex, 'bins'];
@@ -1735,10 +1749,11 @@ export class UndoRedoManager {
      * Helper: Record bin deletion
      */
     recordBinDelete(pageId, binId, bin) {
-        const pageIndex = this.app.pages.findIndex(p => p.id === pageId);
+        const pages = this._getPages();
+        const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
-        const page = this.app.pages[pageIndex];
+        const page = pages[pageIndex];
         const binIndex = page.bins ? page.bins.findIndex(b => b.id === binId) : -1;
         if (binIndex === -1) return;
         
@@ -1763,7 +1778,8 @@ export class UndoRedoManager {
      * Helper: Record page deletion
      */
     recordPageDelete(pageId, page) {
-        const pageIndex = this.app.pages.findIndex(p => p.id === pageId);
+        const pages = this._getPages();
+        const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
         const path = ['pages', pageIndex];
@@ -1786,14 +1802,15 @@ export class UndoRedoManager {
      * Create a snapshot of current state
      */
     createSnapshot() {
-        if (!this.app || !this.app.pages) {
+        const pages = this._getPages();
+        if (!pages || pages.length === 0) {
             console.warn('[BUFFER] Cannot create snapshot - app.pages not available');
             return null;
         }
         
         const snapshot = {
             changeIndex: this.changeCounter,
-            data: JSON.parse(JSON.stringify(this.app.pages)), // Deep copy
+            data: JSON.parse(JSON.stringify(pages)), // Deep copy
             timestamp: new Date().toISOString()
         };
         
@@ -1970,7 +1987,8 @@ export class UndoRedoManager {
         console.log(`[RECOVERY] Found snapshot at change index ${bestSnapshot.changeIndex}, restoring state...`);
         
         // Restore full state from snapshot
-        this.app.pages = JSON.parse(JSON.stringify(bestSnapshot.data));
+        const appState = this._getAppState();
+        appState.pages = JSON.parse(JSON.stringify(bestSnapshot.data));
         
         // Replay changes from snapshot to current point (excluding problematic change)
         let replayedCount = 0;

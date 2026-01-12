@@ -1,0 +1,21 @@
+Fix scroll flicker and file manager issues
+
+- Fixed scroll position flicker when interacting with elements
+  - Added scroll preservation to PaneManager.renderPane() using requestAnimationFrame
+  - Scroll position is now properly preserved and restored after DOM updates
+  - Added scroll tracking infrastructure for debugging (can be enabled if needed)
+
+- Fixed FileManager service registration
+  - Moved FileManager creation before registerAllServices() call in app.js
+  - FileManager service is now properly registered and accessible via ServiceLocator
+
+- Fixed ModalHandler.closeModal() error
+  - Replaced this.app references with ServiceLocator pattern
+  - Uses AppState service for currentEditModal and currentEnterKeyHandler
+  - Uses imported eventBus singleton instead of this.app.eventBus
+  - Fixed missing closing brace in showEditModal function
+
+- Improved dropdown menu event handling
+  - File manager button handler uses capture phase to ensure it runs first
+  - Added stopPropagation to prevent document click handler interference
+  - Delayed dropdown closing for file-manager button to allow handler execution

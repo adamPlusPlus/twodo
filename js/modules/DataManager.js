@@ -1,14 +1,42 @@
 // DataManager.js - Handles all data loading, saving, and migration
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class DataManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.storageKey = 'twodo-data';
         this.lastResetKey = 'twodo-last-reset';
         this._lastSyncTimestamp = 0; // Track last sync timestamp to prevent conflicts
         this.setupEventListeners();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
+     * Get SettingsManager service
+     */
+    _getSettingsManager() {
+        return getService(SERVICES.SETTINGS_MANAGER);
+    }
+    
+    /**
+     * Get SyncManager service
+     */
+    _getSyncManager() {
+        return getService(SERVICES.SYNC_MANAGER);
+    }
+    
+    /**
+     * Get FileManager service
+     */
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
     }
     
     /**
@@ -103,7 +131,8 @@ export class DataManager {
                         });
                     }
                 });
-                this.app.pages = data.pages;
+                const appState = this._getAppState();
+                appState.pages = data.pages;
                 this.saveData();
             }
             localStorage.setItem(this.lastResetKey, today);
@@ -188,13 +217,11 @@ export class DataManager {
                 // Check if data is already in new format (has bins property)
                 const isNewFormat = migratedData.pages[0].bins !== undefined;
                 
+                const appState = this._getAppState();
                 if (isNewFormat) {
                     // Already in new format
                     const pages = migratedData.pages;
-                    this.app.pages = pages;
-                    if (this.app.appState) {
-                        this.app.appState.pages = pages;
-                    }
+                    appState.pages = pages;
                 } else {
                     // Old format: migrate pages to bins under Page 1
                     const pages = [{
@@ -205,10 +232,7 @@ export class DataManager {
                             elements: oldPage.elements || []
                         }))
                     }];
-                    this.app.pages = pages;
-                    if (this.app.appState) {
-                        this.app.appState.pages = pages;
-                    }
+                    appState.pages = pages;
                 }
             } else {
                 // No pages, create default
@@ -220,48 +244,62 @@ export class DataManager {
                         elements: []
                     }]
                 }];
-                this.app.pages = pages;
-                if (this.app.appState) {
-                    this.app.appState.pages = pages;
-                }
+                const appState = this._getAppState();
+                appState.pages = pages;
             }
             
             // Set current page to first page
-            if (this.app.pages.length > 0) {
-                const firstPageId = this.app.pages[0].id;
-                this.app.currentPageId = firstPageId;
-                if (this.app.appState) {
-                    this.app.appState.currentPageId = firstPageId;
-                }
+            const appState = this._getAppState();
+            if (appState.pages.length > 0) {
+                const firstPageId = appState.pages[0].id;
+                appState.currentPageId = firstPageId;
             }
             
             // Restore collapse states if they exist (migrate pageStates to binStates)
             if (migratedData.pageStates) {
                 // Migrate old pageStates keys (pageId) to new binStates keys (binId)
-                this.app.binStates = {};
+                const binStates = {};
                 Object.keys(migratedData.pageStates).forEach(oldKey => {
                     // Old key format: "page-0", new format: "bin-0"
                     const newKey = oldKey.replace(/^page-/, 'bin-');
-                    this.app.binStates[newKey] = migratedData.pageStates[oldKey];
+                    binStates[newKey] = migratedData.pageStates[oldKey];
                 });
+                // Store in AppState if it has binStates property
+                if (appState.setBinState) {
+                    Object.keys(binStates).forEach(binId => {
+                        appState.setBinState(binId, binStates[binId]);
+                    });
+                } else {
+                    appState.binStates = binStates;
+                }
             }
             if (migratedData.subtaskStates) {
-                this.app.subtaskStates = migratedData.subtaskStates;
+                if (appState.setSubtaskState) {
+                    Object.keys(migratedData.subtaskStates).forEach(key => {
+                        appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                    });
+                } else {
+                    appState.subtaskStates = migratedData.subtaskStates;
+                }
             }
             if (migratedData.allSubtasksExpanded !== undefined) {
-                this.app.allSubtasksExpanded = migratedData.allSubtasksExpanded;
+                appState.allSubtasksExpanded = migratedData.allSubtasksExpanded;
             }
             
             // Restore settings if they exist
             if (migratedData.settings) {
-                this.app.settingsManager.saveSettings(migratedData.settings);
+                const settingsManager = this._getSettingsManager();
+                if (settingsManager) {
+                    settingsManager.saveSettings(migratedData.settings);
+                }
             }
             
             // Save migrated data back to storage
             this.saveData();
         } else {
             // Default: one page with one bin
-            this.app.pages = [{
+            const appState = this._getAppState();
+            appState.pages = [{
                 id: 'page-1',
                 bins: [{
                     id: 'bin-0',
@@ -269,7 +307,7 @@ export class DataManager {
                     elements: []
                 }]
             }];
-            this.app.currentPageId = 'page-1';
+            appState.currentPageId = 'page-1';
         }
     }
     
@@ -284,7 +322,7 @@ export class DataManager {
         }, 500); // Wait 500ms after last change before saving
         
         // Debounce WebSocket sync (shorter delay for real-time feel)
-        // Skip sync if this is from a remote update to prevent loops
+            // Skip sync if this is from a remote update to prevent loops
         if (!skipSync) {
             if (this._syncTimer) {
                 clearTimeout(this._syncTimer);
@@ -292,20 +330,24 @@ export class DataManager {
             
             this._syncTimer = setTimeout(() => {
                 // Send full data sync via WebSocket for real-time updates
-                if (this.app.syncManager && this.app.syncManager.isConnected && this.app.fileManager && this.app.fileManager.currentFilename) {
+                const syncManager = this._getSyncManager();
+                const fileManager = this._getFileManager();
+                if (syncManager && syncManager.isConnected && fileManager && fileManager.currentFilename) {
                     this._syncDataToWebSocket();
                 }
             }, 200); // Wait 200ms after last change before syncing
         }
         
+        const appState = this._getAppState();
+        const settingsManager = this._getSettingsManager();
         const data = {
-            pages: this.app.pages,
-            currentPageId: this.app.currentPageId,
+            pages: appState.pages,
+            currentPageId: appState.currentPageId,
             lastModified: new Date().toISOString(),
-            binStates: this.app.binStates, // Renamed from pageStates
-            subtaskStates: this.app.subtaskStates,
-            allSubtasksExpanded: this.app.allSubtasksExpanded,
-            settings: this.app.settingsManager.loadSettings()
+            binStates: appState.binStates || {},
+            subtaskStates: appState.subtaskStates || {},
+            allSubtasksExpanded: appState.allSubtasksExpanded,
+            settings: settingsManager ? settingsManager.loadSettings() : {}
         };
         localStorage.setItem(this.storageKey, JSON.stringify(data));
     }
@@ -314,11 +356,14 @@ export class DataManager {
      * Sync data to WebSocket for real-time updates
      */
     _syncDataToWebSocket() {
-        if (!this.app.syncManager || !this.app.syncManager.isConnected) {
+        const syncManager = this._getSyncManager();
+        const fileManager = this._getFileManager();
+        
+        if (!syncManager || !syncManager.isConnected) {
             return;
         }
         
-        if (!this.app.fileManager || !this.app.fileManager.currentFilename) {
+        if (!fileManager || !fileManager.currentFilename) {
             return;
         }
         
@@ -326,20 +371,22 @@ export class DataManager {
         this._lastSyncTimestamp = Date.now();
         
         // Send full data state for sync
+        const appState = this._getAppState();
+        const settingsManager = this._getSettingsManager();
         const data = {
-            pages: this.app.pages,
-            currentPageId: this.app.currentPageId,
-            binStates: this.app.binStates,
-            subtaskStates: this.app.subtaskStates,
-            allSubtasksExpanded: this.app.allSubtasksExpanded,
-            settings: this.app.settingsManager ? this.app.settingsManager.loadSettings() : {},
+            pages: appState.pages,
+            currentPageId: appState.currentPageId,
+            binStates: appState.binStates || {},
+            subtaskStates: appState.subtaskStates || {},
+            allSubtasksExpanded: appState.allSubtasksExpanded,
+            settings: settingsManager ? settingsManager.loadSettings() : {},
             timestamp: this._lastSyncTimestamp
         };
         
         // Send as a "full sync" change
-        this.app.syncManager.send({
+        syncManager.send({
             type: 'full_sync',
-            filename: this.app.fileManager.currentFilename,
+            filename: fileManager.currentFilename,
             data: data,
             timestamp: this._lastSyncTimestamp
         });
@@ -351,24 +398,26 @@ export class DataManager {
      */
     async _autosaveToServer() {
         // Only autosave if a file is currently open
-        if (!this.app.fileManager || !this.app.fileManager.currentFilename) {
+        const fileManager = this._getFileManager();
+        if (!fileManager || !fileManager.currentFilename) {
             console.log('[DataManager] Autosave skipped - no currentFilename:', {
-                hasFileManager: !!this.app.fileManager,
-                currentFilename: this.app.fileManager?.currentFilename
+                hasFileManager: !!fileManager,
+                currentFilename: fileManager?.currentFilename
             });
             return;
         }
         
-        const currentFilename = this.app.fileManager.currentFilename;
+        const currentFilename = fileManager.currentFilename;
         console.log('[DataManager] Autosaving to:', currentFilename);
         
         try {
+            const appState = this._getAppState();
             const data = {
-                pages: this.app.pages
+                pages: appState.pages
             };
             
             // Use FileManager's saveFile method to save to server (silent mode for autosave)
-            await this.app.fileManager.saveFile(currentFilename, data, true);
+            await fileManager.saveFile(currentFilename, data, true);
             console.log('[DataManager] Autosave successful:', currentFilename);
             // Silently save - don't show alerts for autosave
         } catch (error) {
@@ -393,47 +442,44 @@ export class DataManager {
             if (confirm(`Load ${data.pages.length} page(s) from default.json? This will replace your current data.`)) {
                 // Migrate subtasks to children before loading
                 const migratedData = this.migrateSubtasksToChildren(data);
-                this.app.pages = migratedData.pages;
+                const appState = this._getAppState();
+                appState.pages = migratedData.pages;
                 
                 // Restore collapse states if they exist, otherwise reset to closed state
                 if (data.pageStates) {
-                    this.app.pageStates = data.pageStates;
-                } else {
-                    this.app.pageStates = {};
-                    // Initialize all pages as collapsed
-                    this.app.pages.forEach(page => {
-                        this.app.pageStates[page.id] = false;
+                    // Migrate pageStates to binStates
+                    Object.keys(data.pageStates).forEach(pageId => {
+                        const binId = pageId.replace(/^page-/, 'bin-');
+                        if (appState.setBinState) {
+                            appState.setBinState(binId, data.pageStates[pageId]);
+                        }
                     });
                 }
                 
                 if (migratedData.subtaskStates) {
-                    this.app.subtaskStates = migratedData.subtaskStates;
-                } else {
-                    this.app.subtaskStates = {};
-                    // Initialize all children as collapsed
-                    this.app.pages.forEach(page => {
-                        page.elements.forEach((element, elementIndex) => {
-                            if (element.children && element.children.length > 0) {
-                                const subtaskStateKey = `${page.id}-${elementIndex}`;
-                                this.app.subtaskStates[subtaskStateKey] = false;
-                            }
-                        });
+                    Object.keys(migratedData.subtaskStates).forEach(key => {
+                        if (appState.setSubtaskState) {
+                            appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                        }
                     });
                 }
                 
                 if (data.allSubtasksExpanded !== undefined) {
-                    this.app.allSubtasksExpanded = data.allSubtasksExpanded;
+                    appState.allSubtasksExpanded = data.allSubtasksExpanded;
                 } else {
-                    this.app.allSubtasksExpanded = false;
+                    appState.allSubtasksExpanded = false;
                 }
                 
                 // Restore settings if they exist
                 if (data.settings) {
-                    this.app.settingsManager.saveSettings(data.settings);
+                    const settingsManager = this._getSettingsManager();
+                    if (settingsManager) {
+                        settingsManager.saveSettings(data.settings);
+                    }
                 }
                 
                 this.saveData();
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 alert('default.json loaded successfully!');
             }
         } catch (error) {
@@ -443,14 +489,16 @@ export class DataManager {
     }
     
     saveToFile() {
+        const appState = this._getAppState();
+        const settingsManager = this._getSettingsManager();
         const data = {
-            pages: this.app.pages,
+            pages: appState.pages,
             lastModified: new Date().toISOString(),
             version: '1.0',
-            pageStates: this.app.pageStates,
-            subtaskStates: this.app.subtaskStates,
-            allSubtasksExpanded: this.app.allSubtasksExpanded,
-            settings: this.app.settingsManager.loadSettings()
+            pageStates: {}, // Legacy - binStates are now in AppState
+            subtaskStates: appState.subtaskStates || {},
+            allSubtasksExpanded: appState.allSubtasksExpanded,
+            settings: settingsManager ? settingsManager.loadSettings() : {}
         };
         
         const json = JSON.stringify(data, null, 2);
@@ -472,14 +520,16 @@ export class DataManager {
             return;
         }
         
+        const appState = this._getAppState();
+        const settingsManager = this._getSettingsManager();
         const data = {
-            pages: this.app.pages,
+            pages: appState.pages,
             lastModified: new Date().toISOString(),
             version: '1.0',
-            pageStates: this.app.pageStates,
-            subtaskStates: this.app.subtaskStates,
-            allSubtasksExpanded: this.app.allSubtasksExpanded,
-            settings: this.app.settingsManager.loadSettings()
+            pageStates: {}, // Legacy - binStates are now in AppState
+            subtaskStates: appState.subtaskStates || {},
+            allSubtasksExpanded: appState.allSubtasksExpanded,
+            settings: settingsManager ? settingsManager.loadSettings() : {}
         };
         
         try {
@@ -530,47 +580,44 @@ export class DataManager {
                 if (confirm(`Load ${data.pages.length} page(s) from file? This will replace your current data.`)) {
                     // Migrate subtasks to children before loading
                     const migratedData = this.migrateSubtasksToChildren(data);
-                    this.app.pages = migratedData.pages;
+                    const appState = this._getAppState();
+                    appState.pages = migratedData.pages;
                     
                     // Restore collapse states if they exist, otherwise reset to closed state
                     if (data.pageStates) {
-                        this.app.pageStates = data.pageStates;
-                    } else {
-                        this.app.pageStates = {};
-                        // Initialize all pages as collapsed
-                        this.app.pages.forEach(page => {
-                            this.app.pageStates[page.id] = false;
+                        // Migrate pageStates to binStates
+                        Object.keys(data.pageStates).forEach(pageId => {
+                            const binId = pageId.replace(/^page-/, 'bin-');
+                            if (appState.setBinState) {
+                                appState.setBinState(binId, data.pageStates[pageId]);
+                            }
                         });
                     }
                     
                     if (migratedData.subtaskStates) {
-                        this.app.subtaskStates = migratedData.subtaskStates;
-                    } else {
-                        this.app.subtaskStates = {};
-                        // Initialize all children as collapsed
-                        this.app.pages.forEach(page => {
-                            page.elements.forEach((element, elementIndex) => {
-                                if (element.children && element.children.length > 0) {
-                                    const subtaskStateKey = `${page.id}-${elementIndex}`;
-                                    this.app.subtaskStates[subtaskStateKey] = false;
-                                }
-                            });
+                        Object.keys(migratedData.subtaskStates).forEach(key => {
+                            if (appState.setSubtaskState) {
+                                appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                            }
                         });
                     }
                     
                     if (data.allSubtasksExpanded !== undefined) {
-                        this.app.allSubtasksExpanded = data.allSubtasksExpanded;
+                        appState.allSubtasksExpanded = data.allSubtasksExpanded;
                     } else {
-                        this.app.allSubtasksExpanded = false;
+                        appState.allSubtasksExpanded = false;
                     }
                     
                     // Restore settings if they exist
                     if (data.settings) {
-                        this.app.settingsManager.saveSettings(data.settings);
+                        const settingsManager = this._getSettingsManager();
+                        if (settingsManager) {
+                            settingsManager.saveSettings(data.settings);
+                        }
                     }
                     
                     this.saveData();
-                    this.app.render();
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                     alert('File loaded successfully!');
                 }
             } catch (error) {

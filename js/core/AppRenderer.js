@@ -24,6 +24,86 @@ export class AppRenderer {
         // this.calendarRenderer = new CalendarRenderer(app); // TEMPORARILY DISABLED
         this.animationRenderer = new AnimationRenderer(app);
         this.paneManager = new PaneManager(app, this);
+        this._lastScrollTop = null;
+        this._lastScrollLeft = null;
+        this._setupScrollTracking();
+    }
+    
+    /**
+     * Setup scroll tracking for debugging
+     */
+    _setupScrollTracking() {
+        // Only set up once
+        if (this._scrollTrackingSetup) return;
+        this._scrollTrackingSetup = true;
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this._setupScrollTracking());
+            return;
+        }
+        
+        const setupTracking = () => {
+            const container = document.getElementById('bins-container');
+            if (!container) {
+                // Retry after a short delay if container doesn't exist yet
+                setTimeout(setupTracking, 100);
+                return;
+            }
+            
+            // Remove existing listener if any
+            if (this._scrollTrackingHandler) {
+                container.removeEventListener('scroll', this._scrollTrackingHandler);
+            }
+            
+            // Track programmatic scroll changes by monitoring scrollTop/scrollLeft
+            let lastKnownScrollTop = container.scrollTop;
+            let lastKnownScrollLeft = container.scrollLeft;
+            
+            // Function to check and log scroll changes
+            const checkScrollChange = (source = 'unknown') => {
+                const currentScrollTop = container.scrollTop;
+                const currentScrollLeft = container.scrollLeft;
+                
+                if (currentScrollTop !== lastKnownScrollTop || currentScrollLeft !== lastKnownScrollLeft) {
+                    const scrollHeight = container.scrollHeight;
+                    const clientHeight = container.clientHeight;
+                    const scrollPercentage = scrollHeight > clientHeight ? ((currentScrollTop / (scrollHeight - clientHeight)) * 100).toFixed(1) : 0;
+                    
+                    console.log('[SCROLL TRACK] Scroll position changed:', {
+                        source,
+                        scrollTop: currentScrollTop.toFixed(0),
+                        scrollLeft: currentScrollLeft.toFixed(0),
+                        scrollHeight,
+                        clientHeight,
+                        scrollPercentage: scrollPercentage + '%',
+                        maxScrollTop: scrollHeight - clientHeight,
+                        deltaTop: lastKnownScrollTop !== null ? (currentScrollTop - lastKnownScrollTop).toFixed(0) : 'N/A',
+                        deltaLeft: lastKnownScrollLeft !== null ? (currentScrollLeft - lastKnownScrollLeft).toFixed(0) : 'N/A'
+                    });
+                    
+                    lastKnownScrollTop = currentScrollTop;
+                    lastKnownScrollLeft = currentScrollLeft;
+                    this._lastScrollTop = currentScrollTop;
+                    this._lastScrollLeft = currentScrollLeft;
+                }
+            };
+            
+            // Add scroll event listener (for user scrolling)
+            this._scrollTrackingHandler = (e) => {
+                checkScrollChange('user-scroll');
+            };
+            container.addEventListener('scroll', this._scrollTrackingHandler, { passive: true });
+            
+            // Monitor for programmatic changes using periodic checks
+            this._scrollCheckInterval = setInterval(() => {
+                checkScrollChange('programmatic');
+            }, 50);
+            
+            console.log('[SCROLL TRACK] Scroll tracking enabled on bins-container');
+        };
+        
+        setupTracking();
     }
     
     /**
@@ -55,28 +135,13 @@ export class AppRenderer {
         // Render page tabs
         this.renderPageTabs();
         
-        // Get current page
-        const currentPage = this.app.appState.pages.find(p => p.id === this.app.appState.currentPageId);
-        if (!currentPage) {
-            // If current page doesn't exist, use first page or create default
-            if (this.app.appState.pages.length > 0) {
-                this.app.appState.currentPageId = this.app.appState.pages[0].id;
-            } else {
-                // Create default page with one bin
-                this.app.appState.pages = [{
-                    id: 'page-1',
-                    bins: [{
-                        id: 'bin-0',
-                        title: 'Bin 1',
-                        elements: []
-                    }]
-                }];
-                this.app.appState.currentPageId = 'page-1';
-            }
-        }
+        // Get current page (ensure default exists via PageManager)
+        const pageManager = getService(SERVICES.PAGE_MANAGER);
+        const currentPage = pageManager.ensureDefaultPage();
         
         // Check if multi-pane mode is enabled (for now, we'll add a flag later)
-        const useMultiPane = this.app.appState.multiPaneEnabled !== false; // Default to true for now
+        const appState = getService(SERVICES.APP_STATE);
+        const useMultiPane = appState.multiPaneEnabled !== false; // Default to true for now
         
         if (useMultiPane) {
             // Initialize pane manager if not already done
@@ -92,7 +157,7 @@ export class AppRenderer {
             
             // If no panes, create one with current page
             if (allPanes.length === 0) {
-                this.paneManager.openPane(this.app.appState.currentPageId);
+                this.paneManager.openPane(appState.currentPageId);
             }
             
             return;
@@ -102,16 +167,22 @@ export class AppRenderer {
         const container = document.getElementById('bins-container');
         if (!container) return;
         
-        // Get active page
-        const activePage = this.app.appState.pages.find(p => p.id === this.app.appState.currentPageId);
+        // Get active page (reuse appState from line 63)
+        const activePage = appState.pages.find(p => p.id === appState.currentPageId);
         
         // Store old positions before re-rendering (only if container has content)
         const hasContent = container.children.length > 0;
         const oldPositions = hasContent ? this.getCurrentPositions() : { bins: {}, elements: {} };
         
+        // Preserve scroll position BEFORE any rendering or clearing
+        const scrollTop = container.scrollTop;
+        const scrollLeft = container.scrollLeft;
+        console.log('[SCROLL DEBUG] Preserving scroll position:', { scrollTop, scrollLeft, containerHeight: container.scrollHeight, clientHeight: container.clientHeight });
+        
         // Check if page has a format renderer BEFORE clearing
-        const pageFormat = this.app.formatRendererManager?.getPageFormat(this.app.appState.currentPageId);
-        const format = pageFormat ? this.app.formatRendererManager?.getFormat(pageFormat) : null;
+        const formatRendererManager = getService(SERVICES.FORMAT_RENDERER_MANAGER);
+        const pageFormat = formatRendererManager?.getPageFormat(appState.currentPageId);
+        const format = pageFormat ? formatRendererManager?.getFormat(pageFormat) : null;
         const shouldUseFormat = format && format.renderPage && activePage;
         
         // Only clear if we're not preserving format view (prevents flicker)
@@ -130,31 +201,48 @@ export class AppRenderer {
             // If format view is already rendered, update it instead of clearing
             if (this._preservingFormat && container.children.length > 0) {
                 // Update existing format view
+                console.log('[SCROLL DEBUG] Format render - updating existing (preserving format)', { scrollBeforeUpdate: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft } });
                 format.renderPage(container, activePage, { app: this.app });
+                console.log('[SCROLL DEBUG] Format render - after update', { scrollAfterUpdate: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             } else {
                 // First render or format changed - clear and render
+                console.log('[SCROLL DEBUG] Format render - clearing container', { scrollBeforeClear: { scrollTop, scrollLeft } });
                 container.innerHTML = '';
+                console.log('[SCROLL DEBUG] Format render - after clear', { scrollAfterClear: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft } });
                 format.renderPage(container, activePage, { app: this.app });
+                console.log('[SCROLL DEBUG] Format render - after renderPage', { scrollAfterRender: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             }
             
             // Reset format preservation flag after render
             this._preservingFormat = false;
             
-            // Emit page:render event for plugins
-            setTimeout(() => {
+            // Restore scroll position after format rendering
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                const beforeRestore = { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight };
+                console.log('[SCROLL DEBUG] Format render - About to restore scroll:', { 
+                    preserved: { scrollTop, scrollLeft }, 
+                    beforeRestore
+                });
+                container.scrollTop = scrollTop;
+                container.scrollLeft = scrollLeft;
+                const afterRestore = { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight };
+                console.log('[SCROLL DEBUG] Format render - After restore:', { 
+                    afterRestore,
+                    restored: afterRestore.scrollTop === scrollTop && afterRestore.scrollLeft === scrollLeft,
+                    difference: { top: (afterRestore.scrollTop - scrollTop).toFixed(0), left: (afterRestore.scrollLeft - scrollLeft).toFixed(0) }
+                });
+                
+                // Emit page:render event for plugins
                 if (this.app.eventBus && activePage) {
                     this.app.eventBus.emit('page:render', {
                         pageElement: container,
                         pageData: activePage
                     });
                 }
-            }, 0);
+            });
             return;
         }
-        
-        // Preserve scroll position before rendering
-        const scrollTop = container.scrollTop;
-        const scrollLeft = container.scrollLeft;
         
         // Apply theme for default view
         if (this.app.themeManager) {
@@ -166,13 +254,32 @@ export class AppRenderer {
         container.style.cssText = '';
         
         if (activePage && activePage.bins && activePage.bins.length > 0) {
+            console.log('[SCROLL DEBUG] Default render - before appending bins', { scrollBeforeAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             activePage.bins.forEach((bin, binIndex) => {
                 const binEl = this.binRenderer.renderBin(activePage.id, bin);
                 container.appendChild(binEl);
             });
+            console.log('[SCROLL DEBUG] Default render - after appending bins', { scrollAfterAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             
-            // Emit page:render event for plugins (after a short delay to ensure DOM is ready)
-            setTimeout(() => {
+            // Restore scroll position and emit events after rendering
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                // Restore scroll position after rendering
+                const beforeRestore = { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight };
+                console.log('[SCROLL DEBUG] Default render - About to restore scroll:', { 
+                    preserved: { scrollTop, scrollLeft }, 
+                    beforeRestore
+                });
+                container.scrollTop = scrollTop;
+                container.scrollLeft = scrollLeft;
+                const afterRestore = { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight };
+                console.log('[SCROLL DEBUG] Default render - After restore:', { 
+                    afterRestore,
+                    restored: afterRestore.scrollTop === scrollTop && afterRestore.scrollLeft === scrollLeft,
+                    difference: { top: (afterRestore.scrollTop - scrollTop).toFixed(0), left: (afterRestore.scrollLeft - scrollLeft).toFixed(0) }
+                });
+                
+                // Emit page:render event for plugins
                 if (this.app.eventBus && activePage) {
                     const pageElement = document.querySelector(`[data-page-id="${activePage.id}"], .page, #bins-container`);
                     if (pageElement) {
@@ -182,11 +289,7 @@ export class AppRenderer {
                         });
                     }
                 }
-                
-                // Restore scroll position after rendering
-                container.scrollTop = scrollTop;
-                container.scrollLeft = scrollLeft;
-            }, 0);
+            });
         }
         
         // If no bins, show empty state
@@ -205,10 +308,11 @@ export class AppRenderer {
         
         tabsContainer.innerHTML = '';
         
-        this.app.appState.pages.forEach((page, index) => {
+        const appState = getService(SERVICES.APP_STATE);
+        appState.pages.forEach((page, index) => {
             const tab = document.createElement('div');
             tab.className = 'page-tab';
-            if (page.id === this.app.appState.currentPageId) {
+            if (page.id === appState.currentPageId) {
                 tab.classList.add('active');
             }
             tab.dataset.pageId = page.id;
@@ -218,7 +322,7 @@ export class AppRenderer {
             // Click to switch page
             tab.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.app.appState.currentPageId = page.id;
+                appState.currentPageId = page.id;
                 eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
@@ -366,11 +470,12 @@ export class AppRenderer {
     }
     
     toggleAllSubtasks() {
-        this.app.appState.allSubtasksExpanded = !this.app.appState.allSubtasksExpanded;
+        const appState = getService(SERVICES.APP_STATE);
+        appState.allSubtasksExpanded = !appState.allSubtasksExpanded;
         
         // Update all individual subtask states to match global state
-        Object.keys(this.app.appState.subtaskStates).forEach(key => {
-            this.app.appState.subtaskStates[key] = this.app.appState.allSubtasksExpanded;
+        Object.keys(appState.subtaskStates || {}).forEach(key => {
+            appState.subtaskStates[key] = appState.allSubtasksExpanded;
         });
         
         // Find all subtask content and arrow elements
@@ -378,11 +483,11 @@ export class AppRenderer {
         const subtaskArrows = document.querySelectorAll('[id^="subtask-toggle-"]');
         
         subtaskContents.forEach(content => {
-            content.style.display = this.app.appState.allSubtasksExpanded ? 'block' : 'none';
+            content.style.display = appState.allSubtasksExpanded ? 'block' : 'none';
         });
         
         subtaskArrows.forEach(arrow => {
-            arrow.textContent = this.app.appState.allSubtasksExpanded ? '▼' : '▶';
+            arrow.textContent = appState.allSubtasksExpanded ? '▼' : '▶';
         });
     }
 }

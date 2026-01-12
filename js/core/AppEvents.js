@@ -227,6 +227,78 @@ export const EVENTS = {
          */
         DISABLED: 'plugin:disabled',
     },
+    
+    /**
+     * UI events
+     */
+    UI: {
+        /** UI state changed
+         * @event ui:changed
+         * @type {{type: string, value: any}}
+         * Emitted when UI state changes (e.g., multiPaneEnabled)
+         */
+        CHANGED: 'ui:changed',
+        
+        /** Show edit modal
+         * @event ui:show-edit-modal
+         * @type {{pageId: string, binId: string, elementIndex: number, element: Object}}
+         */
+        SHOW_EDIT_MODAL: 'ui:show-edit-modal',
+        
+        /** Show add element modal
+         * @event ui:show-add-element-modal
+         * @type {{pageId: string, binId?: string, elementIndex?: number}}
+         */
+        SHOW_ADD_ELEMENT_MODAL: 'ui:show-add-element-modal',
+        
+        /** Show add child element modal
+         * @event ui:show-add-child-element-modal
+         * @type {{pageId: string, binId: string, elementIndex: number}}
+         */
+        SHOW_ADD_CHILD_ELEMENT_MODAL: 'ui:show-add-child-element-modal',
+        
+        /** Show add subtasks modal
+         * @event ui:show-add-subtasks-modal
+         * @type {{pageId: string, binId: string, elementIndex: number, element: Object}}
+         */
+        SHOW_ADD_SUBTASKS_MODAL: 'ui:show-add-subtasks-modal',
+        
+        /** Show view data modal
+         * @event ui:show-view-data-modal
+         * @type {{element: Object, isSubtask?: boolean}}
+         */
+        SHOW_VIEW_DATA_MODAL: 'ui:show-view-data-modal',
+        
+        /** Show edit page modal
+         * @event ui:show-edit-page-modal
+         * @type {{pageId: string}}
+         */
+        SHOW_EDIT_PAGE_MODAL: 'ui:show-edit-page-modal',
+        
+        /** Show edit bin modal
+         * @event ui:show-edit-bin-modal
+         * @type {{pageId: string, binId: string}}
+         */
+        SHOW_EDIT_BIN_MODAL: 'ui:show-edit-bin-modal',
+        
+        /** Show visual customization modal
+         * @event ui:show-visual-customization-modal
+         * @type {{targetType: string, targetId: string, context: Object}}
+         */
+        SHOW_VISUAL_CUSTOMIZATION_MODAL: 'ui:show-visual-customization-modal',
+        
+        /** Close modal
+         * @event ui:close-modal
+         * @type {void}
+         */
+        CLOSE_MODAL: 'ui:close-modal',
+        
+        /** Focus input element
+         * @event ui:focus-input
+         * @type {{inputId: string, select?: boolean}}
+         */
+        FOCUS_INPUT: 'ui:focus-input',
+    },
 };
 
 /**

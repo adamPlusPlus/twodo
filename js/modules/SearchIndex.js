@@ -1,11 +1,18 @@
 // SearchIndex.js - Builds and maintains a search index for all elements
 import { DataUtils } from '../utils/data.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class SearchIndex {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.index = new Map(); // elementId -> searchable data
         this.rebuildIndex();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
@@ -14,12 +21,13 @@ export class SearchIndex {
     rebuildIndex() {
         this.index.clear();
         
+        const appState = this._getAppState();
         // Check if app and pages exist and is an array
-        if (!this.app || !this.app.pages || !Array.isArray(this.app.pages)) {
+        if (!appState || !appState.pages || !Array.isArray(appState.pages)) {
             return;
         }
         
-        this.app.pages.forEach(page => {
+        appState.pages.forEach(page => {
             if (page && page.bins) {
                 page.bins.forEach(bin => {
                     if (bin && bin.elements) {
@@ -154,7 +162,8 @@ export class SearchIndex {
      * Update index for a single element
      */
     updateElement(pageId, binId, elementIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);

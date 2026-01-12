@@ -2,31 +2,72 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { EventHelper } from '../utils/EventHelper.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class EventHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+    
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
+    }
+    
+    _getElementManager() {
+        return getService(SERVICES.ELEMENT_MANAGER);
+    }
+    
+    _getModalHandler() {
+        return getService(SERVICES.MODAL_HANDLER);
+    }
+    
+    _getBinManager() {
+        return getService(SERVICES.BIN_MANAGER);
+    }
+    
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getContextMenuHandler() {
+        return getService(SERVICES.CONTEXT_MENU_HANDLER);
     }
     
     setupEventListeners() {
         const loadDefaultBtn = document.getElementById('load-default');
         if (loadDefaultBtn) {
             loadDefaultBtn.addEventListener('click', () => {
-                this.app.dataManager.loadDefaultFile();
+                const dataManager = this._getDataManager();
+                if (dataManager) {
+                    dataManager.loadDefaultFile();
+                }
             });
         }
         
         const fileManagerBtn = document.getElementById('file-manager');
         if (fileManagerBtn) {
-            fileManagerBtn.addEventListener('click', () => {
-                this.app.fileManager.showFileManager();
-            });
+            fileManagerBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event from bubbling to document click handler
+                const fileManager = this._getFileManager();
+                if (fileManager) {
+                    fileManager.showFileManager();
+                }
+            }, true); // Use capture phase to ensure this runs first
         }
         
         const saveDefaultBtn = document.getElementById('save-default');
         if (saveDefaultBtn) {
             saveDefaultBtn.addEventListener('click', () => {
-                this.app.dataManager.saveAsDefault();
+                const dataManager = this._getDataManager();
+                if (dataManager) {
+                    dataManager.saveAsDefault();
+                }
             });
         }
         
@@ -34,7 +75,10 @@ export class EventHandler {
         const fileInput = document.getElementById('file-input');
         if (fileInput) {
             fileInput.addEventListener('change', (e) => {
-                this.app.dataManager.loadFromFile(e);
+                const dataManager = this._getDataManager();
+                if (dataManager) {
+                    dataManager.loadFromFile(e);
+                }
             });
         }
         
@@ -57,7 +101,10 @@ export class EventHandler {
         const recordAudioBtn = document.getElementById('record-audio');
         if (recordAudioBtn) {
             recordAudioBtn.addEventListener('click', () => {
-                this.app.audioHandler.showAudioRecordingModal();
+                const audioHandler = this._getAudioHandler();
+                if (audioHandler) {
+                    audioHandler.showAudioRecordingModal();
+                }
             });
         }
         
@@ -65,13 +112,12 @@ export class EventHandler {
         const undoBtn = document.getElementById('undo-btn');
         if (undoBtn) {
             undoBtn.addEventListener('click', () => {
-                if (this.app.undoRedoManager) {
-                    const success = this.app.undoRedoManager.undo();
+                const undoRedoManager = this._getUndoRedoManager();
+                if (undoRedoManager) {
+                    const success = undoRedoManager.undo();
                     if (!success) {
                         console.log('Nothing to undo');
                     }
-                } else {
-                    console.error('UndoRedoManager not initialized');
                 }
             });
         }
@@ -80,13 +126,12 @@ export class EventHandler {
         const redoBtn = document.getElementById('redo-btn');
         if (redoBtn) {
             redoBtn.addEventListener('click', () => {
-                if (this.app.undoRedoManager) {
-                    const success = this.app.undoRedoManager.redo();
+                const undoRedoManager = this._getUndoRedoManager();
+                if (undoRedoManager) {
+                    const success = undoRedoManager.redo();
                     if (!success) {
                         console.log('Nothing to redo');
                     }
-                } else {
-                    console.error('UndoRedoManager not initialized');
                 }
             });
         }
@@ -129,7 +174,10 @@ export class EventHandler {
         const settingsBtn = document.getElementById('settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => {
-                this.app.settingsManager.showSettingsModal();
+                const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                if (settingsManager) {
+                    settingsManager.showSettingsModal();
+                }
             });
         }
         
@@ -137,7 +185,10 @@ export class EventHandler {
         const settingsCloseBtn = document.getElementById('settings-close');
         if (settingsCloseBtn) {
             settingsCloseBtn.addEventListener('click', () => {
-                this.app.settingsManager.closeSettingsModal();
+                const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                if (settingsManager) {
+                    settingsManager.closeSettingsModal();
+                }
             });
         }
         
@@ -146,7 +197,10 @@ export class EventHandler {
         if (settingsModal) {
             settingsModal.addEventListener('click', (e) => {
                 if (e.target.id === 'settings-modal') {
-                    this.app.settingsManager.closeSettingsModal();
+                    const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                if (settingsManager) {
+                    settingsManager.closeSettingsModal();
+                }
                 }
             });
         }
@@ -175,11 +229,21 @@ export class EventHandler {
             });
             
             // Close dropdown when clicking on menu items
+            // Use capture phase to ensure this runs after specific button handlers
             dropdownMenu.querySelectorAll('button').forEach(button => {
-                button.addEventListener('click', () => {
-                    dropdownMenu.classList.remove('active');
-                    dropdownToggle.classList.remove('active');
-                });
+                button.addEventListener('click', (e) => {
+                    // Only close if this isn't the file-manager button (it has its own handler)
+                    if (button.id !== 'file-manager') {
+                        dropdownMenu.classList.remove('active');
+                        dropdownToggle.classList.remove('active');
+                    } else {
+                        // For file-manager, close dropdown after a short delay to allow handler to fire
+                        setTimeout(() => {
+                            dropdownMenu.classList.remove('active');
+                            dropdownToggle.classList.remove('active');
+                        }, 100);
+                    }
+                }, true); // Use capture phase
             });
         }
         
@@ -250,12 +314,16 @@ export class EventHandler {
         // Close context menu on outside click
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.context-menu')) {
-                this.app.contextMenuHandler.hideContextMenu();
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.hideContextMenu();
+                }
             }
             // Track active page when clicking on pages
             const pageEl = e.target.closest('.page');
             if (pageEl) {
-                this.app.activePageId = pageEl.dataset.pageId;
+                const appState = this._getAppState();
+                appState.currentPageId = pageEl.dataset.pageId;
             }
         });
         
@@ -286,10 +354,14 @@ export class EventHandler {
                 if (types[e.key]) {
                     e.preventDefault();
                     // Use active page or first page
-                    const targetPageId = this.app.activePageId || (this.app.pages.length > 0 ? this.app.pages[0].id : null);
-                    const targetBinId = this.app.activeBinId || (this.app.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
+                    const appState = this._getAppState();
+                    const targetPageId = appState.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : null);
+                    const targetBinId = appState.activeBinId || (appState.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
                     if (targetPageId && targetBinId) {
-                        this.app.elementManager.addElement(targetPageId, targetBinId, types[e.key]);
+                        const elementManager = this._getElementManager();
+                        if (elementManager) {
+                            elementManager.addElement(targetPageId, targetBinId, types[e.key]);
+                        }
                     }
                 }
             }
@@ -297,10 +369,14 @@ export class EventHandler {
             // Ctrl+N for adding element (shows modal)
             if (e.ctrlKey && e.key === 'n') {
                 e.preventDefault();
-                const targetPageId = this.app.activePageId || (this.app.pages.length > 0 ? this.app.pages[0].id : null);
-                const targetBinId = this.app.activeBinId || (this.app.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
+                const appState = this._getAppState();
+                const targetPageId = this.app?.activePageId || (appState.pages.length > 0 ? appState.pages[0].id : null);
+                const targetBinId = this.app?.activeBinId || (appState.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
                 if (targetPageId && targetBinId) {
-                    this.app.modalHandler.showAddElementModal(targetPageId, targetBinId);
+                    const modalHandler = this._getModalHandler();
+                    if (modalHandler) {
+                        modalHandler.showAddElementModal(targetPageId, targetBinId);
+                    }
                 }
             }
             
@@ -332,12 +408,16 @@ export class EventHandler {
             if (!e.target.closest('.bin') && !e.target.closest('.element')) {
                 e.preventDefault();
                 e.stopPropagation();
-                this.app.contextMenuHandler.showPageContextMenu(e);
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.showPageContextMenu(e);
+                }
             }
         };
         binsContainer.addEventListener('contextmenu', handleBinsContainerMenu);
         
         // Use EventHelper for double-click detection on bins container
+        const appState = this._getAppState();
         EventHelper.setupDoubleClick(
             binsContainer,
             (e) => {
@@ -348,7 +428,7 @@ export class EventHandler {
                     handlePageContainerMenu(e);
                 }
             },
-            this.app.doubleClickDelay,
+            appState.doubleClickDelay,
             {
                 filter: (e) => {
                     // Only process clicks on empty area
@@ -372,7 +452,8 @@ export class EventHandler {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             
-            const dragData = this.app.dragData || (() => {
+            const appState = this._getAppState();
+            const dragData = appState.dragData || (() => {
                 try {
                     return JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
                 } catch {
@@ -416,7 +497,8 @@ export class EventHandler {
                 return;
             }
             
-            let dragData = this.app.dragData;
+            const appState = this._getAppState();
+            let dragData = appState.dragData;
             if (!dragData) {
                 try {
                     const dataStr = e.dataTransfer.getData('text/plain');
@@ -437,18 +519,24 @@ export class EventHandler {
                 if (binEl) {
                     const targetPageId = binEl.dataset.pageId;
                     const targetBinId = binEl.dataset.binId;
-                    this.app.binManager.moveBin(dragData.pageId, dragData.binId, targetPageId, targetBinId);
+                    const binManager = this._getBinManager();
+                    if (binManager) {
+                        binManager.moveBin(dragData.pageId, dragData.binId, targetPageId, targetBinId);
+                    }
                 } else {
                     // Dropped on empty space, move to end of current page
-                    const page = this.app.pages.find(p => p.id === dragData.pageId);
+                    const page = appState.pages.find(p => p.id === dragData.pageId);
                     if (page) {
                         const bin = page.bins?.find(b => b.id === dragData.binId);
                         if (bin) {
                             const sourceIndex = page.bins.indexOf(bin);
                             page.bins.splice(sourceIndex, 1);
                             page.bins.push(bin);
-                            this.app.dataManager.saveData();
-                            this.app.render();
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                         }
                     }
                 }
@@ -461,12 +549,15 @@ export class EventHandler {
             }
             
             // Clear dragData after processing
-            this.app.dragData = null;
+            appState.dragData = null;
         });
         
         // Close context menu on left-click anywhere
         document.addEventListener('click', (e) => {
-            this.app.contextMenuHandler.hideContextMenu();
+            const contextMenuHandler = this._getContextMenuHandler();
+            if (contextMenuHandler) {
+                contextMenuHandler.hideContextMenu();
+            }
         });
 
         // Unified contextmenu handler - routes to appropriate ContextMenuHandler methods
@@ -482,43 +573,62 @@ export class EventHandler {
             // Route to appropriate handler
             if (elementEl) {
                 // Element context menu
-                const pageId = elementEl.dataset.pageId || this.app.appState.currentPageId;
+                const appState = this._getAppState();
+                const pageId = elementEl.dataset.pageId || appState.currentPageId;
                 const binId = elementEl.dataset.binId;
                 const elementIndex = parseInt(elementEl.dataset.elementIndex);
-                this.app.contextMenuHandler.showContextMenu(e, pageId, binId, elementIndex);
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.showContextMenu(e, pageId, binId, elementIndex);
+                }
                 return;
             }
             
             if (binEl && !elementEl) {
                 // Bin context menu
-                const pageId = binEl.dataset.pageId || this.app.appState.currentPageId;
+                const pageId = binEl.dataset.pageId || appState.currentPageId;
                 const binId = binEl.dataset.binId;
-                this.app.contextMenuHandler.showBinContextMenu(e, pageId, binId);
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.showBinContextMenu(e, pageId, binId);
+                }
                 return;
             }
             
             if (pageTabEl) {
                 // Page tab context menu
                 const pageId = pageTabEl.dataset.pageId;
-                this.app.contextMenuHandler.showPageContextMenu(e, pageId);
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.showPageContextMenu(e, pageId);
+                }
                 return;
             }
             
             // Empty area context menu (bins container or app area)
-            if (this.app && binsContainer) {
-                this.app.contextMenuHandler.showPageContextMenu(e);
+            if (binsContainer) {
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.showPageContextMenu(e);
+                }
                 return;
             }
             
             // If no specific handler, hide any active context menu
-            this.app.contextMenuHandler.hideContextMenu();
+            const contextMenuHandler = getService(SERVICES.CONTEXT_MENU_HANDLER);
+            if (contextMenuHandler) {
+                contextMenuHandler.hideContextMenu();
+            }
         }, true); // Use capture phase
         
         // Touch gesture handlers for mobile two-finger context menu
-        this.app.touchGestureHandler.setupTouchGestures();
-        
-        // Swipe gesture handlers for mobile
-        this.app.touchGestureHandler.setupSwipeGestures();
+        const touchGestureHandler = getService(SERVICES.TOUCH_GESTURE_HANDLER);
+        if (touchGestureHandler) {
+            touchGestureHandler.setupTouchGestures();
+            
+            // Swipe gesture handlers for mobile
+            touchGestureHandler.setupSwipeGestures();
+        }
         
         // Modal close handlers
         // Store the current edit info for the close button
@@ -526,13 +636,24 @@ export class EventHandler {
         
         document.querySelector('.modal-close').addEventListener('click', () => {
             // Use currentEdit if available, otherwise try to find it from the modal
-            if (this.app.currentEdit && this.app.currentEdit.pageId && this.app.currentEdit.elementIndex !== undefined) {
-                this.app.modalHandler.saveEdit(this.app.currentEdit.pageId, this.app.currentEdit.elementIndex);
+            const appState = this._getAppState();
+            const currentEdit = appState.currentEditModal;
+            if (currentEdit && currentEdit.pageId && currentEdit.elementIndex !== undefined) {
+                const modalHandler = this._getModalHandler();
+                if (modalHandler && currentEdit) {
+                    modalHandler.saveEdit(currentEdit.pageId, currentEdit.elementIndex);
+                }
             } else if (currentEditInfo) {
-                this.app.modalHandler.saveEdit(currentEditInfo.pageId, currentEditInfo.elementIndex);
+                const modalHandler = this._getModalHandler();
+                if (modalHandler) {
+                    modalHandler.saveEdit(currentEditInfo.pageId, currentEditInfo.elementIndex);
+                }
             } else {
                 // Fallback: close modal
-                this.app.modalHandler.closeModal();
+                const modalHandler = this._getModalHandler();
+                if (modalHandler) {
+                    modalHandler.closeModal();
+                }
             }
         });
         
@@ -549,14 +670,18 @@ export class EventHandler {
             // Only close if both mousedown and click were on the modal background (not modal-content)
             // This prevents closing when clicking inside and releasing outside
             if (e.target.id === 'modal' && modalMouseDownTarget && modalMouseDownTarget.id === 'modal') {
-                this.app.modalHandler.closeModal();
+                const modalHandler = this._getModalHandler();
+                if (modalHandler) {
+                    modalHandler.closeModal();
+                }
             }
             modalMouseDownTarget = null; // Reset
         });
         
         // Auto-scroll during drag when near screen edges
         document.addEventListener('dragover', (e) => {
-            if (!this.app.isDragging) return;
+            const appState = this._getAppState();
+            if (!appState.isDragging) return;
             
             const edgeThreshold = 50; // Distance from edge to trigger scrolling
             const viewportWidth = window.innerWidth;
@@ -569,30 +694,30 @@ export class EventHandler {
             
             // Check horizontal edges
             if (mouseX < edgeThreshold) {
-                scrollX = -this.app.edgeScrollSpeed;
+                scrollX = -appState.edgeScrollSpeed;
             } else if (mouseX > viewportWidth - edgeThreshold) {
-                scrollX = this.app.edgeScrollSpeed;
+                scrollX = appState.edgeScrollSpeed;
             }
             
             // Check vertical edges
             if (mouseY < edgeThreshold) {
-                scrollY = -this.app.edgeScrollSpeed;
+                scrollY = -appState.edgeScrollSpeed;
             } else if (mouseY > viewportHeight - edgeThreshold) {
-                scrollY = this.app.edgeScrollSpeed;
+                scrollY = appState.edgeScrollSpeed;
             }
             
             // Apply scrolling
             if (scrollX !== 0 || scrollY !== 0) {
                 // Clear existing interval
-                if (this.app.autoScrollInterval) {
-                    clearInterval(this.app.autoScrollInterval);
+                if (appState.autoScrollInterval) {
+                    clearInterval(appState.autoScrollInterval);
                 }
                 
                 // Start continuous scrolling
-                this.app.autoScrollInterval = setInterval(() => {
-                    if (!this.app.isDragging) {
-                        clearInterval(this.app.autoScrollInterval);
-                        this.app.autoScrollInterval = null;
+                appState.autoScrollInterval = setInterval(() => {
+                    if (!appState.isDragging) {
+                        clearInterval(appState.autoScrollInterval);
+                        appState.autoScrollInterval = null;
                         return;
                     }
                     
@@ -616,21 +741,22 @@ export class EventHandler {
                 }, 16); // ~60fps
             } else {
                 // Stop scrolling if not near edge
-                if (this.app.autoScrollInterval) {
-                    clearInterval(this.app.autoScrollInterval);
-                    this.app.autoScrollInterval = null;
+                if (appState.autoScrollInterval) {
+                    clearInterval(appState.autoScrollInterval);
+                    appState.autoScrollInterval = null;
                 }
             }
         });
         
         // Middle mouse wheel scrolling during drag
         document.addEventListener('wheel', (e) => {
-            if (!this.app.isDragging) return;
+            const appState = this._getAppState();
+            if (!appState.isDragging) return;
             
             // Check if middle mouse button is pressed (button 1)
             // Note: We can't directly check button state during wheel event,
             // so we'll track it via mousedown/mouseup
-            if (this.app.middleMouseDown) {
+            if (appState.middleMouseDown) {
                 e.preventDefault();
                 
                 const container = document.getElementById('pages-container');
@@ -652,17 +778,19 @@ export class EventHandler {
             }
         }, { passive: false });
         
-        // Track middle mouse button state
-        this.app.middleMouseDown = false;
+        // Track middle mouse button state (reuse appState from wheel handler scope)
+        // Get appState for middle mouse tracking
+        const appStateForMouse = this._getAppState();
+        appStateForMouse.middleMouseDown = false;
         document.addEventListener('mousedown', (e) => {
             if (e.button === 1) { // Middle mouse button
-                this.app.middleMouseDown = true;
+                appStateForMouse.middleMouseDown = true;
             }
         });
         
         document.addEventListener('mouseup', (e) => {
             if (e.button === 1) { // Middle mouse button
-                this.app.middleMouseDown = false;
+                appStateForMouse.middleMouseDown = false;
             }
         });
         

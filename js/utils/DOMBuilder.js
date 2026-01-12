@@ -66,18 +66,18 @@ export class DOMBuilder {
         // This is a safety check - should never receive empty strings, but handle it gracefully
         
         // LOGGING: Log the exact value received for debugging
-        console.log('[DOMBuilder.class] Entry - className:', className, 'type:', typeof className, 'length:', className?.length, 'isFalsy:', !className, 'isNull:', className == null, 'isEmptyString:', className === '');
+        // console.log('[DOMBuilder.class] Entry - className:', className, 'type:', typeof className, 'length:', className?.length, 'isFalsy:', !className, 'isNull:', className == null, 'isEmptyString:', className === '');
         
         // CRITICAL: Early return for all falsy values (null, undefined, false, 0, '', NaN)
         // Empty string is falsy, so this should catch it
         if (!className) {
-            console.log('[DOMBuilder.class] Early return - falsy value (includes empty string)');
+            // console.log('[DOMBuilder.class] Early return - falsy value (includes empty string)');
             return this;
         }
         
         // ADDITIONAL CHECK: Explicitly check for empty string (in case it's not caught above)
         if (className === '' || (typeof className === 'string' && className.trim() === '')) {
-            console.warn('[DOMBuilder.class] Early return - explicit empty string check');
+            // console.warn('[DOMBuilder.class] Early return - explicit empty string check');
             return this;
         }
         
@@ -85,18 +85,18 @@ export class DOMBuilder {
         if (typeof className === 'string') {
             // Check for empty string
             if (className === '') {
-                console.warn('[DOMBuilder.class] Empty string detected - returning early');
+                // console.warn('[DOMBuilder.class] Empty string detected - returning early');
                 return this;
             }
             
             const trimmed = className.trim();
             // Only add if trimmed string has content
             if (!trimmed || trimmed.length === 0) {
-                console.warn('[DOMBuilder.class] Whitespace-only string detected - returning early');
+                // console.warn('[DOMBuilder.class] Whitespace-only string detected - returning early');
                 return this;
             }
             
-            console.log('[DOMBuilder.class] Processing string - trimmed:', trimmed, 'length:', trimmed.length);
+            // console.log('[DOMBuilder.class] Processing string - trimmed:', trimmed, 'length:', trimmed.length);
             
             // Split by spaces in case multiple classes are passed
             const classes = trimmed.split(/\s+/).filter(c => {
@@ -119,7 +119,7 @@ export class DOMBuilder {
                 // Final validation before calling classList.add
                 const safeClasses = validClasses.filter(c => {
                     if (!c || typeof c !== 'string' || c === '' || c.trim() === '') {
-                        console.warn('[DOMBuilder] Filtering out invalid class:', c);
+                        // console.warn('[DOMBuilder] Filtering out invalid class:', c);
                         return false;
                     }
                     return true;
@@ -134,13 +134,13 @@ export class DOMBuilder {
                                        c.trim() !== '' &&
                                        c.trim().length > 0;
                         if (!isValid) {
-                            console.warn('[DOMBuilder.class] Final filter removing invalid class:', c);
+                            // console.warn('[DOMBuilder.class] Final filter removing invalid class:', c);
                         }
                         return isValid;
                     }).map(c => c.trim());
                     
                     if (finalSafeClasses.length > 0) {
-                        console.log('[DOMBuilder.class] Attempting to add classes:', finalSafeClasses);
+                        // console.log('[DOMBuilder.class] Attempting to add classes:', finalSafeClasses);
                         // CRITICAL: Add classes one at a time instead of using spread operator
                         // This prevents empty strings from causing errors
                         finalSafeClasses.forEach(c => {
@@ -156,21 +156,21 @@ export class DOMBuilder {
                                     const finalCheck = trimmed.trim();
                                     if (finalCheck && finalCheck.length > 0) {
                                         this.element.classList.add(finalCheck);
-                                        console.log('[DOMBuilder.class] Successfully added class:', finalCheck);
+                                        // console.log('[DOMBuilder.class] Successfully added class:', finalCheck);
                                     } else {
-                                        console.error('[DOMBuilder.class] CRITICAL: finalCheck failed for:', trimmed);
+                                        // console.error('[DOMBuilder.class] CRITICAL: finalCheck failed for:', trimmed);
                                     }
                                 } catch (err) {
-                                    console.error('[DOMBuilder.class] Failed to add class:', trimmed, 'error:', err, 'stack:', err.stack);
+                                    // console.error('[DOMBuilder.class] Failed to add class:', trimmed, 'error:', err, 'stack:', err.stack);
                                     // Don't throw - just log and continue
                                 }
                             } else {
-                                console.warn('[DOMBuilder.class] Skipping empty/invalid class:', c, 'trimmed:', trimmed);
+                                // console.warn('[DOMBuilder.class] Skipping empty/invalid class:', c, 'trimmed:', trimmed);
                             }
                         });
-                        console.log('[DOMBuilder.class] Finished adding classes');
+                        // console.log('[DOMBuilder.class] Finished adding classes');
                     } else {
-                        console.warn('[DOMBuilder.class] No valid classes after final filtering');
+                        // console.warn('[DOMBuilder.class] No valid classes after final filtering');
                     }
                 }
             }
@@ -199,16 +199,16 @@ export class DOMBuilder {
                             const finalCheck = trimmed.trim();
                             if (finalCheck && finalCheck.length > 0) {
                                 this.element.classList.add(finalCheck);
-                                console.log('[DOMBuilder.class] Successfully added class from array:', finalCheck);
+                                // console.log('[DOMBuilder.class] Successfully added class from array:', finalCheck);
                             } else {
-                                console.error('[DOMBuilder.class] CRITICAL: finalCheck failed for array item:', trimmed);
+                                // console.error('[DOMBuilder.class] CRITICAL: finalCheck failed for array item:', trimmed);
                             }
                         } catch (err) {
-                            console.error('[DOMBuilder.class] Failed to add class from array:', trimmed, 'error:', err, 'stack:', err.stack);
+                            // console.error('[DOMBuilder.class] Failed to add class from array:', trimmed, 'error:', err, 'stack:', err.stack);
                             // Don't throw - just log and continue
                         }
                     } else {
-                        console.warn('[DOMBuilder.class] Skipping empty/invalid class from array:', c, 'trimmed:', trimmed);
+                        // console.warn('[DOMBuilder.class] Skipping empty/invalid class from array:', c, 'trimmed:', trimmed);
                     }
                 });
             }

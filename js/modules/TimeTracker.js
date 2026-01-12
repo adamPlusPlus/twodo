@@ -1,13 +1,27 @@
 // TimeTracker.js - Time tracking system for elements and pages
 import { StorageUtils } from '../utils/storage.js';
 import { eventBus } from '../core/EventBus.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class TimeTracker {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.activeTimers = new Map(); // elementId -> timer data
         this.timeLogs = this.loadTimeLogs();
         this.storageKey = 'twodo-time-logs';
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
+     * Get DataManager service
+     */
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     loadTimeLogs() {
@@ -84,7 +98,8 @@ export class TimeTracker {
         });
         
         // Update element's total time if it has time tracking
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         const bin = page?.bins?.find(b => b.id === binId);
         const element = bin?.elements?.[elementIndex];
         
@@ -94,7 +109,10 @@ export class TimeTracker {
         }
         
         this.saveTimeLogs();
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
     }
     
     /**
@@ -163,7 +181,8 @@ export class TimeTracker {
      * Get time report for a page
      */
     getPageTimeReport(pageId, startDate, endDate) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         const report = {

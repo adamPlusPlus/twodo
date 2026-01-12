@@ -1,16 +1,24 @@
 // ExportService.js - Handles exporting pages to various formats
 import { DataUtils } from '../utils/data.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class ExportService {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
      * Export page to JSON
      */
     exportToJSON(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         const data = DataUtils.deepClone(page);
@@ -21,7 +29,8 @@ export class ExportService {
      * Export page to CSV
      */
     exportToCSV(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         const rows = [];
@@ -50,7 +59,8 @@ export class ExportService {
      * Export page to Markdown
      */
     exportToMarkdown(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         let md = `# ${page.title || page.id}\n\n`;
@@ -87,7 +97,8 @@ export class ExportService {
      * Export page to PDF (requires jsPDF library)
      */
     async exportToPDF(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         // Check if jsPDF is available

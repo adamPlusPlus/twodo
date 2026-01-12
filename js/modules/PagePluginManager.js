@@ -1,13 +1,21 @@
 // PagePluginManager - Manages page plugin lifecycle and rendering
 import { pluginRegistry } from '../core/PluginRegistry.js';
 import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
 import { DOMUtils } from '../utils/dom.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class PagePluginManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.pagePlugins = new Map(); // pageId -> Set of enabled pluginIds
         this.setupEventListeners();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
@@ -28,7 +36,8 @@ export class PagePluginManager {
      * @param {string} pageId - Page ID
      */
     async initializePagePlugins(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const enabledPlugins = page.plugins || [];
@@ -66,7 +75,8 @@ export class PagePluginManager {
      * @returns {Promise<boolean>} - Success status
      */
     async enablePlugin(pageId, pluginId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const plugin = pluginRegistry.get(pluginId);
@@ -77,7 +87,7 @@ export class PagePluginManager {
         
         // Initialize plugin if needed
         if (!pluginRegistry.isInitialized(pluginId)) {
-            await pluginRegistry.initialize(pluginId, this.app);
+            await pluginRegistry.initialize(pluginId, null);
         }
         
         // Enable plugin
@@ -100,8 +110,11 @@ export class PagePluginManager {
             pluginSet.add(pluginId);
             
             // Save and re-render
-            this.app.dataManager.saveData();
-            this.app.render();
+            const dataManager = this._getDataManager();
+            if (dataManager) {
+                dataManager.saveData();
+            }
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
             eventBus.emit('page:plugin:enabled', { pageId, pluginId });
         }
@@ -116,7 +129,8 @@ export class PagePluginManager {
      * @returns {Promise<boolean>} - Success status
      */
     async disablePlugin(pageId, pluginId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const success = await pluginRegistry.disable(pluginId);
@@ -133,8 +147,11 @@ export class PagePluginManager {
             }
             
             // Save and re-render
-            this.app.dataManager.saveData();
-            this.app.render();
+            const dataManager = this._getDataManager();
+            if (dataManager) {
+                dataManager.saveData();
+            }
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
             eventBus.emit('page:plugin:disabled', { pageId, pluginId });
         }
@@ -168,7 +185,8 @@ export class PagePluginManager {
      * @param {string} pageId - Page ID
      */
     renderPluginUI(container, pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const availablePlugins = this.getAvailablePlugins();
@@ -239,7 +257,8 @@ export class PagePluginManager {
                 const pluginContainer = DOMUtils.createElement('div', {
                     class: `plugin-content plugin-${plugin.id}`
                 });
-                const page = this.app.pages.find(p => p.id === pageId);
+                const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
                 plugin.render(pluginContainer, page);
                 container.appendChild(pluginContainer);
             }

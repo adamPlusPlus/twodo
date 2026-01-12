@@ -1,12 +1,19 @@
 // TemplateManager - Manages page and bin templates
 import { StorageUtils } from '../utils/storage.js';
 import { DataUtils } from '../utils/data.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class TemplateManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.templatesKey = 'twodo-templates';
         this.templates = this.loadTemplates();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
@@ -34,7 +41,8 @@ export class TemplateManager {
      * @returns {boolean} - Success status
      */
     savePageAsTemplate(pageId, templateName) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         // Create template copy (deep clone)
@@ -63,7 +71,8 @@ export class TemplateManager {
      * @returns {boolean} - Success status
      */
     saveBinAsTemplate(pageId, binId, templateName) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const bin = page.bins?.find(b => b.id === binId);

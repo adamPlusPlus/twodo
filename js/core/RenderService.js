@@ -54,7 +54,7 @@ export class RenderService {
             if (renderTime > 100) {
                 console.log(`[PERF] Render took ${renderTime.toFixed(1)}ms`);
             }
-            console.log(`[DIAG] Render complete: ${renderTime.toFixed(1)}ms`);
+            // console.log(`[DIAG] Render complete: ${renderTime.toFixed(1)}ms`);
             
             // Emit render complete event
             eventBus.emit(EVENTS.APP.RENDERED);

@@ -1,9 +1,26 @@
 // AudioHandler.js - Handles audio recording and playback
 import { ElementFinder } from '../utils/ElementFinder.js';
+import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class AudioHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+    
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
+    }
+    
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     showAudioRecordingModal() {
@@ -25,7 +42,8 @@ export class AudioHandler {
         previewAudio.style.display = 'none';
         saveControls.style.display = 'none';
         filenameInput.value = '';
-        this.app.appState.audioChunks = [];
+        const appState = this._getAppState();
+        appState.audioChunks = [];
         
         // Close button
         const closeBtn = document.getElementById('audio-recording-close');
@@ -69,17 +87,18 @@ export class AudioHandler {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            this.app.appState.mediaRecorder = new MediaRecorder(stream);
-            this.app.appState.audioChunks = [];
+            const appState = this._getAppState();
+            appState.mediaRecorder = new MediaRecorder(stream);
+            appState.audioChunks = [];
             
-            this.app.appState.mediaRecorder.ondataavailable = (event) => {
+            appState.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
-                    this.app.appState.audioChunks.push(event.data);
+                    appState.audioChunks.push(event.data);
                 }
             };
             
-            this.app.appState.mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(this.app.appState.audioChunks, { type: 'audio/webm' });
+            appState.mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(appState.audioChunks, { type: 'audio/webm' });
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const previewAudio = document.getElementById('audio-preview');
                 previewAudio.src = audioUrl;
@@ -89,8 +108,8 @@ export class AudioHandler {
                 stream.getTracks().forEach(track => track.stop());
             };
             
-            this.app.appState.mediaRecorder.start();
-            this.app.appState.recordingStartTime = Date.now();
+            appState.mediaRecorder.start();
+            appState.recordingStartTime = Date.now();
             
             // Update UI
             const startBtn = document.getElementById('audio-start-btn');
@@ -104,9 +123,9 @@ export class AudioHandler {
             statusDiv.style.color = '#ff5555';
             timeDiv.style.display = 'block';
             
-            // Start timer
-            this.app.appState.recordingTimer = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - this.app.appState.recordingStartTime) / 1000);
+            // Start timer (reuse appState from line 90)
+            appState.recordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - appState.recordingStartTime) / 1000);
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 timeDiv.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -119,13 +138,14 @@ export class AudioHandler {
     }
     
     stopAudioRecording() {
-        if (this.app.appState.mediaRecorder && this.app.appState.mediaRecorder.state !== 'inactive') {
-            this.app.appState.mediaRecorder.stop();
+        const appState = this._getAppState();
+        if (appState.mediaRecorder && appState.mediaRecorder.state !== 'inactive') {
+            appState.mediaRecorder.stop();
         }
         
-        if (this.app.appState.recordingTimer) {
-            clearInterval(this.app.appState.recordingTimer);
-            this.app.appState.recordingTimer = null;
+        if (appState.recordingTimer) {
+            clearInterval(appState.recordingTimer);
+            appState.recordingTimer = null;
         }
         
         const startBtn = document.getElementById('audio-start-btn');
@@ -141,12 +161,14 @@ export class AudioHandler {
     }
     
     async saveAudioRecording() {
-        if (this.app.appState.audioChunks.length === 0) {
+        const appState = this._getAppState();
+        if (appState.audioChunks.length === 0) {
             alert('No recording to save.');
             return;
         }
         
-        const audioBlob = new Blob(this.app.appState.audioChunks, { type: 'audio/webm' });
+        // Reuse appState from line 165
+        const audioBlob = new Blob(appState.audioChunks, { type: 'audio/webm' });
         const filenameInput = document.getElementById('audio-filename');
         let filename = filenameInput.value.trim();
         
@@ -231,7 +253,11 @@ export class AudioHandler {
             recorder.start();
             const startTime = Date.now();
             
-            this.app.appState.inlineAudioRecorders[audioKey] = {
+            const appState = this._getAppState();
+            if (!appState.inlineAudioRecorders) {
+                appState.inlineAudioRecorders = {};
+            }
+            appState.inlineAudioRecorders[audioKey] = {
                 recorder: recorder,
                 chunks: chunks,
                 startTime: startTime,
@@ -251,7 +277,8 @@ export class AudioHandler {
     async stopInlineRecording(pageId, binId, elementIndex, originalElementIndex = null) {
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
         const domElementIndex = originalElementIndex !== null ? originalElementIndex : elementIndex;
-        const recorderData = this.app.appState.inlineAudioRecorders[audioKey];
+        const appState = this._getAppState();
+        const recorderData = appState.inlineAudioRecorders?.[audioKey];
         
         if (recorderData && recorderData.recorder && recorderData.recorder.state !== 'inactive') {
             recorderData.recorder.stop();
@@ -272,7 +299,7 @@ export class AudioHandler {
             await this.saveInlineRecording(pageId, binId, elementIndex, recorderData.chunks, saveDomIndex);
             
             // Clean up
-            delete this.app.appState.inlineAudioRecorders[audioKey];
+            delete appState.inlineAudioRecorders[audioKey];
         }
     }
     
@@ -282,7 +309,8 @@ export class AudioHandler {
             return;
         }
         
-        const page = this.app.appState.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) {
             return;
         }
@@ -306,7 +334,8 @@ export class AudioHandler {
 
         // element is already declared above in error handling
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
-        const recorderData = this.app.appState.inlineAudioRecorders[audioKey];
+        // Reuse appState from line 312
+        const recorderData = appState.inlineAudioRecorders?.[audioKey];
         
         let audioBlob = new Blob(chunks, { type: 'audio/webm' });
         let filename = element.audioFile;
@@ -346,11 +375,14 @@ export class AudioHandler {
                 // Update element with file reference
                 element.audioFile = filename;
                 element.date = today;
-                this.app.dataManager.saveData();
+                const dataManager = this._getDataManager();
+                if (dataManager) {
+                    dataManager.saveData();
+                }
                 // Use domElementIndex for status update if provided, otherwise use elementIndex
                 const statusIndex = domElementIndex !== null ? domElementIndex : elementIndex;
                 this.updateAudioStatus(pageId, binId, statusIndex, `File: ${filename} (${today})`, '#4a9eff');
-                this.app.render(); // Re-render to show new controls
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED); // Re-render to show new controls
             } else {
                 throw new Error(result.error || 'Unknown error');
             }
@@ -364,7 +396,8 @@ export class AudioHandler {
     async appendInlineRecording(pageId, binId, elementIndex, originalElementIndex = null) {
         const domElementIndex = originalElementIndex !== null ? originalElementIndex : elementIndex;
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
-        const page = this.app.appState.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) {
             return;
         }
@@ -395,9 +428,10 @@ export class AudioHandler {
             await this.startInlineRecording(pageId, binId, elementIndex, domElementIndex, false);
             
             // Mark as append mode and store existing blob
-            if (this.app.appState.inlineAudioRecorders[audioKey]) {
-                this.app.appState.inlineAudioRecorders[audioKey].isAppend = true;
-                this.app.appState.inlineAudioRecorders[audioKey].existingBlob = existingBlob;
+            const appState = this._getAppState();
+            if (appState.inlineAudioRecorders?.[audioKey]) {
+                appState.inlineAudioRecorders[audioKey].isAppend = true;
+                appState.inlineAudioRecorders[audioKey].existingBlob = existingBlob;
             }
         } catch (error) {
             alert('Failed to load existing recording for appending.');
@@ -406,7 +440,8 @@ export class AudioHandler {
     
     async playInlineAudio(pageId, binId, elementIndex) {
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
-        const page = this.app.appState.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         
         if (!page) {
             return;
@@ -423,7 +458,11 @@ export class AudioHandler {
 
         try {
             // Create player if it doesn't exist
-            if (!this.app.appState.inlineAudioPlayers[audioKey]) {
+            const appState = this._getAppState();
+            if (!appState.inlineAudioPlayers) {
+                appState.inlineAudioPlayers = {};
+            }
+            if (!appState.inlineAudioPlayers[audioKey]) {
                 const response = await fetch(`/saved_files/recordings/${filename}`);
                 if (!response.ok) {
                     throw new Error(`Failed to load audio file: ${response.status}`);
@@ -433,14 +472,15 @@ export class AudioHandler {
                 const audioUrl = URL.createObjectURL(blob);
                 const audio = new Audio(audioUrl);
 
-                this.app.appState.inlineAudioPlayers[audioKey] = {
+                appState.inlineAudioPlayers[audioKey] = {
                     audio: audio,
                     isPlaying: false,
                     url: audioUrl
                 };
             }
 
-            const player = this.app.appState.inlineAudioPlayers[audioKey];
+            // Reuse appState from line 461
+            const player = appState.inlineAudioPlayers?.[audioKey];
 
             if (player.isPlaying) {
                 // Pause
@@ -500,8 +540,9 @@ export class AudioHandler {
     
     stopInlineAudio(pageId, binId, elementIndex) {
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
-        const player = this.app.appState.inlineAudioPlayers[audioKey];
-        const page = this.app.appState.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const player = appState.inlineAudioPlayers?.[audioKey];
+        const page = appState.pages.find(p => p.id === pageId);
 
         if (!page) {
             console.error('Page not found:', pageId);
@@ -570,7 +611,8 @@ export class AudioHandler {
         
         if (archiveView.style.display === 'none') {
             // Show archive
-            const archived = this.app.dataManager.getArchivedRecordings(pageId, elementIndex);
+            const dataManager = this._getDataManager();
+            const archived = dataManager ? dataManager.getArchivedRecordings(pageId, elementIndex) : [];
             if (archived.length === 0) {
                 archiveView.innerHTML = '<div style="padding: 10px; color: #888;">No archived recordings</div>';
             } else {

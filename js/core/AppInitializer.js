@@ -2,6 +2,7 @@
 // Extracted from app.js to reduce coupling and improve modularity
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
+import { pluginDiscovery } from './PluginDiscovery.js';
 
 /**
  * AppInitializer - Manages application initialization sequence
@@ -67,7 +68,7 @@ export class AppInitializer {
         const initLoadStart = performance.now();
         await this.app.loadLastOpenedFile();
         const initLoadTime = performance.now() - initLoadStart;
-        console.log(`[DIAG] AppInitializer.init() - loadLastOpenedFile took: ${initLoadTime.toFixed(1)}ms`);
+        // console.log(`[DIAG] AppInitializer.init() - loadLastOpenedFile took: ${initLoadTime.toFixed(1)}ms`);
         
         // Now render with the loaded data
         eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
@@ -109,42 +110,19 @@ export class AppInitializer {
     
     /**
      * Load all available plugins
-     * Extracted from app.js for better organization
+     * Uses PluginDiscovery to load plugins from manifest
      */
     async loadAllPlugins() {
-        // Define all plugin paths
-        const elementTypes = [
-            'LinkBookmarkElement', 'CodeSnippetElement', 'TableElement',
-            'ContactElement', 'ExpenseTrackerElement', 'ReadingListElement',
-            'RecipeElement', 'WorkoutElement', 'MoodTrackerElement',
-            'NoteElement', 'HabitTracker', 'TimeTracking',
-            'ElementRelationships', 'CustomProperties'
-        ];
-        
-        const pagePlugins = [
-            'SearchFilter', 'ExportImport', 'PageTemplates', 'CustomScripts',
-            'PageThemes', 'CustomViews', 'AnalyticsDashboard',
-            'PageGoalSetting', 'PageReminderSystem'
-        ];
-        
-        const binPlugins = [
-            'KanbanBoard', 'WorkflowAutomation', 'BatchOperations', 'CustomSorting',
-            'FilterPresets', 'ProgressTracker', 'TimeEstimates', 'ColorCoding',
-            'BinArchive', 'BinStatistics', 'BinNotificationRules', 'GanttChartView'
-        ];
-        
-        const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat',
-            'LaTeXEditorFormat', 'MindMapFormat', 'LogicGraphFormat', 'FlowchartFormat'
-        ];
+        // Get plugin definitions from PluginDiscovery
+        const plugins = await pluginDiscovery.getAllPlugins();
         
         // Load all plugins
         const loadPromises = [];
         
         // Load element types
-        for (const type of elementTypes) {
+        for (const pluginDef of plugins.elementTypes) {
             loadPromises.push(
-                this.app.pluginLoader.loadPlugin(`/js/plugins/element/${type}.js`, null, this.app)
+                this.app.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this.app)
                     .catch(err => {
                         // Silently ignore connection/fetch errors (file doesn't exist or server issue)
                         // These are expected for optional plugins that may not be implemented yet
@@ -156,16 +134,16 @@ export class AppInitializer {
                             return null;
                         }
                         // Log other unexpected errors
-                        console.warn(`Failed to load element type ${type}:`, err);
+                        console.warn(`Failed to load element type ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load page plugins
-        for (const plugin of pagePlugins) {
+        for (const pluginDef of plugins.pagePlugins) {
             loadPromises.push(
-                this.app.pluginLoader.loadPlugin(`/js/plugins/page/${plugin}.js`, null, this.app)
+                this.app.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this.app)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -174,16 +152,16 @@ export class AppInitializer {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load page plugin ${plugin}:`, err);
+                        console.warn(`Failed to load page plugin ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load bin plugins
-        for (const plugin of binPlugins) {
+        for (const pluginDef of plugins.binPlugins) {
             loadPromises.push(
-                this.app.pluginLoader.loadPlugin(`/js/plugins/bin/${plugin}.js`, null, this.app)
+                this.app.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this.app)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -192,16 +170,16 @@ export class AppInitializer {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load bin plugin ${plugin}:`, err);
+                        console.warn(`Failed to load bin plugin ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load format renderers
-        for (const format of formatRenderers) {
+        for (const pluginDef of plugins.formatRenderers) {
             loadPromises.push(
-                this.app.pluginLoader.loadPlugin(`/js/plugins/format/${format}.js`, null, this.app)
+                this.app.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this.app)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -210,7 +188,7 @@ export class AppInitializer {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load format renderer ${format}:`, err);
+                        console.warn(`Failed to load format renderer ${pluginDef.name}:`, err);
                         return null;
                     })
             );

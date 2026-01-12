@@ -2,6 +2,7 @@
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
+import { getService, SERVICES } from '../../core/AppServices.js';
 
 export default class SearchFilter extends BasePlugin {
     constructor(app = null, config = {}) {
@@ -229,7 +230,9 @@ export default class SearchFilter extends BasePlugin {
 
         // Populate pages
         if (filterPage) {
-            filterPage.innerHTML = this.app.pages.map(page => 
+            const appState = getService(SERVICES.APP_STATE);
+            const pages = appState?.pages || [];
+            filterPage.innerHTML = pages.map(page => 
                 `<option value="${StringUtils.escapeHtml(page.id)}">${StringUtils.escapeHtml(page.title || page.id)}</option>`
             ).join('');
         }

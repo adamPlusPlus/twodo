@@ -35,6 +35,8 @@ export class AppState {
         this._subtaskStates = {}; // Track individual subtask visibility
         this._activeBinId = null;
         this._currentEnterKeyHandler = null;
+        this._multiEditState = null;
+        this._pageStates = {}; // Track collapsed/expanded state of pages
         
         // Drag and drop state
         this._dragData = null;
@@ -48,6 +50,9 @@ export class AppState {
         // Touch gesture state
         this._touchPoints = {};
         this._firstTouchData = null;
+        
+        // Mouse state
+        this._middleMouseDown = false;
         
         // Audio recording state (legacy)
         this._mediaRecorder = null;
@@ -264,6 +269,15 @@ export class AppState {
         this._autoScrollInterval = value;
     }
     
+    // Middle mouse button state
+    get middleMouseDown() {
+        return this._middleMouseDown;
+    }
+    
+    set middleMouseDown(value) {
+        this._middleMouseDown = value;
+    }
+    
     // Edge scroll speed
     get edgeScrollSpeed() {
         return this._edgeScrollSpeed;
@@ -399,6 +413,8 @@ export class AppState {
         app.subtaskStates = this._subtaskStates;
         app.activeBinId = this._activeBinId;
         app.currentEnterKeyHandler = this._currentEnterKeyHandler;
+        app.multiEditState = this._multiEditState;
+        app.pageStates = this._pageStates;
         app.dragData = this._dragData;
         app.nestTargetElement = this._nestTargetElement;
         app.lastMovedElement = this._lastMovedElement;

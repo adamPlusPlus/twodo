@@ -1,10 +1,10 @@
 // FileManager.js - Handles server-side file management
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class FileManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.currentFilename = null;
         this.lastOpenedFileKey = 'twodo-last-opened-file';
         // Backup loading state
@@ -12,6 +12,21 @@ export class FileManager {
         this.tempFilename = null;  // Temporary filename for saves (filename-1.json, overwritten by autosaves)
         this.isBackupLoaded = false;  // Whether a backup file was loaded
         this.backupDiffers = false;  // Whether the backup differs from current file
+    }
+    
+    /**
+     * Get services
+     */
+    _getModalHandler() {
+        return getService(SERVICES.MODAL_HANDLER);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
+    }
+    
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     async listFiles() {
@@ -28,8 +43,9 @@ export class FileManager {
             }
         } catch (error) {
             console.error('Error listing files:', error);
-            if (this.app && this.app.modalHandler) {
-                this.app.modalHandler.showAlert('Failed to list files: ' + error.message);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                modalHandler.showAlert('Failed to list files: ' + error.message);
             } else {
                 alert('Failed to list files: ' + error.message);
             }
@@ -75,8 +91,9 @@ export class FileManager {
                 }
                 
                 // Trigger buffer save after main file save
-                if (this.app && this.app.undoRedoManager) {
-                    this.app.undoRedoManager._debouncedSaveBuffer();
+                const undoRedoManager = this._getUndoRedoManager();
+                if (undoRedoManager) {
+                    undoRedoManager._debouncedSaveBuffer();
                 }
                 
                 return result;
@@ -87,8 +104,9 @@ export class FileManager {
             console.error('Error saving file:', error);
             // Only show alert if not silent (for autosave)
             if (!silent) {
-                if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert('Failed to save file: ' + error.message);
+                const modalHandler = this._getModalHandler();
+                if (modalHandler) {
+                    await modalHandler.showAlert('Failed to save file: ' + error.message);
                 } else {
                     alert('Failed to save file: ' + error.message);
                 }
@@ -124,8 +142,9 @@ export class FileManager {
             }
         } catch (error) {
             console.error('Error saving file:', error);
-            if (this.app && this.app.modalHandler) {
-                await this.app.modalHandler.showAlert('Failed to save file: ' + error.message);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                await modalHandler.showAlert('Failed to save file: ' + error.message);
             } else {
                 alert('Failed to save file: ' + error.message);
             }
@@ -147,7 +166,7 @@ export class FileManager {
                 
                 // Check how many requests are in flight before our fetch
                 const requestsBefore = performance.getEntriesByType('resource').length;
-                console.log(`[DIAG] FileManager.loadFile(): ${requestsBefore} resource requests before fetch`);
+                // console.log(`[DIAG] FileManager.loadFile(): ${requestsBefore} resource requests before fetch`);
                 
                 const response = await fetch(fetchUrl, {
                     signal: controller.signal,
@@ -161,16 +180,16 @@ export class FileManager {
                     const resourceTimings = performance.getEntriesByType('resource');
                     const resourceTiming = resourceTimings.find(entry => entry.name.includes(encodedFilename));
                     if (resourceTiming) {
-                        console.log('[DIAG] FileManager.loadFile() network timing:', {
-                            stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
-                            dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
-                            tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
-                            ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
-                            download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
-                            total: resourceTiming.duration.toFixed(1) + 'ms'
-                        });
+                        // console.log('[DIAG] FileManager.loadFile() network timing:', {
+                        //     stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
+                        //     dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
+                        //     tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
+                        //     ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
+                        //     download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
+                        //     total: resourceTiming.duration.toFixed(1) + 'ms'
+                        // });
                     } else {
-                        console.log('[DIAG] FileManager.loadFile(): Could not find resource timing entry');
+                        // console.log('[DIAG] FileManager.loadFile(): Could not find resource timing entry');
                     }
                 }, 100);
                 
@@ -192,11 +211,14 @@ export class FileManager {
                     this.currentFilename = result.filename;
                     
                     // Load corresponding buffer file after loading main file (if requested)
-                    if (loadBuffer && this.app && this.app.undoRedoManager) {
-                        const bufferStart = performance.now();
-                        await this.app.undoRedoManager.loadBuffer(result.filename);
-                        const bufferTime = performance.now() - bufferStart;
-                        console.log(`[PERF] Buffer load: ${bufferTime.toFixed(1)}ms`);
+                    if (loadBuffer) {
+                        const undoRedoManager = this._getUndoRedoManager();
+                        if (undoRedoManager) {
+                            const bufferStart = performance.now();
+                            await undoRedoManager.loadBuffer(result.filename);
+                            const bufferTime = performance.now() - bufferStart;
+                            console.log(`[PERF] Buffer load: ${bufferTime.toFixed(1)}ms`);
+                        }
                     }
                     
                     const totalTime = performance.now() - perfStart;
@@ -217,8 +239,9 @@ export class FileManager {
             // Only show alert for non-404 errors (404 is handled by caller)
             if (error.status !== 404 && !error.message.includes('timeout')) {
                 console.error('Error loading file:', error);
-                if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert('Failed to load file: ' + error.message);
+                const modalHandler = this._getModalHandler();
+                if (modalHandler) {
+                    await modalHandler.showAlert('Failed to load file: ' + error.message);
                 } else {
                     alert('Failed to load file: ' + error.message);
                 }
@@ -255,8 +278,9 @@ export class FileManager {
             }
         } catch (error) {
             console.error('Error renaming file:', error);
-            if (this.app && this.app.modalHandler) {
-                await this.app.modalHandler.showAlert('Failed to rename file: ' + error.message);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                await modalHandler.showAlert('Failed to rename file: ' + error.message);
             } else {
                 alert('Failed to rename file: ' + error.message);
             }
@@ -286,8 +310,9 @@ export class FileManager {
             }
         } catch (error) {
             console.error('Error deleting file:', error);
-            if (this.app && this.app.modalHandler) {
-                await this.app.modalHandler.showAlert('Failed to delete file: ' + error.message);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                await modalHandler.showAlert('Failed to delete file: ' + error.message);
             } else {
                 alert('Failed to delete file: ' + error.message);
             }
@@ -298,6 +323,11 @@ export class FileManager {
     showFileManager() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
+        
+        if (!modal || !modalBody) {
+            console.error('[FileManager] Modal elements not found!');
+            return;
+        }
         
         modalBody.innerHTML = `
             <h3>File Manager</h3>
@@ -408,7 +438,7 @@ export class FileManager {
                 // Overwrite original file
                 try {
                     const data = {
-                        pages: this.app.pages
+                        pages: this._getAppState().pages
                     };
                     
                     // Store temp filename for cleanup
@@ -455,7 +485,7 @@ export class FileManager {
         
         try {
             const data = {
-                pages: this.app.pages
+                pages: this._getAppState().pages
             };
             
             console.log('[FileManager] Manual save - currentFilename:', this.currentFilename);
@@ -497,7 +527,7 @@ export class FileManager {
         
         try {
             const data = {
-                pages: this.app.pages
+                pages: this._getAppState().pages
             };
             
             // Store temp filename for cleanup
@@ -553,25 +583,23 @@ export class FileManager {
                 return;
             }
             
-            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
-            if (this.app.appState) {
-                this.app.appState.pages = data.pages;
-                // Update currentPageId if needed
-                if (data.pages.length > 0 && !data.pages.find(p => p.id === this.app.appState.currentPageId)) {
-                    this.app.appState.currentPageId = data.pages[0].id;
-                }
+            // Update appState.pages
+            const appState = this._getAppState();
+            appState.pages = data.pages;
+            // Update currentPageId if needed
+            if (data.pages.length > 0 && !data.pages.find(p => p.id === appState.currentPageId)) {
+                appState.currentPageId = data.pages[0].id;
             }
-            // Also set app.pages for backward compatibility with other modules
-            this.app.pages = data.pages;
             
             // Store last opened file in localStorage (device-specific)
             localStorage.setItem(this.lastOpenedFileKey, filename);
             
             // Request render via EventBus
             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
-            this.app.modalHandler.closeModal();
-            if (this.app && this.app.modalHandler) {
-                await this.app.modalHandler.showAlert(`File loaded: ${filename}`);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                modalHandler.closeModal();
+                await modalHandler.showAlert(`File loaded: ${filename}`);
             } else {
                 alert(`File loaded: ${filename}`);
             }
@@ -650,33 +678,31 @@ export class FileManager {
                 this.currentFilename = filename;
             }
             
-            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
-            if (this.app.appState) {
-                this.app.appState.pages = backupData.pages;
-                // Update currentPageId if needed
-                if (backupData.pages.length > 0 && !backupData.pages.find(p => p.id === this.app.appState.currentPageId)) {
-                    this.app.appState.currentPageId = backupData.pages[0].id;
-                }
+            // Update appState.pages
+            const appState = this._getAppState();
+            appState.pages = backupData.pages;
+            // Update currentPageId if needed
+            if (backupData.pages.length > 0 && !backupData.pages.find(p => p.id === appState.currentPageId)) {
+                appState.currentPageId = backupData.pages[0].id;
             }
-            // Also set app.pages for backward compatibility with other modules
-            this.app.pages = backupData.pages;
             
             // Store last opened file in localStorage (device-specific) - use original filename, not backup
             localStorage.setItem(this.lastOpenedFileKey, filename);
             
             // Request render via EventBus
             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
-            this.app.modalHandler.closeModal();
-            
-            if (differs) {
-                if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                modalHandler.closeModal();
+                
+                if (differs) {
+                    await modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
                 } else {
-                    alert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
+                    await modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup is identical to the current file.`);
                 }
             } else {
-                if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert(`Backup file loaded: ${backupFilename}\n\nThis backup is identical to the current file.`);
+                if (differs) {
+                    alert(`Backup file loaded: ${backupFilename}\n\nThis backup differs from the current file. Saves will go to temporary file: ${this.tempFilename}\n\nWhen you manually save, you'll be asked to overwrite the original or save as a new file.`);
                 } else {
                     alert(`Backup file loaded: ${backupFilename}\n\nThis backup is identical to the current file.`);
                 }
@@ -767,10 +793,11 @@ export class FileManager {
         
         try {
             // Auto-save current file if one is open
-            if (this.currentFilename && this.app && this.app.pages) {
+            const appState = this._getAppState();
+            if (this.currentFilename && appState && appState.pages) {
                 try {
                     const currentData = {
-                        pages: this.app.pages
+                        pages: this._getAppState().pages
                     };
                     await this.saveFile(this.currentFilename, currentData);
                 } catch (saveError) {
@@ -809,23 +836,22 @@ export class FileManager {
                 return;
             }
             
-            // Update appState.pages (used by renderer) and app.pages (for backward compatibility)
-            if (this.app.appState) {
-                this.app.appState.pages = loadedData.pages;
-                // Update currentPageId if needed
-                if (loadedData.pages.length > 0 && !loadedData.pages.find(p => p.id === this.app.appState.currentPageId)) {
-                    this.app.appState.currentPageId = loadedData.pages[0].id;
-                }
+            // Update appState.pages (reuse appState from line 791)
+            appState.pages = loadedData.pages;
+            // Update currentPageId if needed
+            if (loadedData.pages.length > 0 && !loadedData.pages.find(p => p.id === appState.currentPageId)) {
+                appState.currentPageId = loadedData.pages[0].id;
             }
-            // Also set app.pages for backward compatibility with other modules
-            this.app.pages = loadedData.pages;
             
             // Store last opened file in localStorage (device-specific)
             localStorage.setItem(this.lastOpenedFileKey, this.currentFilename);
             
             // Request render via EventBus
             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
-            this.app.modalHandler.closeModal();
+            const modalHandler = this._getModalHandler();
+            if (modalHandler) {
+                modalHandler.closeModal();
+            }
             
             // Refresh file list to show the new file as current
             this.refreshFileList();

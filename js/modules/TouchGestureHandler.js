@@ -1,7 +1,21 @@
 // TouchGestureHandler.js - Handles touch gestures for mobile devices
+import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
+
 export class TouchGestureHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     setupTouchGestures() {
@@ -9,11 +23,12 @@ export class TouchGestureHandler {
         document.addEventListener('touchstart', (e) => {
             const touches = Array.from(e.touches);
             
+            const appState = this._getAppState();
             // Store all current touches
             touches.forEach(touch => {
-                if (!this.app.touchPoints[touch.identifier]) {
+                if (!appState.touchPoints[touch.identifier]) {
                     // New touch - store it with timestamp
-                    this.app.touchPoints[touch.identifier] = {
+                    appState.touchPoints[touch.identifier] = {
                         x: touch.clientX,
                         y: touch.clientY,
                         target: document.elementFromPoint(touch.clientX, touch.clientY),
@@ -24,13 +39,13 @@ export class TouchGestureHandler {
             
             // If we now have 2 touches (second finger just touched)
             if (touches.length === 2) {
-                const touchIds = Object.keys(this.app.touchPoints).map(id => parseInt(id));
+                const touchIds = Object.keys(appState.touchPoints).map(id => parseInt(id));
                 // Get the first touch (oldest)
                 const firstTouchId = touchIds.sort((a, b) => 
-                    this.app.touchPoints[a].time - this.app.touchPoints[b].time
+                    appState.touchPoints[a].time - appState.touchPoints[b].time
                 )[0];
                 
-                const firstTouch = this.app.touchPoints[firstTouchId];
+                const firstTouch = appState.touchPoints[firstTouchId];
                 const timeHeld = Date.now() - firstTouch.time;
                 
                 // If first touch has been held for at least 100ms
@@ -60,9 +75,10 @@ export class TouchGestureHandler {
         document.addEventListener('touchmove', (e) => {
             // Update touch positions
             Array.from(e.touches).forEach(touch => {
-                if (this.app.touchPoints[touch.identifier]) {
-                    this.app.touchPoints[touch.identifier].x = touch.clientX;
-                    this.app.touchPoints[touch.identifier].y = touch.clientY;
+                const appState = this._getAppState();
+                if (appState.touchPoints[touch.identifier]) {
+                    appState.touchPoints[touch.identifier].x = touch.clientX;
+                    appState.touchPoints[touch.identifier].y = touch.clientY;
                 }
             });
         });
@@ -70,13 +86,15 @@ export class TouchGestureHandler {
         document.addEventListener('touchend', (e) => {
             // Remove ended touches
             Array.from(e.changedTouches).forEach(touch => {
-                delete this.app.touchPoints[touch.identifier];
+                const appState = this._getAppState();
+                delete appState.touchPoints[touch.identifier];
             });
             
             // Clear first touch data if no touches remain
             if (e.touches.length === 0) {
                 this.app.firstTouchData = null;
-                this.app.touchPoints = {};
+                const appState = this._getAppState();
+                appState.touchPoints = {};
             }
         });
     }
@@ -299,13 +317,17 @@ export class TouchGestureHandler {
                     } else {
                         // Swipe left - delete
                         if (confirm('Delete this element?')) {
-                            const page = this.app.pages.find(p => p.id === pageId);
+                            const appState = this._getAppState();
+                            const page = appState.pages.find(p => p.id === pageId);
                             if (page) {
                                 const bin = page.bins?.find(b => b.id === binId);
                                 if (bin && bin.elements && bin.elements[elementIndex]) {
                                     bin.elements.splice(elementIndex, 1);
-                                    this.app.dataManager.saveData();
-                                    this.app.render();
+                                    const dataManager = this._getDataManager();
+                                    if (dataManager) {
+                                        dataManager.saveData();
+                                    }
+                                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                                 }
                             }
                         }

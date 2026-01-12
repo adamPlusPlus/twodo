@@ -3,8 +3,7 @@ import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 
 export class ThemeManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.storageKey = 'twodo-themes';
         this.themes = this.loadThemes();
         

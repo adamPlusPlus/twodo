@@ -1,11 +1,18 @@
 // TagManager - Manages tags across all elements
 import { StorageUtils } from '../utils/storage.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class TagManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.tagsKey = 'twodo-tags';
         this.allTags = this.loadTags();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
@@ -135,7 +142,8 @@ export class TagManager {
         const results = [];
         const normalizedTag = tag.trim().toLowerCase();
         
-        this.app.pages.forEach(page => {
+        const appState = this._getAppState();
+        appState.pages.forEach(page => {
             if (page.bins) {
                 page.bins.forEach(bin => {
                     if (bin.elements) {
@@ -166,7 +174,8 @@ export class TagManager {
     getTagStatistics() {
         const stats = {};
         
-        this.app.pages.forEach(page => {
+        const appState = this._getAppState();
+        appState.pages.forEach(page => {
             if (page.bins) {
                 page.bins.forEach(bin => {
                     if (bin.elements) {

@@ -591,6 +591,12 @@ export class PaneManager {
             console.warn('Page not found:', activeTab.pageId);
         }
         
+        // Restore scroll positions after rendering
+        // Use requestAnimationFrame to ensure DOM is fully updated
+        requestAnimationFrame(() => {
+            this.restoreScrollPositions(pane, scrollPositions);
+        });
+        
         // Emit page:render event for plugins (after a short delay to ensure DOM is ready)
         if (page) {
             setTimeout(() => {

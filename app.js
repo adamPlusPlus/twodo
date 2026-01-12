@@ -32,7 +32,7 @@ import { OAuthManager } from './js/core/OAuthManager.js';
 import { SyncManager } from './js/modules/SyncManager.js';
 import { UndoRedoManager } from './js/modules/UndoRedoManager.js';
 import { TimeTracker } from './js/modules/TimeTracker.js';
-import { registerAllServices } from './js/core/AppServices.js';
+import { registerAllServices, registerService, SERVICES } from './js/core/AppServices.js';
 import { RenderService } from './js/core/RenderService.js';
 import { EVENTS } from './js/core/AppEvents.js';
 import { AppState } from './js/core/AppState.js';
@@ -41,50 +41,78 @@ import { StringUtils } from './js/utils/string.js';
 import { DailyResetManager } from './js/modules/DailyResetManager.js';
 import { InlineEditor } from './js/modules/InlineEditor.js';
 import { LinkHandler } from './js/utils/LinkHandler.js';
+import { modalEventHandlers } from './js/core/ModalEventHandlers.js';
+import { pluginDiscovery } from './js/core/PluginDiscovery.js';
 
 class TodoApp {
     constructor() {
         performance.mark('app-constructor-start');
         const constructorStart = performance.now();
         
+        // Initialize app state first (needed by services)
+        this.appState = new AppState();
+        
         // Initialize managers
-        this.dataManager = new DataManager(this);
-        this.settingsManager = new SettingsManager(this);
-        this.themeManager = new ThemeManager(this);
-        this.visualSettingsManager = new VisualSettingsManager(this);
-        this.pageManager = new PageManager(this);
-        this.binManager = new BinManager(this);
-        this.elementManager = new ElementManager(this);
-        this.dragDropHandler = new DragDropHandler(this);
-        this.audioHandler = new AudioHandler(this);
+        this.dataManager = new DataManager();
+        this.settingsManager = new SettingsManager();
+        this.themeManager = new ThemeManager();
+        this.visualSettingsManager = new VisualSettingsManager();
+        this.pageManager = new PageManager();
+        this.binManager = new BinManager();
+        
+        // Initialize undoRedoManager early (needed by ElementManager)
+        this.undoRedoManager = new UndoRedoManager();
+        
+        // Register core services first (before creating modules that need them)
+        // Register services that don't depend on modules created later
+        // Use imported eventBus singleton (this.eventBus is assigned later)
+        registerService(SERVICES.EVENT_BUS, eventBus);
+        registerService(SERVICES.APP_STATE, this.appState);
+        registerService(SERVICES.DATA_MANAGER, this.dataManager);
+        registerService(SERVICES.UNDO_REDO_MANAGER, this.undoRedoManager);
+        registerService(SERVICES.SETTINGS_MANAGER, this.settingsManager);
+        registerService(SERVICES.PAGE_MANAGER, this.pageManager);
+        registerService(SERVICES.BIN_MANAGER, this.binManager);
+        
+        // Initialize modules that use ServiceLocator (no app parameter)
+        // These can now access the services registered above
+        this.elementManager = new ElementManager();
+        
+        // Create handlers and managers that need to be registered
+        this.dragDropHandler = new DragDropHandler();
+        this.audioHandler = new AudioHandler();
         this.eventHandler = new EventHandler(this);
-        this.contextMenuHandler = new ContextMenuHandler(this);
-        this.touchGestureHandler = new TouchGestureHandler(this);
-        this.modalHandler = new ModalHandler(this);
-        this.fileManager = new FileManager(this);
+        this.contextMenuHandler = new ContextMenuHandler();
+        this.touchGestureHandler = new TouchGestureHandler();
+        this.modalHandler = new ModalHandler();
+        this.fileManager = new FileManager();
+        
+        // Register remaining services (including ElementManager and others)
+        // Must be called AFTER all services are created
+        registerAllServices(this);
         
         // Initialize relationship manager
-        this.relationshipManager = new RelationshipManager(this);
+        this.relationshipManager = new RelationshipManager();
         
         // Initialize template manager
-        this.templateManager = new TemplateManager(this);
+        this.templateManager = new TemplateManager();
         
         // Initialize automation engine
-        this.automationEngine = new AutomationEngine(this);
+        this.automationEngine = new AutomationEngine();
         
         // Initialize tag manager
-        this.tagManager = new TagManager(this);
+        this.tagManager = new TagManager();
         
         // Initialize search index
-        this.searchIndex = new SearchIndex(this);
+        this.searchIndex = new SearchIndex();
         
         // Initialize export/import services
-        this.exportService = new ExportService(this);
-        this.importService = new ImportService(this);
+        this.exportService = new ExportService();
+        this.importService = new ImportService();
         
         // Initialize OAuth and sync managers
-        this.oauthManager = new OAuthManager(this);
-        this.syncManager = new SyncManager(this);
+        this.oauthManager = new OAuthManager();
+        this.syncManager = new SyncManager();
         
         // Start loading file early (in parallel with other initialization)
         // This prevents the file request from being queued behind other operations
@@ -94,46 +122,43 @@ class TodoApp {
             performance.mark('preload-start');
             const preloadInitStart = performance.now();
             const requestsBeforePreload = performance.getEntriesByType('resource').length;
-            console.log('[DIAG] Starting preload:', lastOpenedFile);
-            console.log(`[DIAG] Preload init: ${requestsBeforePreload} resource requests already loaded`);
+            // console.log('[DIAG] Starting preload:', lastOpenedFile);
+            // console.log(`[DIAG] Preload init: ${requestsBeforePreload} resource requests already loaded`);
             // Start the fetch immediately, but don't await it yet
             this._fileLoadPromise = this._preloadFile(lastOpenedFile);
             const preloadInitTime = performance.now() - preloadInitStart;
-            console.log(`[DIAG] Preload promise created in: ${preloadInitTime.toFixed(1)}ms`);
+            // console.log(`[DIAG] Preload promise created in: ${preloadInitTime.toFixed(1)}ms`);
         }
-        this.undoRedoManager = new UndoRedoManager(this);
         
         // Initialize time tracker
-        this.timeTracker = new TimeTracker(this);
+        this.timeTracker = new TimeTracker();
         
         // Initialize daily reset manager
-        this.dailyResetManager = new DailyResetManager(this);
+        this.dailyResetManager = new DailyResetManager();
         
         // Initialize inline editor
-        this.inlineEditor = new InlineEditor(this);
+        this.inlineEditor = new InlineEditor();
         
         // Initialize link handler
-        this.linkHandler = new LinkHandler(this);
+        this.linkHandler = new LinkHandler();
         
         // Initialize plugin system managers
-        this.pagePluginManager = new PagePluginManager(this);
-        this.binPluginManager = new BinPluginManager(this);
-        this.elementTypeManager = new ElementTypeManager(this);
-        this.formatRendererManager = new FormatRendererManager(this);
+        this.pagePluginManager = new PagePluginManager();
+        this.binPluginManager = new BinPluginManager();
+        this.elementTypeManager = new ElementTypeManager();
+        this.formatRendererManager = new FormatRendererManager();
         
         // Expose plugin system to window for debugging
         this.pluginRegistry = pluginRegistry;
         this.eventBus = eventBus;
         this.pluginLoader = pluginLoader;
         
-        // Initialize app state (manages all application state) - must be before registerAllServices
-        this.appState = new AppState();
-        
-        // Register all services in ServiceLocator for dependency injection
-        registerAllServices(this);
-        
         // Initialize render service (registers itself in ServiceLocator)
         this.renderService = new RenderService(this);
+        
+        // Initialize modal event handlers (listens to UI events)
+        // This is initialized after services are registered
+        this.modalEventHandlers = modalEventHandlers;
         
         // Initialize app initializer
         this.appInitializer = new AppInitializer(this);
@@ -142,8 +167,8 @@ class TodoApp {
         
         performance.mark('app-constructor-end');
         const constructorTime = performance.now() - constructorStart;
-        console.log(`[DIAG] Constructor took: ${constructorTime.toFixed(1)}ms`);
-        console.log(`[DIAG] Preload started: ${this._fileLoadPromise ? 'YES' : 'NO'}`);
+        // console.log(`[DIAG] Constructor took: ${constructorTime.toFixed(1)}ms`);
+        // console.log(`[DIAG] Preload started: ${this._fileLoadPromise ? 'YES' : 'NO'}`);
         
         this.init();
     }
@@ -155,7 +180,7 @@ class TodoApp {
     async _preloadFile(filename) {
         performance.mark('preload-fetch-start');
         const preloadStart = performance.now();
-        console.log(`[DIAG] _preloadFile() called for: ${filename}`);
+        // console.log(`[DIAG] _preloadFile() called for: ${filename}`);
         
         try {
             const encodedFilename = encodeURIComponent(filename);
@@ -168,7 +193,7 @@ class TodoApp {
                 
                 // Check how many requests are in flight before our fetch
                 const requestsBefore = performance.getEntriesByType('resource').length;
-                console.log(`[DIAG] Preload: ${requestsBefore} resource requests before fetch`);
+                // console.log(`[DIAG] Preload: ${requestsBefore} resource requests before fetch`);
                 
                 const response = await fetch(fetchUrl, {
                     signal: controller.signal,
@@ -183,22 +208,22 @@ class TodoApp {
                     const resourceTimings = performance.getEntriesByType('resource');
                     const resourceTiming = resourceTimings.find(entry => entry.name.includes(encodedFilename));
                     if (resourceTiming) {
-                        console.log('[DIAG] Preload network timing:', {
-                            stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
-                            dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
-                            tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
-                            ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
-                            download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
-                            total: resourceTiming.duration.toFixed(1) + 'ms'
-                        });
+                        // console.log('[DIAG] Preload network timing:', {
+                        //     stalled: (resourceTiming.requestStart - resourceTiming.fetchStart).toFixed(1) + 'ms',
+                        //     dns: (resourceTiming.domainLookupEnd - resourceTiming.domainLookupStart).toFixed(1) + 'ms',
+                        //     tcp: (resourceTiming.connectEnd - resourceTiming.connectStart).toFixed(1) + 'ms',
+                        //     ttfb: (resourceTiming.responseStart - resourceTiming.requestStart).toFixed(1) + 'ms',
+                        //     download: (resourceTiming.responseEnd - resourceTiming.responseStart).toFixed(1) + 'ms',
+                        //     total: resourceTiming.duration.toFixed(1) + 'ms'
+                        // });
                     } else {
-                        console.log('[DIAG] Preload: Could not find resource timing entry');
+                        // console.log('[DIAG] Preload: Could not find resource timing entry');
                     }
                 }, 100);
                 
                 if (!response.ok) {
                     if (response.status === 404) {
-                        console.log('[DIAG] Preload: File not found (404)');
+                        // console.log('[DIAG] Preload: File not found (404)');
                         return null; // File doesn't exist
                     }
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -211,7 +236,7 @@ class TodoApp {
                 if (result.success) {
                     performance.mark('preload-fetch-end');
                     const preloadTime = performance.now() - preloadStart;
-                    console.log(`[DIAG] Preload fetch: ${fetchTime.toFixed(1)}ms, parse: ${parseTime.toFixed(1)}ms, total: ${preloadTime.toFixed(1)}ms`);
+                    // console.log(`[DIAG] Preload fetch: ${fetchTime.toFixed(1)}ms, parse: ${parseTime.toFixed(1)}ms, total: ${preloadTime.toFixed(1)}ms`);
                     return result.data; // Return the data for later use
                 } else {
                     throw new Error(result.error || 'Failed to load file');
@@ -219,13 +244,13 @@ class TodoApp {
             } catch (fetchError) {
                 clearTimeout(timeoutId);
                 if (fetchError.name === 'AbortError') {
-                    console.log('[DIAG] Preload: Timeout');
+                    // console.log('[DIAG] Preload: Timeout');
                     throw new Error('File load timeout');
                 }
                 throw fetchError;
             }
         } catch (error) {
-            console.log(`[DIAG] Preload failed: ${error.message}`);
+            // console.log(`[DIAG] Preload failed: ${error.message}`);
             // Silently fail - will be handled in loadLastOpenedFile
             return null;
         }
@@ -237,32 +262,32 @@ class TodoApp {
     async loadLastOpenedFile() {
         performance.mark('load-file-start');
         const loadStart = performance.now();
-        console.log('[DIAG] loadLastOpenedFile() called');
+        // console.log('[DIAG] loadLastOpenedFile() called');
         
         try {
             const lastOpenedFile = localStorage.getItem('twodo-last-opened-file');
             if (!lastOpenedFile) {
-                console.log('[DIAG] No last opened file in localStorage');
+                // console.log('[DIAG] No last opened file in localStorage');
                 return; // No last opened file, use default data
             }
             
             // Use preloaded data if available (started in constructor)
             let data;
             if (this._fileLoadPromise) {
-                console.log('[DIAG] Preload promise exists, awaiting...');
+                // console.log('[DIAG] Preload promise exists, awaiting...');
                 const preloadAwaitStart = performance.now();
                 const preloadedData = await this._fileLoadPromise;
                 const preloadAwaitTime = performance.now() - preloadAwaitStart;
-                console.log(`[DIAG] Preload await took: ${preloadAwaitTime.toFixed(1)}ms`);
+                // console.log(`[DIAG] Preload await took: ${preloadAwaitTime.toFixed(1)}ms`);
                 
                 if (preloadedData) {
                     // Use preloaded data - fetch already completed!
-                    console.log('[DIAG] Using preloaded data');
+                    // console.log('[DIAG] Using preloaded data');
                     data = preloadedData;
                     this.fileManager.currentFilename = lastOpenedFile;
                 } else {
                     // Preload failed or file doesn't exist, try normal load
-                    console.log('[DIAG] Preload returned null, doing normal load');
+                    // console.log('[DIAG] Preload returned null, doing normal load');
                     const loadPromise = this.fileManager.loadFile(lastOpenedFile, false);
                     const timeoutPromise = new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('File load timeout')), 5000)
@@ -271,7 +296,7 @@ class TodoApp {
                 }
             } else {
                 // No preload started, do normal load
-                console.log('[DIAG] No preload promise, doing normal load');
+                // console.log('[DIAG] No preload promise, doing normal load');
                 const loadPromise = this.fileManager.loadFile(lastOpenedFile, false);
                 const timeoutPromise = new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('File load timeout')), 5000)
@@ -292,7 +317,7 @@ class TodoApp {
             
             performance.mark('load-file-end');
             const loadTime = performance.now() - loadStart;
-            console.log(`[DIAG] Total loadLastOpenedFile: ${loadTime.toFixed(1)}ms`);
+            // console.log(`[DIAG] Total loadLastOpenedFile: ${loadTime.toFixed(1)}ms`);
             
             // Load buffer in background (non-blocking)
             if (this.undoRedoManager) {
@@ -398,41 +423,19 @@ class TodoApp {
     
     /**
      * Load all available plugins
+     * Uses PluginDiscovery to load plugins from manifest
      */
     async loadAllPlugins() {
-        // Define all plugin paths
-        const elementTypes = [
-            'LinkBookmarkElement', 'CodeSnippetElement', 'TableElement',
-            'ContactElement', 'ExpenseTrackerElement', 'ReadingListElement',
-            'RecipeElement', 'WorkoutElement', 'MoodTrackerElement',
-            'NoteElement', 'HabitTracker', 'TimeTracking',
-            'ElementRelationships', 'CustomProperties'
-        ];
-        
-        const pagePlugins = [
-            'SearchFilter', 'ExportImport', 'PageTemplates', 'CustomScripts',
-            'PageThemes', 'CustomViews', 'AnalyticsDashboard',
-            'PageGoalSetting', 'PageReminderSystem'
-        ];
-        
-        const binPlugins = [
-            'KanbanBoard', 'WorkflowAutomation', 'BatchOperations', 'CustomSorting',
-            'FilterPresets', 'ProgressTracker', 'TimeEstimates', 'ColorCoding',
-            'BinArchive', 'BinStatistics', 'BinNotificationRules', 'GanttChartView'
-        ];
-        
-        const formatRenderers = [
-            'TrelloBoardFormat', 'GridLayoutFormat', 'HorizontalLayoutFormat', 'PageKanbanFormat', 'DocumentViewFormat',
-            'LaTeXEditorFormat', 'MindMapFormat', 'LogicGraphFormat', 'FlowchartFormat'
-        ];
+        // Get plugin definitions from PluginDiscovery
+        const plugins = await pluginDiscovery.getAllPlugins();
         
         // Load all plugins
         const loadPromises = [];
         
         // Load element types
-        for (const type of elementTypes) {
+        for (const pluginDef of plugins.elementTypes) {
             loadPromises.push(
-                this.pluginLoader.loadPlugin(`/js/plugins/element/${type}.js`, null, this)
+                this.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this)
                     .catch(err => {
                         // Silently ignore connection/fetch errors (file doesn't exist or server issue)
                         // These are expected for optional plugins that may not be implemented yet
@@ -444,16 +447,16 @@ class TodoApp {
                             return null;
                         }
                         // Log other unexpected errors
-                        console.warn(`Failed to load element type ${type}:`, err);
+                        console.warn(`Failed to load element type ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load page plugins
-        for (const plugin of pagePlugins) {
+        for (const pluginDef of plugins.pagePlugins) {
             loadPromises.push(
-                this.pluginLoader.loadPlugin(`/js/plugins/page/${plugin}.js`, null, this)
+                this.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -462,16 +465,16 @@ class TodoApp {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load page plugin ${plugin}:`, err);
+                        console.warn(`Failed to load page plugin ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load bin plugins
-        for (const plugin of binPlugins) {
+        for (const pluginDef of plugins.binPlugins) {
             loadPromises.push(
-                this.pluginLoader.loadPlugin(`/js/plugins/bin/${plugin}.js`, null, this)
+                this.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -480,16 +483,16 @@ class TodoApp {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load bin plugin ${plugin}:`, err);
+                        console.warn(`Failed to load bin plugin ${pluginDef.name}:`, err);
                         return null;
                     })
             );
         }
         
         // Load format renderers
-        for (const format of formatRenderers) {
+        for (const pluginDef of plugins.formatRenderers) {
             loadPromises.push(
-                this.pluginLoader.loadPlugin(`/js/plugins/format/${format}.js`, null, this)
+                this.pluginLoader.loadPlugin(pluginDef.path, pluginDef.name, this)
                     .catch(err => {
                         const isFetchError = err instanceof TypeError && 
                             (err.message.includes('Failed to fetch') || 
@@ -498,7 +501,7 @@ class TodoApp {
                         if (isFetchError) {
                             return null;
                         }
-                        console.warn(`Failed to load format renderer ${format}:`, err);
+                        console.warn(`Failed to load format renderer ${pluginDef.name}:`, err);
                         return null;
                     })
             );

@@ -4,8 +4,7 @@ import { eventBus } from '../core/EventBus.js';
 import { DOMUtils } from '../utils/dom.js';
 
 export class ElementTypeManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.elementTypes = new Map(); // elementType -> plugin instance
         this.setupEventListeners();
     }

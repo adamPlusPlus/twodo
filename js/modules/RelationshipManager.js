@@ -1,11 +1,25 @@
 // RelationshipManager - Manages element relationships
 import { DataUtils } from '../utils/data.js';
 import { eventBus } from '../core/EventBus.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class RelationshipManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.relationships = new Map(); // elementId -> Set of relationship objects
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
+     * Get DataManager service
+     */
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     /**
@@ -279,7 +293,8 @@ export class RelationshipManager {
      */
     updateElementRelationships(elementId) {
         const [pageId, binId, elementIndex] = elementId.split(':');
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -316,7 +331,10 @@ export class RelationshipManager {
         if (!element.relationships.relatedTo) element.relationships.relatedTo = [];
         
         // Save data
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
     }
     
     /**
@@ -381,7 +399,8 @@ export class RelationshipManager {
      */
     getElement(elementId) {
         const { pageId, binId, elementIndex } = this.parseElementId(elementId);
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -406,7 +425,8 @@ export class RelationshipManager {
     initializeFromData() {
         this.relationships.clear();
         
-        this.app.pages.forEach(page => {
+        const appState = this._getAppState();
+        appState.pages.forEach(page => {
             if (page.bins) {
                 page.bins.forEach(bin => {
                     if (bin.elements) {

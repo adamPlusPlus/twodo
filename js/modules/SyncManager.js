@@ -1,10 +1,10 @@
 // SyncManager.js - Handles real-time synchronization via WebSocket
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class SyncManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.ws = null;
         this.clientId = null;
         this.currentFilename = null;
@@ -14,6 +14,21 @@ export class SyncManager {
         this.isConnected = false;
         this.pendingChanges = [];
         this.pendingFileJoin = null; // File to join once connected
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     async connect() {
@@ -156,12 +171,14 @@ export class SyncManager {
     
     handleFileJoined(message) {
         // File data received from server
-        if (message.data && this.app && this.app.fileManager) {
+        const fileManager = this._getFileManager();
+        if (message.data && fileManager) {
             // Update app data if it matches current file
             if (this.currentFilename === message.filename) {
                 // Check timestamp to prevent older changes from overwriting newer ones
                 const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
-                const localTimestamp = this.app.dataManager._lastSyncTimestamp || 0;
+                const dataManager = this._getDataManager();
+                const localTimestamp = dataManager?._lastSyncTimestamp || 0;
                 
                 // Only apply if remote change is newer (or if we don't have a local timestamp)
                 if (remoteTimestamp < localTimestamp && localTimestamp > 0) {
@@ -171,22 +188,28 @@ export class SyncManager {
                 
                 // Update local timestamp
                 if (remoteTimestamp > 0) {
-                    this.app.dataManager._lastSyncTimestamp = remoteTimestamp;
+                    if (dataManager) {
+                        dataManager._lastSyncTimestamp = remoteTimestamp;
+                    }
                 }
                 
                 // Only update if data is different to avoid unnecessary renders
-                const currentData = JSON.stringify(this.app.pages);
+                const appState = this._getAppState();
+                const currentData = JSON.stringify(appState.pages);
                 const newData = JSON.stringify(message.data.pages || []);
                 if (currentData !== newData) {
-                    this.app.pages = message.data.pages || [];
-                    this.app.currentPageId = message.data.currentPageId || (this.app.pages.length > 0 ? this.app.pages[0].id : 'page-1');
-                    this.app.binStates = message.data.binStates || {};
-                    this.app.subtaskStates = message.data.subtaskStates || {};
-                    this.app.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
+                    appState.pages = message.data.pages || [];
+                    appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
+                    appState.binStates = message.data.binStates || {};
+                    appState.subtaskStates = message.data.subtaskStates || {};
+                    appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
                     if (message.data.settings) {
-                        this.app.settingsManager.saveSettings(message.data.settings);
+                        const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                        if (settingsManager) {
+                            settingsManager.saveSettings(message.data.settings);
+                        }
                     }
-                    this.app.render();
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
             }
         }
@@ -199,10 +222,13 @@ export class SyncManager {
             return;
         }
         
-        if (message.filename === this.currentFilename && this.app) {
+        if (message.filename === this.currentFilename) {
+            const appState = this._getAppState();
+            const dataManager = this._getDataManager();
+            
             // Check timestamp to prevent older changes from overwriting newer ones
             const remoteTimestamp = message.timestamp || message.data?.timestamp || 0;
-            const localTimestamp = this.app.dataManager._lastSyncTimestamp || 0;
+            const localTimestamp = dataManager?._lastSyncTimestamp || 0;
             
             // Only apply if remote change is newer (or if we don't have a local timestamp)
             if (remoteTimestamp < localTimestamp && localTimestamp > 0) {
@@ -211,30 +237,35 @@ export class SyncManager {
             }
             
             // Only update if data is different to avoid unnecessary renders
-            const currentData = JSON.stringify(this.app.pages);
+            const currentData = JSON.stringify(appState.pages);
             const newData = JSON.stringify(message.data.pages || []);
             if (currentData !== newData) {
                 // Update local timestamp to match remote
-                this.app.dataManager._lastSyncTimestamp = remoteTimestamp;
+                if (dataManager) {
+                    dataManager._lastSyncTimestamp = remoteTimestamp;
+                }
                 
                 // Temporarily disable sync to prevent echo loop
                 const wasConnected = this.isConnected;
                 this.isConnected = false;
                 
-                this.app.pages = message.data.pages || [];
-                this.app.currentPageId = message.data.currentPageId || (this.app.pages.length > 0 ? this.app.pages[0].id : 'page-1');
-                this.app.binStates = message.data.binStates || {};
-                this.app.subtaskStates = message.data.subtaskStates || {};
-                this.app.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
+                appState.pages = message.data.pages || [];
+                appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
+                appState.binStates = message.data.binStates || {};
+                appState.subtaskStates = message.data.subtaskStates || {};
+                appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
                 if (message.data.settings) {
-                    this.app.settingsManager.saveSettings(message.data.settings);
+                    const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                    if (settingsManager) {
+                        settingsManager.saveSettings(message.data.settings);
+                    }
                 }
                 
                 // Save to localStorage but don't trigger sync (we're already synced)
                 // Request data save with skipSync flag via EventBus
                 eventBus.emit(EVENTS.DATA.SAVE_REQUESTED, true);
                 
-                this.app.render();
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 
                 // Re-enable sync after a brief delay
                 setTimeout(() => {

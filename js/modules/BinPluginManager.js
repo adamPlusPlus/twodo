@@ -1,13 +1,21 @@
 // BinPluginManager - Manages bin plugin lifecycle and rendering
 import { pluginRegistry } from '../core/PluginRegistry.js';
 import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
 import { DOMUtils } from '../utils/dom.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class BinPluginManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.binPlugins = new Map(); // binId -> Set of enabled pluginIds
         this.setupEventListeners();
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     /**
@@ -29,7 +37,8 @@ export class BinPluginManager {
      * @param {string} binId - Bin ID
      */
     async initializeBinPlugins(pageId, binId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -74,7 +83,8 @@ export class BinPluginManager {
      * @returns {Promise<boolean>} - Success status
      */
     async enablePlugin(pageId, binId, pluginId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -88,7 +98,7 @@ export class BinPluginManager {
         
         // Initialize plugin if needed
         if (!pluginRegistry.isInitialized(pluginId)) {
-            await pluginRegistry.initialize(pluginId, this.app);
+            await pluginRegistry.initialize(pluginId, null);
         }
         
         // Enable plugin
@@ -112,8 +122,11 @@ export class BinPluginManager {
             pluginSet.add(pluginId);
             
             // Save and re-render
-            this.app.dataManager.saveData();
-            this.app.render();
+            const dataManager = this._getDataManager();
+            if (dataManager) {
+                dataManager.saveData();
+            }
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
             eventBus.emit('bin:plugin:enabled', { pageId, binId, pluginId });
         }
@@ -129,7 +142,8 @@ export class BinPluginManager {
      * @returns {Promise<boolean>} - Success status
      */
     async disablePlugin(pageId, binId, pluginId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -150,8 +164,11 @@ export class BinPluginManager {
             }
             
             // Save and re-render
-            this.app.dataManager.saveData();
-            this.app.render();
+            const dataManager = this._getDataManager();
+            if (dataManager) {
+                dataManager.saveData();
+            }
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
             eventBus.emit('bin:plugin:disabled', { pageId, binId, pluginId });
         }
@@ -188,7 +205,8 @@ export class BinPluginManager {
      * @param {string} binId - Bin ID
      */
     renderPluginUI(container, pageId, binId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -263,7 +281,8 @@ export class BinPluginManager {
                 const pluginContainer = DOMUtils.createElement('div', {
                     class: `plugin-content plugin-${plugin.id}`
                 });
-                const page = this.app.pages.find(p => p.id === pageId);
+                const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
                 const bin = page.bins?.find(b => b.id === binId);
                 plugin.render(pluginContainer, bin, { page });
                 container.appendChild(pluginContainer);

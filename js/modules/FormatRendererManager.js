@@ -3,10 +3,10 @@ import { pluginRegistry } from '../core/PluginRegistry.js';
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { DOMUtils } from '../utils/dom.js';
+import { getService, SERVICES } from '../core/AppServices.js';
 
 export class FormatRendererManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.formatRenderers = new Map(); // formatName -> plugin instance
         this.activeFormats = new Map(); // pageId/binId -> formatName
         this.setupEventListeners();
@@ -17,11 +17,19 @@ export class FormatRendererManager {
     }
     
     /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
      * Initialize activeFormats from saved page data
      */
     initializeFromSavedData() {
-        if (this.app && this.app.pages) {
-            this.app.pages.forEach(page => {
+        const appState = this._getAppState();
+        if (appState && appState.pages) {
+            appState.pages.forEach(page => {
                 if (page.format) {
                     this.activeFormats.set(page.id, page.format);
                 }
@@ -51,12 +59,12 @@ export class FormatRendererManager {
      */
     scanForFormats() {
         const formatPlugins = pluginRegistry.getByType('format');
-        console.log(`[FormatRendererManager] scanForFormats found ${formatPlugins.length} format plugins:`, formatPlugins.map(p => ({ id: p.id, formatName: p.formatName, name: p.name })));
+        // console.log(`[FormatRendererManager] scanForFormats found ${formatPlugins.length} format plugins:`, formatPlugins.map(p => ({ id: p.id, formatName: p.formatName, name: p.name })));
         formatPlugins.forEach(plugin => {
             const formatName = plugin.formatName || plugin.id;
             if (formatName && !this.formatRenderers.has(formatName)) {
                 this.formatRenderers.set(formatName, plugin);
-                console.log(`[FormatRendererManager] Scanned and registered format: ${formatName} (${plugin.name || plugin.id})`);
+                // console.log(`[FormatRendererManager] Scanned and registered format: ${formatName} (${plugin.name || plugin.id})`);
             }
         });
     }
@@ -67,15 +75,15 @@ export class FormatRendererManager {
      */
     registerFormat(pluginId) {
         const plugin = pluginRegistry.get(pluginId);
-        console.log(`[FormatRendererManager] registerFormat called for ${pluginId}, plugin found:`, !!plugin, 'type:', plugin?.type);
+        // console.log(`[FormatRendererManager] registerFormat called for ${pluginId}, plugin found:`, !!plugin, 'type:', plugin?.type);
         if (plugin && plugin.type === 'format') {
             const formatName = plugin.formatName || plugin.id;
             this.formatRenderers.set(formatName, plugin);
-            console.log(`[FormatRendererManager] Registered format: ${formatName} (${plugin.name || plugin.id})`);
+            // console.log(`[FormatRendererManager] Registered format: ${formatName} (${plugin.name || plugin.id})`);
         } else {
             // Plugin might not be registered yet - this is OK, it will be picked up by scanForFormats
             // or when the plugin:loaded event fires
-            console.log(`[FormatRendererManager] Plugin ${pluginId} not found or not a format plugin`);
+            // console.log(`[FormatRendererManager] Plugin ${pluginId} not found or not a format plugin`);
         }
     }
     
@@ -112,12 +120,13 @@ export class FormatRendererManager {
             return false;
         }
         
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         // Initialize format if needed
         if (!pluginRegistry.isInitialized(format.id)) {
-            await pluginRegistry.initialize(format.id, this.app);
+            await pluginRegistry.initialize(format.id, null);
         }
         
         // Enable format
@@ -129,7 +138,7 @@ export class FormatRendererManager {
         
         // Save and re-render
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
-        this.app.render();
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
         eventBus.emit('format:changed', { pageId, formatName, type: 'page' });
         
@@ -142,7 +151,8 @@ export class FormatRendererManager {
      * @returns {boolean} - Success status
      */
     clearPageFormat(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         // Remove from activeFormats
@@ -153,7 +163,7 @@ export class FormatRendererManager {
         
         // Save and re-render
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
-        this.app.render();
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
         eventBus.emit('format:changed', { pageId, formatName: null, type: 'page' });
         
@@ -174,7 +184,8 @@ export class FormatRendererManager {
             return false;
         }
         
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return false;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -182,7 +193,7 @@ export class FormatRendererManager {
         
         // Initialize format if needed
         if (!pluginRegistry.isInitialized(format.id)) {
-            await pluginRegistry.initialize(format.id, this.app);
+            await pluginRegistry.initialize(format.id, null);
         }
         
         // Enable format
@@ -195,7 +206,7 @@ export class FormatRendererManager {
         
         // Save and re-render
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
-        this.app.render();
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
         eventBus.emit('format:changed', { pageId, binId, formatName, type: 'bin' });
         
@@ -214,8 +225,9 @@ export class FormatRendererManager {
         }
         
         // Fallback: check page data (for when data is loaded but activeFormats wasn't initialized)
-        if (this.app && this.app.pages) {
-            const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        if (appState && appState.pages) {
+            const page = appState.pages.find(p => p.id === pageId);
             if (page && page.format) {
                 // Sync to activeFormats for future lookups
                 this.activeFormats.set(pageId, page.format);
@@ -251,8 +263,9 @@ export class FormatRendererManager {
         
         const format = this.getFormat(formatName);
         if (format && format.renderPage) {
-            const page = this.app.pages.find(p => p.id === pageId);
-            format.renderPage(container, page, { app: this.app });
+            const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
+            format.renderPage(container, page, {});
         }
     }
     
@@ -271,9 +284,10 @@ export class FormatRendererManager {
         
         const format = this.getFormat(formatName);
         if (format && format.renderBin) {
-            const page = this.app.pages.find(p => p.id === pageId);
+            const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
             const bin = page.bins?.find(b => b.id === binId);
-            format.renderBin(container, bin, { page, app: this.app });
+            format.renderBin(container, bin, { page });
         }
     }
     

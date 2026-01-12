@@ -1,0 +1,54 @@
+{
+  "elementTypes": [
+    { "name": "LinkBookmarkElement", "path": "/js/plugins/element/LinkBookmarkElement.js" },
+    { "name": "CodeSnippetElement", "path": "/js/plugins/element/CodeSnippetElement.js" },
+    { "name": "TableElement", "path": "/js/plugins/element/TableElement.js" },
+    { "name": "ContactElement", "path": "/js/plugins/element/ContactElement.js" },
+    { "name": "ExpenseTrackerElement", "path": "/js/plugins/element/ExpenseTrackerElement.js" },
+    { "name": "ReadingListElement", "path": "/js/plugins/element/ReadingListElement.js" },
+    { "name": "RecipeElement", "path": "/js/plugins/element/RecipeElement.js" },
+    { "name": "WorkoutElement", "path": "/js/plugins/element/WorkoutElement.js" },
+    { "name": "MoodTrackerElement", "path": "/js/plugins/element/MoodTrackerElement.js" },
+    { "name": "NoteElement", "path": "/js/plugins/element/NoteElement.js" },
+    { "name": "HabitTracker", "path": "/js/plugins/element/HabitTracker.js" },
+    { "name": "TimeTracking", "path": "/js/plugins/element/TimeTracking.js" },
+    { "name": "ElementRelationships", "path": "/js/plugins/element/ElementRelationships.js" },
+    { "name": "CustomProperties", "path": "/js/plugins/element/CustomProperties.js" }
+  ],
+  "pagePlugins": [
+    { "name": "SearchFilter", "path": "/js/plugins/page/SearchFilter.js" },
+    { "name": "ExportImport", "path": "/js/plugins/page/ExportImport.js" },
+    { "name": "PageTemplates", "path": "/js/plugins/page/PageTemplates.js" },
+    { "name": "CustomScripts", "path": "/js/plugins/page/CustomScripts.js" },
+    { "name": "PageThemes", "path": "/js/plugins/page/PageThemes.js" },
+    { "name": "CustomViews", "path": "/js/plugins/page/CustomViews.js" },
+    { "name": "AnalyticsDashboard", "path": "/js/plugins/page/AnalyticsDashboard.js" },
+    { "name": "PageGoalSetting", "path": "/js/plugins/page/PageGoalSetting.js" },
+    { "name": "PageReminderSystem", "path": "/js/plugins/page/PageReminderSystem.js" }
+  ],
+  "binPlugins": [
+    { "name": "KanbanBoard", "path": "/js/plugins/bin/KanbanBoard.js" },
+    { "name": "WorkflowAutomation", "path": "/js/plugins/bin/WorkflowAutomation.js" },
+    { "name": "BatchOperations", "path": "/js/plugins/bin/BatchOperations.js" },
+    { "name": "CustomSorting", "path": "/js/plugins/bin/CustomSorting.js" },
+    { "name": "FilterPresets", "path": "/js/plugins/bin/FilterPresets.js" },
+    { "name": "ProgressTracker", "path": "/js/plugins/bin/ProgressTracker.js" },
+    { "name": "TimeEstimates", "path": "/js/plugins/bin/TimeEstimates.js" },
+    { "name": "ColorCoding", "path": "/js/plugins/bin/ColorCoding.js" },
+    { "name": "BinArchive", "path": "/js/plugins/bin/BinArchive.js" },
+    { "name": "BinStatistics", "path": "/js/plugins/bin/BinStatistics.js" },
+    { "name": "BinNotificationRules", "path": "/js/plugins/bin/BinNotificationRules.js" },
+    { "name": "GanttChartView", "path": "/js/plugins/bin/GanttChartView.js" }
+  ],
+  "formatRenderers": [
+    { "name": "TrelloBoardFormat", "path": "/js/plugins/format/TrelloBoardFormat.js" },
+    { "name": "GridLayoutFormat", "path": "/js/plugins/format/GridLayoutFormat.js" },
+    { "name": "HorizontalLayoutFormat", "path": "/js/plugins/format/HorizontalLayoutFormat.js" },
+    { "name": "PageKanbanFormat", "path": "/js/plugins/format/PageKanbanFormat.js" },
+    { "name": "DocumentViewFormat", "path": "/js/plugins/format/DocumentViewFormat.js" },
+    { "name": "LaTeXEditorFormat", "path": "/js/plugins/format/LaTeXEditorFormat.js" },
+    { "name": "MindMapFormat", "path": "/js/plugins/format/MindMapFormat.js" },
+    { "name": "LogicGraphFormat", "path": "/js/plugins/format/LogicGraphFormat.js" },
+    { "name": "FlowchartFormat", "path": "/js/plugins/format/FlowchartFormat.js" }
+  ]
+}

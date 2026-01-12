@@ -3,24 +3,38 @@ import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { ThemePresets } from './ThemePresets.js';
 import { StringUtils } from '../utils/string.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class SettingsManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
         this.storageKey = 'twodo-settings';
-        // ThemeManager may not be initialized yet, so we check at runtime
         this.themePresets = new ThemePresets();
+    }
+    
+    /**
+     * Get ThemeManager service
+     */
+    _getThemeManager() {
+        return getService(SERVICES.THEME_MANAGER);
+    }
+    
+    /**
+     * Get AppState service
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
     }
     
     // Check if themes are available at runtime
     get useThemes() {
-        return !!this.app.themeManager;
+        return !!this._getThemeManager();
     }
     
     loadSettings() {
         // If ThemeManager is available, use it for global theme
-        if (this.useThemes && this.app.themeManager) {
-            return this.app.themeManager.themes.global;
+        const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
+            return themeManager.themes.global;
         }
         
         // Legacy: load from localStorage
@@ -139,13 +153,14 @@ export class SettingsManager {
     
     saveSettings(settings, themeType = 'global', viewFormat = null, pageId = null) {
         // If ThemeManager is available, use it
-        if (this.useThemes && this.app.themeManager) {
+        const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
             if (themeType === 'global') {
-                this.app.themeManager.setGlobalTheme(settings);
+                themeManager.setGlobalTheme(settings);
             } else if (themeType === 'view' && viewFormat) {
-                this.app.themeManager.setViewTheme(viewFormat, settings);
+                themeManager.setViewTheme(viewFormat, settings);
             } else if (themeType === 'page' && pageId) {
-                this.app.themeManager.setPageTheme(pageId, settings);
+                themeManager.setPageTheme(pageId, settings);
             }
             // Apply the effective theme
             this.applySettings(settings);
@@ -156,7 +171,8 @@ export class SettingsManager {
         }
         
         // Also update the main data structure to include settings
-        if (this.app.appState?.pages && this.app.appState.pages.length > 0) {
+        const appState = this._getAppState();
+        if (appState?.pages && appState.pages.length > 0) {
             eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
         }
     }
@@ -227,7 +243,8 @@ export class SettingsManager {
         html += qrCodeHtml;
         
         // Theme Management Section (if ThemeManager is available)
-        if (this.useThemes && this.app.themeManager) {
+        const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
             html += '<div class="settings-section">';
             html += '<div class="settings-section-title" data-collapse-target="settings-content-theme">';
             html += '<span class="settings-toggle-arrow">▶</span>';
@@ -250,7 +267,7 @@ export class SettingsManager {
             html += '<div class="settings-control" id="theme-view-selector" style="display: none;">';
             html += '<label>View Format:</label>';
             html += '<select id="theme-view-format" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
-            const viewFormats = this.app.themeManager.getViewFormats();
+            const viewFormats = themeManager.getViewFormats();
             viewFormats.forEach(format => {
                 const formatName = format === 'default' ? 'Default' : format.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 html += `<option value="${format}">${formatName}</option>`;
@@ -262,7 +279,8 @@ export class SettingsManager {
             html += '<div class="settings-control" id="theme-page-selector" style="display: none;">';
             html += '<label>Page:</label>';
             html += '<select id="theme-page-id" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
-            const pages = this.app.appState?.pages || [];
+            const appState = this._getAppState();
+            const pages = appState?.pages || [];
             pages.forEach(page => {
                 html += `<option value="${page.id}">${page.title || page.id}</option>`;
             });
@@ -566,7 +584,8 @@ export class SettingsManager {
                 let viewFormat = null;
                 let pageId = null;
                 
-                if (this.useThemes && this.app.themeManager) {
+                const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
                     const themeScopeSelect = document.getElementById('theme-scope-select');
                     const themeViewFormat = document.getElementById('theme-view-format');
                     const themePageId = document.getElementById('theme-page-id');
@@ -590,7 +609,8 @@ export class SettingsManager {
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 const defaultSettings = this.getDefaultSettings();
-                if (this.useThemes && this.app.themeManager) {
+                const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
                     // Get current theme scope
                     const themeScopeSelect = document.getElementById('theme-scope-select');
                     const themeViewFormat = document.getElementById('theme-view-format');
@@ -667,7 +687,8 @@ export class SettingsManager {
         }
         
         // Theme management event listeners
-        if (this.useThemes && this.app.themeManager) {
+        const themeManagerForListeners = this._getThemeManager();
+        if (this.useThemes && themeManagerForListeners) {
             const themeScopeSelect = document.getElementById('theme-scope-select');
             const themeViewSelector = document.getElementById('theme-view-selector');
             const themePageSelector = document.getElementById('theme-page-selector');
@@ -706,7 +727,10 @@ export class SettingsManager {
                         const preset = this.themePresets.getPreset(selectedPresetId);
                         if (preset) {
                             // Apply to global theme
-                            this.app.themeManager.setGlobalTheme(preset.theme);
+                            const themeManager = this._getThemeManager();
+                            if (themeManager) {
+                                themeManager.setGlobalTheme(preset.theme);
+                            }
                             // Apply settings
                             this.applySettings(preset.theme);
                             alert(`Applied "${preset.name}" theme globally!`);
@@ -722,7 +746,8 @@ export class SettingsManager {
                 themeSaveCustomBtn.addEventListener('click', () => {
                     const themeName = prompt('Enter a name for this custom theme:');
                     if (themeName && themeName.trim()) {
-                        const currentTheme = this.app.themeManager.themes.global;
+                        const themeManager = this._getThemeManager();
+                        const currentTheme = themeManager?.themes?.global;
                         const customTheme = {
                             name: themeName.trim(),
                             description: 'Custom theme',
@@ -754,13 +779,19 @@ export class SettingsManager {
                                 const imported = JSON.parse(event.target.result);
                                 if (imported.theme) {
                                     // It's a preset format
-                                    this.app.themeManager.setGlobalTheme(imported.theme);
+                                    const themeManager = this._getThemeManager();
+                                    if (themeManager) {
+                                        themeManager.setGlobalTheme(imported.theme);
+                                    }
                                     this.applySettings(imported.theme);
                                     alert(`Loaded custom theme: ${imported.name || 'Unnamed'}`);
                                     this.showSettingsModal();
                                 } else {
                                     // It's a raw theme
-                                    this.app.themeManager.setGlobalTheme(imported);
+                                    const themeManager = this._getThemeManager();
+                                    if (themeManager) {
+                                        themeManager.setGlobalTheme(imported);
+                                    }
                                     this.applySettings(imported);
                                     alert('Loaded custom theme!');
                                     this.showSettingsModal();
@@ -790,14 +821,15 @@ export class SettingsManager {
                     const scope = themeScopeSelect?.value || 'global';
                     let theme = null;
                     
+                    const themeManager = this._getThemeManager();
                     if (scope === 'global') {
-                        theme = this.app.themeManager.themes.global;
+                        theme = themeManager?.themes?.global;
                     } else if (scope === 'view' && themeViewFormat) {
                         const viewFormat = themeViewFormat.value;
-                        theme = this.app.themeManager.getViewTheme(viewFormat) || this.app.themeManager.themes.global;
+                        theme = themeManager?.getViewTheme(viewFormat) || themeManager?.themes?.global;
                     } else if (scope === 'page' && themePageId) {
                         const pageId = themePageId.value;
-                        theme = this.app.themeManager.getPageTheme(pageId) || this.app.themeManager.getEffectiveTheme(pageId);
+                        theme = themeManager?.getPageTheme(pageId) || themeManager?.getEffectiveTheme(pageId);
                     }
                     
                     if (theme) {
@@ -817,7 +849,10 @@ export class SettingsManager {
             if (themeResetViewBtn && themeViewFormat) {
                 themeResetViewBtn.addEventListener('click', () => {
                     const viewFormat = themeViewFormat.value;
-                    this.app.themeManager.setViewTheme(viewFormat, null);
+                    const themeManager = this._getThemeManager();
+                    if (themeManager) {
+                        themeManager.setViewTheme(viewFormat, null);
+                    }
                     alert(`View theme for "${viewFormat}" reset to inherit from global.`);
                     this.showSettingsModal();
                 });
@@ -826,7 +861,9 @@ export class SettingsManager {
             if (themeResetPageBtn && themePageId) {
                 themeResetPageBtn.addEventListener('click', () => {
                     const pageId = themePageId.value;
-                    this.app.themeManager.setPageTheme(pageId, null);
+                    if (themeManager) {
+                        themeManager.setPageTheme(pageId, null);
+                    }
                     alert(`Page theme for "${pageId}" reset to inherit from view/global.`);
                     this.showSettingsModal();
                 });
@@ -840,19 +877,20 @@ export class SettingsManager {
                     let theme = null;
                     let filename = 'theme';
                     
+                    const themeManager = this._getThemeManager();
                     if (scope === 'global') {
-                        theme = this.app.themeManager.themes.global;
+                        theme = themeManager?.themes?.global;
                         filename = 'theme-global';
                     } else if (scope === 'view' && themeViewFormat) {
-                        theme = this.app.themeManager.getViewTheme(themeViewFormat.value) || this.app.themeManager.themes.global;
+                        theme = themeManager?.getViewTheme(themeViewFormat.value) || themeManager?.themes?.global;
                         filename = `theme-view-${themeViewFormat.value}`;
                     } else if (scope === 'page' && themePageId) {
-                        theme = this.app.themeManager.getPageTheme(themePageId.value) || this.app.themeManager.getEffectiveTheme(themePageId.value);
+                        theme = themeManager?.getPageTheme(themePageId.value) || themeManager?.getEffectiveTheme(themePageId.value);
                         filename = `theme-page-${themePageId.value}`;
                     }
                     
                     if (theme) {
-                        const json = this.app.themeManager.exportTheme(theme);
+                        const json = themeManager?.exportTheme(theme);
                         const blob = new Blob([json], { type: 'application/json' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -877,7 +915,7 @@ export class SettingsManager {
                             const scope = themeScopeSelect?.value || 'global';
                             const viewFormat = themeViewFormat?.value || null;
                             const pageId = themePageId?.value || null;
-                            const success = this.app.themeManager.importTheme(event.target.result, scope, viewFormat, pageId);
+                            const success = themeManager?.importTheme(event.target.result, scope, viewFormat, pageId);
                             if (success) {
                                 alert('Theme imported successfully!');
                                 this.showSettingsModal();
@@ -894,7 +932,8 @@ export class SettingsManager {
             const themeExportAllBtn = document.getElementById('theme-export-all-btn');
             if (themeExportAllBtn) {
                 themeExportAllBtn.addEventListener('click', () => {
-                    const json = this.app.themeManager.exportAllThemes();
+                    const themeManager = this._getThemeManager();
+                    const json = themeManager?.exportAllThemes();
                     const blob = new Blob([json], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -915,7 +954,7 @@ export class SettingsManager {
                     if (file) {
                         const reader = new FileReader();
                         reader.onload = (event) => {
-                            const success = this.app.themeManager.importAllThemes(event.target.result);
+                            const success = themeManager?.importAllThemes(event.target.result);
                             if (success) {
                                 alert('All themes imported successfully!');
                                 this.showSettingsModal();
@@ -1015,23 +1054,24 @@ export class SettingsManager {
         let settings;
         
         // Load settings from appropriate theme scope
-        if (this.useThemes && this.app.themeManager) {
+        const themeManager = this._getThemeManager();
+        if (this.useThemes && themeManager) {
             if (themeType === 'global') {
-                settings = this.app.themeManager.themes.global;
+                settings = themeManager?.themes?.global;
             } else if (themeType === 'view' && viewFormat) {
-                let viewTheme = this.app.themeManager.getViewTheme(viewFormat);
-                if (!viewTheme) {
+                let viewTheme = themeManager?.getViewTheme(viewFormat);
+                if (!viewTheme && themeManager) {
                     // Create new view theme based on global
-                    viewTheme = { ...this.app.themeManager.themes.global };
-                    this.app.themeManager.setViewTheme(viewFormat, viewTheme);
+                    viewTheme = { ...themeManager.themes.global };
+                    themeManager.setViewTheme(viewFormat, viewTheme);
                 }
                 settings = viewTheme;
             } else if (themeType === 'page' && pageId) {
-                let pageTheme = this.app.themeManager.getPageTheme(pageId);
-                if (!pageTheme) {
+                let pageTheme = themeManager?.getPageTheme(pageId);
+                if (!pageTheme && themeManager) {
                     // Create new page theme based on effective theme
-                    pageTheme = { ...this.app.themeManager.getEffectiveTheme(pageId) };
-                    this.app.themeManager.setPageTheme(pageId, pageTheme);
+                    pageTheme = { ...themeManager.getEffectiveTheme(pageId) };
+                    themeManager.setPageTheme(pageId, pageTheme);
                 }
                 settings = pageTheme;
             } else {

@@ -2,8 +2,7 @@
 import { DataUtils } from '../utils/data.js';
 
 export class ImportService {
-    constructor(app) {
-        this.app = app;
+    constructor() {
     }
     
     /**

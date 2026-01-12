@@ -1,14 +1,36 @@
 // ElementManager.js - Handles element-related operations
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES } from '../core/AppServices.js';
 
 export class ElementManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+        // Get services via ServiceLocator
+        // Use lazy access for services that might not be registered yet
+        this.appState = getService(SERVICES.APP_STATE);
+        this.undoRedoManager = getService(SERVICES.UNDO_REDO_MANAGER);
+        this.dataManager = getService(SERVICES.DATA_MANAGER);
+        // ElementTypeManager is created later, so access lazily
+        this._elementTypeManager = null;
+    }
+    
+    /**
+     * Get ElementTypeManager (lazy access since it's created after ElementManager)
+     */
+    get elementTypeManager() {
+        if (!this._elementTypeManager) {
+            try {
+                this._elementTypeManager = getService(SERVICES.ELEMENT_TYPE_MANAGER);
+            } catch (e) {
+                // Service not available yet, return null
+                return null;
+            }
+        }
+        return this._elementTypeManager;
     }
     
     addElement(pageId, binId, elementType) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -24,43 +46,46 @@ export class ElementManager {
         bin.elements.push(newElement);
         
         // Record undo/redo change
-        if (this.app.undoRedoManager) {
-            this.app.undoRedoManager.recordElementAdd(pageId, binId, newElementIndex, newElement);
+        if (this.undoRedoManager) {
+            this.undoRedoManager.recordElementAdd(pageId, binId, newElementIndex, newElement);
         }
         
         // Request data save via EventBus
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
         
         // Emit element created event for automation
-        if (this.app.eventBus) {
-            this.app.eventBus.emit('element:created', {
+        eventBus.emit(EVENTS.ELEMENT.CREATED, {
+            pageId,
+            binId,
+            elementIndex: newElementIndex,
+            element: newElement
+        });
+        
+        // Request render via EventBus
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+        
+        // Automatically open edit modal for the newly created element via event
+        setTimeout(() => {
+            eventBus.emit(EVENTS.UI.SHOW_EDIT_MODAL, {
                 pageId,
                 binId,
                 elementIndex: newElementIndex,
                 element: newElement
             });
-        }
-        
-        this.app.render();
-        
-        // Automatically open edit modal for the newly created element
-        setTimeout(() => {
-            this.app.modalHandler.showEditModal(pageId, binId, newElementIndex, newElement);
             // Focus on the text input
             setTimeout(() => {
-                const textInput = document.getElementById('edit-text');
-                if (textInput) {
-                    textInput.focus();
-                    textInput.select();
-                }
+                eventBus.emit(EVENTS.UI.FOCUS_INPUT, {
+                    inputId: 'edit-text',
+                    select: true
+                });
             }, 50);
         }, 50);
     }
     
     createElementTemplate(type) {
         // Try to use ElementTypeManager if available
-        if (this.app.elementTypeManager) {
-            const template = this.app.elementTypeManager.createTemplate(type);
+        if (this.elementTypeManager) {
+            const template = this.elementTypeManager.createTemplate(type);
             if (template) {
                 return template;
             }
@@ -231,7 +256,7 @@ export class ElementManager {
             childIndex = parseInt(parts[1]);
         }
         
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === actualPageId);
+        const page = this.appState.pages.find(p => p.id === actualPageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === actualBinId);
@@ -248,9 +273,9 @@ export class ElementManager {
             element.completed = element.children.every(ch => ch.completed);
             
             // Record undo/redo change
-            if (this.app.undoRedoManager) {
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', child.completed, oldValue, childIndex);
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
+            if (this.undoRedoManager) {
+                this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', child.completed, oldValue, childIndex);
+                this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
             }
         } else if (itemIndex !== null && element.items) {
             // Toggle multi-checkbox item
@@ -260,9 +285,9 @@ export class ElementManager {
             element.completed = element.items.every(item => item.completed);
             
             // Record undo/redo change
-            if (this.app.undoRedoManager) {
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.items[itemIndex].completed, oldItemValue, null, itemIndex);
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, oldElementValue);
+            if (this.undoRedoManager) {
+                this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.items[itemIndex].completed, oldItemValue, null, itemIndex);
+                this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, oldElementValue);
             }
         } else if (subtaskIndex !== null) {
             // Legacy subtask support (for backward compatibility)
@@ -272,9 +297,9 @@ export class ElementManager {
                 element.completed = element.subtasks.every(st => st.completed);
                 
                 // Record undo/redo change
-                if (this.app.undoRedoManager) {
-                    this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.subtasks[subtaskIndex].completed, oldValue, subtaskIndex);
-                    this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
+                if (this.undoRedoManager) {
+                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.subtasks[subtaskIndex].completed, oldValue, subtaskIndex);
+                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
                 }
             } else if (element.children && element.children[subtaskIndex]) {
                 // Use children if subtasks don't exist
@@ -283,9 +308,9 @@ export class ElementManager {
                 element.completed = element.children.every(ch => ch.completed);
                 
                 // Record undo/redo change
-                if (this.app.undoRedoManager) {
-                    this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.children[subtaskIndex].completed, oldValue, subtaskIndex);
-                    this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
+                if (this.undoRedoManager) {
+                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.children[subtaskIndex].completed, oldValue, subtaskIndex);
+                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
                 }
             }
         } else {
@@ -294,8 +319,8 @@ export class ElementManager {
             const oldValue = element.completed;
             element.completed = !element.completed;
             // Record undo/redo change for main element
-            if (this.app.undoRedoManager) {
-                this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, oldValue);
+            if (this.undoRedoManager) {
+                this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, oldValue);
             }
             
             if (element.children) {
@@ -304,8 +329,8 @@ export class ElementManager {
                         const oldChildValue = ch.completed;
                         ch.completed = element.completed;
                         // Record child changes
-                        if (this.app.undoRedoManager && oldChildValue !== ch.completed) {
-                            this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', ch.completed, oldChildValue, idx);
+                        if (this.undoRedoManager && oldChildValue !== ch.completed) {
+                            this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', ch.completed, oldChildValue, idx);
                         }
                     }
                 });
@@ -317,33 +342,31 @@ export class ElementManager {
                         const oldSubtaskValue = st.completed;
                         st.completed = element.completed;
                         // Record subtask changes
-                        if (this.app.undoRedoManager && oldSubtaskValue !== st.completed) {
-                            this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', st.completed, oldSubtaskValue, idx);
+                        if (this.undoRedoManager && oldSubtaskValue !== st.completed) {
+                            this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', st.completed, oldSubtaskValue, idx);
                         }
                     }
                 });
             }
             
             // Emit events for automation
-            if (this.app.eventBus) {
-                if (element.completed && !wasChecked) {
-                    // Element was just completed
-                    this.app.eventBus.emit('element:completed', {
-                        pageId: actualPageId,
-                        binId: actualBinId,
-                        elementIndex: actualElementIndex,
-                        element: element
-                    });
-                }
-                
-                // Always emit updated event
-                this.app.eventBus.emit('element:updated', {
+            if (element.completed && !wasChecked) {
+                // Element was just completed
+                eventBus.emit(EVENTS.ELEMENT.COMPLETED, {
                     pageId: actualPageId,
                     binId: actualBinId,
                     elementIndex: actualElementIndex,
                     element: element
                 });
             }
+            
+            // Always emit updated event
+            eventBus.emit(EVENTS.ELEMENT.UPDATED, {
+                pageId: actualPageId,
+                binId: actualBinId,
+                elementIndex: actualElementIndex,
+                element: element
+            });
             
             // Update tracker elements if any exist (only if element was just checked)
             if (element.completed && !wasChecked) {
@@ -361,7 +384,7 @@ export class ElementManager {
     }
     
     updateTrackers(pageId, binId, toggledElementIndex = null, wasChecked = false) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -406,7 +429,7 @@ export class ElementManager {
     }
     
     addMultiCheckboxItem(pageId, binId, elementIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -423,23 +446,23 @@ export class ElementManager {
             element.items.push(newItem);
             
             // Record undo/redo change
-            if (this.app.undoRedoManager) {
-                const path = this.app.undoRedoManager.getElementPath(pageId, binId, elementIndex);
+            if (this.undoRedoManager) {
+                const path = this.undoRedoManager.getElementPath(pageId, binId, elementIndex);
                 if (path) {
                     path.push('items');
-                    const change = this.app.undoRedoManager.createChange('add', path, newItem, null);
+                    const change = this.undoRedoManager.createChange('add', path, newItem, null);
                     change.changeId = `${Date.now()}-${Math.random()}`;
-                    this.app.undoRedoManager.recordChange(change);
+                    this.undoRedoManager.recordChange(change);
                 }
             }
             
-            this.app.dataManager.saveData();
-            this.app.render();
+            this.dataManager.saveData();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         }
     }
     
     removeMultiCheckboxItem(pageId, binId, elementIndex, itemIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -453,29 +476,29 @@ export class ElementManager {
             element.completed = element.items.length > 0 && element.items.every(item => item.completed);
             
             // Record undo/redo change
-            if (this.app.undoRedoManager) {
-                const path = this.app.undoRedoManager.getElementPath(pageId, binId, elementIndex);
+            if (this.undoRedoManager) {
+                const path = this.undoRedoManager.getElementPath(pageId, binId, elementIndex);
                 if (path) {
                     path.push('items');
                     path.push(itemIndex);
-                    const change = this.app.undoRedoManager.createChange('delete', path, null, removedItem);
+                    const change = this.undoRedoManager.createChange('delete', path, null, removedItem);
                     change.changeId = `${Date.now()}-${Math.random()}`;
-                    this.app.undoRedoManager.recordChange(change);
+                    this.undoRedoManager.recordChange(change);
                     
                     // Also record completed state change if it changed
                     if (oldCompleted !== element.completed) {
-                        this.app.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'completed', element.completed, oldCompleted);
+                        this.undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'completed', element.completed, oldCompleted);
                     }
                 }
             }
             
-            this.app.dataManager.saveData();
-            this.app.render();
+            this.dataManager.saveData();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         }
     }
     
     addElementAfter(pageId, binId, elementIndex, elementType) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
         
         const bin = page.bins?.find(b => b.id === binId);
@@ -491,8 +514,8 @@ export class ElementManager {
         bin.elements.splice(insertIndex, 0, newElement);
         
         // Record undo/redo change
-        if (this.app.undoRedoManager) {
-            this.app.undoRedoManager.recordElementAdd(pageId, binId, insertIndex, newElement);
+        if (this.undoRedoManager) {
+            this.undoRedoManager.recordElementAdd(pageId, binId, insertIndex, newElement);
         }
         
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);

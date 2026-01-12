@@ -1,14 +1,38 @@
 // DragDropHandler.js - Handles drag and drop operations
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class DragDropHandler {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+    
+    _getFormatRendererManager() {
+        return getService(SERVICES.FORMAT_RENDERER_MANAGER);
+    }
+    
+    _getRenderer() {
+        return getService(SERVICES.RENDERER);
     }
     
     moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
-        const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
+        const appState = this._getAppState();
+        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
@@ -48,7 +72,7 @@ export class DragDropHandler {
         }
         
         // Add to target
-        const targetPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
+        const targetPage = appState.pages.find(p => p.id === targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             // Re-add element to source if target is invalid
@@ -155,19 +179,20 @@ export class DragDropHandler {
         targetBin.elements.splice(adjustedTargetIndex, 0, element);
         
         // Record undo/redo change
-        if (this.app.undoRedoManager) {
+        const undoRedoManager = this._getUndoRedoManager();
+        if (undoRedoManager) {
             if (isChild && parentElementIndex !== null) {
                 // Child element being un-nested - record as move from child to element
                 // For now, treat it as a regular element move from the parent's position
                 // (the actual implementation is complex, so we'll record it as a move)
-                this.app.undoRedoManager.recordElementMove(
+                undoRedoManager.recordElementMove(
                     sourcePageId, sourceBinId, parentElementIndex, // Source (parent position)
                     targetPageId, targetBinId, adjustedTargetIndex, // Target
                     JSON.parse(JSON.stringify(element))
                 );
             } else {
                 // Regular element move
-                this.app.undoRedoManager.recordElementMove(
+                undoRedoManager.recordElementMove(
                     sourcePageId, sourceBinId, sourceElementIndex,
                     targetPageId, targetBinId, adjustedTargetIndex,
                     JSON.parse(JSON.stringify(element))
@@ -181,7 +206,7 @@ export class DragDropHandler {
         const elementType = element.type || 'unknown';
         const elementId = `${targetPageId}-${targetBinId}-${adjustedTargetIndex}-${elementType}-${elementText}`;
         
-        this.app.lastMovedElement = {
+        appState.lastMovedElement = {
             pageId: targetPageId,
             binId: targetBinId,
             elementIndex: adjustedTargetIndex,
@@ -193,7 +218,7 @@ export class DragDropHandler {
             oldPosition: oldPosition // Store the captured old position
         };
         // Log resulting structure
-        const resultPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
+        const resultPage = appState.pages.find(p => p.id === targetPageId);
         const resultBin = resultPage?.bins?.find(b => b.id === targetBinId);
         const resultElement = resultBin?.elements[adjustedTargetIndex];
         const resultText = resultElement?.text || 'N/A';
@@ -201,7 +226,8 @@ export class DragDropHandler {
         // If we un-nested a child, check if parent still has children
         let parentChildrenInfo = 'N/A';
         if (isChild && parentElementIndex !== null) {
-            const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
+            const appState = this._getAppState();
+        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
             const sourceBin = sourcePage?.bins?.find(b => b.id === sourceBinId);
             const parentElement = sourceBin?.elements[parentElementIndex];
             if (parentElement) {
@@ -210,21 +236,29 @@ export class DragDropHandler {
             }
         }
         
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
         // Preserve format view during re-render to prevent flicker
-        const pageFormat = this.app.formatRendererManager?.getPageFormat(targetPageId);
+        const formatRendererManager = this._getFormatRendererManager();
+        const pageFormat = formatRendererManager?.getPageFormat(targetPageId);
         if (pageFormat) {
-            this.app._preservingFormat = true;
+            const renderer = this._getRenderer();
+            if (renderer && renderer.getRenderer) {
+                renderer.getRenderer()._preservingFormat = true;
+            }
         }
         
         // Use requestAnimationFrame to ensure smooth animation
         requestAnimationFrame(() => {
-            this.app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         });
     }
 
     reorderChildElement(pageId, binId, parentElementIndex, sourceChildIndex, targetChildIndex) {
-        const page = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) {
             console.error('Page not found:', pageId);
             return;
@@ -257,8 +291,9 @@ export class DragDropHandler {
         parentElement.children.splice(adjustedTargetIndex, 0, childElement);
 
         // Record undo/redo change
-        if (this.app.undoRedoManager) {
-            this.app.undoRedoManager.recordChildReorder(
+        const undoRedoManager = this._getUndoRedoManager();
+        if (undoRedoManager) {
+            undoRedoManager.recordChildReorder(
                 pageId, binId, parentElementIndex, sourceChildIndex, adjustedTargetIndex,
                 JSON.parse(JSON.stringify(childElement))
             );
@@ -266,22 +301,30 @@ export class DragDropHandler {
 
         // Log resulting structure
         const parentText = parentElement?.text || 'N/A';
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
         
         // Preserve format view during re-render to prevent flicker
-        const pageFormat = this.app.formatRendererManager?.getPageFormat(pageId);
+        const formatRendererManager = this._getFormatRendererManager();
+        const pageFormat = formatRendererManager?.getPageFormat(pageId);
         if (pageFormat) {
-            this.app._preservingFormat = true;
+            const renderer = this._getRenderer();
+            if (renderer && renderer.getRenderer) {
+                renderer.getRenderer()._preservingFormat = true;
+            }
         }
         
         requestAnimationFrame(() => {
-            this.app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         });
     }
 
     nestElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null, elementToNest = null) {
         
-        const sourcePage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === sourcePageId);
+        const appState = this._getAppState();
+        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
@@ -293,7 +336,8 @@ export class DragDropHandler {
             return;
         }
         
-        const targetPage = (this.app.appState?.pages || this.app.pages || []).find(p => p.id === targetPageId);
+        // Reuse appState from line 316
+        const targetPage = appState.pages.find(p => p.id === targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             return;
@@ -480,17 +524,24 @@ export class DragDropHandler {
         // Log resulting structure
         const resultElement = targetBin.elements[adjustedTargetElementIndex];
         const resultText = resultElement?.text || 'N/A';
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
         
         // Preserve format view during re-render to prevent flicker
-        const pageFormat = this.app.formatRendererManager?.getPageFormat(targetPageId);
+        const formatRendererManager = this._getFormatRendererManager();
+        const pageFormat = formatRendererManager?.getPageFormat(targetPageId);
         if (pageFormat) {
-            this.app._preservingFormat = true;
+            const renderer = this._getRenderer();
+            if (renderer && renderer.getRenderer) {
+                renderer.getRenderer()._preservingFormat = true;
+            }
         }
         
         // Use requestAnimationFrame to ensure smooth animation
         requestAnimationFrame(() => {
-            this.app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         });
     }
     
@@ -533,12 +584,13 @@ export class DragDropHandler {
             trashIcon.style.transform = 'scale(1)';
             trashIcon.style.display = 'none';
             
-            const dragData = this.app.appState.dragData;
+            const appState = this._getAppState();
+            const dragData = appState.dragData;
             if (!dragData) return;
             
             if (dragData.type === 'element') {
                 // Delete element
-                const page = this.app.appState.pages.find(p => p.id === dragData.pageId);
+                const page = appState.pages.find(p => p.id === dragData.pageId);
                 const bin = page?.bins?.find(b => b.id === dragData.binId);
                 if (bin) {
                     if (dragData.isChild && dragData.parentElementIndex !== null && dragData.childIndex !== null) {
@@ -547,12 +599,13 @@ export class DragDropHandler {
                         if (parentElement && parentElement.children) {
                             const deletedChild = parentElement.children[dragData.childIndex];
                             // Record undo/redo change
-                            if (this.app.undoRedoManager && deletedChild) {
-                                const path = this.app.undoRedoManager.getElementPath(dragData.pageId, dragData.binId, dragData.parentElementIndex, dragData.childIndex);
+                            const undoRedoManager = this._getUndoRedoManager();
+                            if (undoRedoManager && deletedChild) {
+                                const path = undoRedoManager.getElementPath(dragData.pageId, dragData.binId, dragData.parentElementIndex, dragData.childIndex);
                                 if (path) {
-                                    const change = this.app.undoRedoManager.createChange('delete', path, null, deletedChild);
+                                    const change = undoRedoManager.createChange('delete', path, null, deletedChild);
                                     change.changeId = `${Date.now()}-${Math.random()}`;
-                                    this.app.undoRedoManager.recordChange(change);
+                                    undoRedoManager.recordChange(change);
                                 }
                             }
                             parentElement.children.splice(dragData.childIndex, 1);
@@ -564,25 +617,35 @@ export class DragDropHandler {
                         // Delete regular element
                         const deletedElement = bin.elements[dragData.elementIndex];
                         // Record undo/redo change
-                        if (this.app.undoRedoManager && deletedElement) {
-                            this.app.undoRedoManager.recordElementDelete(dragData.pageId, dragData.binId, dragData.elementIndex, deletedElement);
+                        const undoRedoManager = this._getUndoRedoManager();
+                        if (undoRedoManager && deletedElement) {
+                            undoRedoManager.recordElementDelete(dragData.pageId, dragData.binId, dragData.elementIndex, deletedElement);
                         }
                         bin.elements.splice(dragData.elementIndex, 1);
                     }
-                    this.app.dataManager.saveData();
+                    const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
                     eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
             } else if (dragData.type === 'bin') {
                 // Delete bin
-                this.app.deleteBin(dragData.pageId, dragData.binId);
+                const binManager = getService(SERVICES.BIN_MANAGER);
+                if (binManager) {
+                    binManager.deleteBin(dragData.pageId, dragData.binId);
+                }
             } else if (dragData.type === 'page') {
                 // Delete page (only if more than one page exists)
-                if (this.app.appState.pages.length > 1) {
-                    this.app.deletePage(dragData.pageId);
+                if (appState.pages.length > 1) {
+                    const pageManager = getService(SERVICES.PAGE_MANAGER);
+                    if (pageManager) {
+                        pageManager.deletePage(dragData.pageId);
+                    }
                 }
             }
             
-            this.app.appState.dragData = null;
+            appState.dragData = null;
         });
     }
 }

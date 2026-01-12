@@ -1,5 +1,6 @@
 // AppServices.js - Service name constants and registration helpers
 import { serviceLocator } from './ServiceLocator.js';
+import { eventBus } from './EventBus.js';
 
 /**
  * Service name constants
@@ -15,6 +16,8 @@ export const SERVICES = {
     
     // Manager services
     SETTINGS_MANAGER: 'settingsManager',
+    THEME_MANAGER: 'themeManager',
+    VISUAL_SETTINGS_MANAGER: 'visualSettingsManager',
     PAGE_MANAGER: 'pageManager',
     BIN_MANAGER: 'binManager',
     ELEMENT_MANAGER: 'elementManager',
@@ -36,6 +39,8 @@ export const SERVICES = {
     IMPORT_SERVICE: 'importService',
     OAUTH_MANAGER: 'oauthManager',
     TIME_TRACKER: 'timeTracker',
+    DAILY_RESET_MANAGER: 'dailyResetManager',
+    INLINE_EDITOR: 'inlineEditor',
     
     // Plugin system
     PAGE_PLUGIN_MANAGER: 'pagePluginManager',
@@ -81,16 +86,40 @@ export function hasService(name) {
  */
 export function registerAllServices(app) {
     // Core services
-    registerService(SERVICES.EVENT_BUS, app.eventBus);
-    registerService(SERVICES.DATA_MANAGER, app.dataManager);
-    registerService(SERVICES.UNDO_REDO_MANAGER, app.undoRedoManager);
+    // EVENT_BUS is already registered in app.js using the imported singleton
+    // Only register if not already registered (for backward compatibility)
+    if (!hasService(SERVICES.EVENT_BUS)) {
+        registerService(SERVICES.EVENT_BUS, app.eventBus || eventBus);
+    }
+    // These may already be registered, but registerAllServices will overwrite with latest instance
+    if (!hasService(SERVICES.DATA_MANAGER)) {
+        registerService(SERVICES.DATA_MANAGER, app.dataManager);
+    }
+    if (!hasService(SERVICES.UNDO_REDO_MANAGER)) {
+        registerService(SERVICES.UNDO_REDO_MANAGER, app.undoRedoManager);
+    }
     registerService(SERVICES.SYNC_MANAGER, app.syncManager);
     
     // Manager services
-    registerService(SERVICES.SETTINGS_MANAGER, app.settingsManager);
-    registerService(SERVICES.PAGE_MANAGER, app.pageManager);
-    registerService(SERVICES.BIN_MANAGER, app.binManager);
-    registerService(SERVICES.ELEMENT_MANAGER, app.elementManager);
+    // These services may already be registered in app.js, check before registering
+    if (!hasService(SERVICES.SETTINGS_MANAGER)) {
+        registerService(SERVICES.SETTINGS_MANAGER, app.settingsManager);
+    }
+    if (!hasService(SERVICES.THEME_MANAGER)) {
+        registerService(SERVICES.THEME_MANAGER, app.themeManager);
+    }
+    if (!hasService(SERVICES.VISUAL_SETTINGS_MANAGER)) {
+        registerService(SERVICES.VISUAL_SETTINGS_MANAGER, app.visualSettingsManager);
+    }
+    if (!hasService(SERVICES.PAGE_MANAGER)) {
+        registerService(SERVICES.PAGE_MANAGER, app.pageManager);
+    }
+    if (!hasService(SERVICES.BIN_MANAGER)) {
+        registerService(SERVICES.BIN_MANAGER, app.binManager);
+    }
+    if (!hasService(SERVICES.ELEMENT_MANAGER)) {
+        registerService(SERVICES.ELEMENT_MANAGER, app.elementManager);
+    }
     registerService(SERVICES.FILE_MANAGER, app.fileManager);
     registerService(SERVICES.MODAL_HANDLER, app.modalHandler);
     registerService(SERVICES.DRAG_DROP_HANDLER, app.dragDropHandler);
@@ -109,6 +138,8 @@ export function registerAllServices(app) {
     registerService(SERVICES.IMPORT_SERVICE, app.importService);
     registerService(SERVICES.OAUTH_MANAGER, app.oauthManager);
     registerService(SERVICES.TIME_TRACKER, app.timeTracker);
+    registerService(SERVICES.DAILY_RESET_MANAGER, app.dailyResetManager);
+    registerService(SERVICES.INLINE_EDITOR, app.inlineEditor);
     
     // Plugin system
     registerService(SERVICES.PAGE_PLUGIN_MANAGER, app.pagePluginManager);
@@ -118,6 +149,9 @@ export function registerAllServices(app) {
     
     // App state - provide access to pages array and other app state
     // Now uses AppState instance
-    registerService(SERVICES.APP_STATE, app.appState);
+    // APP_STATE may already be registered in app.js, check before registering
+    if (!hasService(SERVICES.APP_STATE)) {
+        registerService(SERVICES.APP_STATE, app.appState);
+    }
 }
 

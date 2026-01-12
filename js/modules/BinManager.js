@@ -1,13 +1,34 @@
 // BinManager.js - Handles bin-related operations (renamed from PageManager)
 import { eventBus } from '../core/EventBus.js';
+import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class BinManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+    
+    _getBinPluginManager() {
+        return getService(SERVICES.BIN_PLUGIN_MANAGER);
     }
     
     async addBin(pageId, afterBinId = null) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page) return;
 
         if (!page.bins) {
@@ -52,41 +73,49 @@ export class BinManager {
         }
         
         // Record undo/redo change
-        if (this.app.undoRedoManager) {
-            this.app.undoRedoManager.recordBinAdd(pageId, binIndex, newBin);
+        const undoRedoManager = this._getUndoRedoManager();
+        if (undoRedoManager) {
+            undoRedoManager.recordBinAdd(pageId, binIndex, newBin);
         }
         
         // Initialize plugins for new bin
-        if (this.app.binPluginManager) {
-            await this.app.binPluginManager.initializeBinPlugins(pageId, binId);
+        const binPluginManager = this._getBinPluginManager();
+        if (binPluginManager) {
+            await binPluginManager.initializeBinPlugins(pageId, binId);
         }
         
         // Emit event
-        eventBus.emit('bin:created', { pageId, binId });
+        eventBus.emit(EVENTS.BIN.CREATED, { pageId, binId, bin: newBin });
         
-        this.app.dataManager.saveData();
-        this.app.render();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
     }
     
     async deleteBin(pageId, binId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const appState = this._getAppState();
+        const page = appState.pages.find(p => p.id === pageId);
         if (!page || !page.bins) return;
         
         const bin = page.bins.find(b => b.id === binId);
         if (!bin) return;
         
         // Record undo/redo change before deletion
-        if (this.app.undoRedoManager) {
-            this.app.undoRedoManager.recordBinDelete(pageId, binId, JSON.parse(JSON.stringify(bin)));
+        const undoRedoManager = this._getUndoRedoManager();
+        if (undoRedoManager) {
+            undoRedoManager.recordBinDelete(pageId, binId, JSON.parse(JSON.stringify(bin)));
         }
         
         // Cleanup plugins for bin
-        if (this.app.binPluginManager) {
-            await this.app.binPluginManager.cleanupBinPlugins(pageId, binId);
+        const binPluginManager = this._getBinPluginManager();
+        if (binPluginManager) {
+            await binPluginManager.cleanupBinPlugins(pageId, binId);
         }
         
         // Emit event before deletion
-        eventBus.emit('bin:deleted', { pageId, binId });
+        eventBus.emit(EVENTS.BIN.DELETED, { pageId, binId });
         
         page.bins = page.bins.filter(b => b.id !== binId);
         
@@ -100,20 +129,24 @@ export class BinManager {
             page.bins = [defaultBin];
             
             // Record addition of default bin
-            if (this.app.undoRedoManager) {
-                this.app.undoRedoManager.recordBinAdd(pageId, 0, defaultBin);
+            if (undoRedoManager) {
+                undoRedoManager.recordBinAdd(pageId, 0, defaultBin);
             }
         }
         
-        this.app.dataManager.saveData();
-        this.app.render();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
     }
     
     moveBin(sourcePageId, sourceBinId, targetPageId, targetBinId) {
         if (sourcePageId === targetPageId && sourceBinId === targetBinId) return;
         
-        const sourcePage = this.app.pages.find(p => p.id === sourcePageId);
-        const targetPage = this.app.pages.find(p => p.id === targetPageId);
+        const appState = this._getAppState();
+        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
+        const targetPage = appState.pages.find(p => p.id === targetPageId);
         
         if (!sourcePage || !targetPage || !sourcePage.bins || !targetPage.bins) return;
         
@@ -136,9 +169,12 @@ export class BinManager {
             targetPage.bins.splice(targetIndex, 0, sourceBin);
         }
         
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
         requestAnimationFrame(() => {
-            this.app.render();
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         });
     }
 }

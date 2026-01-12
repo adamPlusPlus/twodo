@@ -1,10 +1,21 @@
 // DailyResetManager.js - Handles daily task reset logic
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class DailyResetManager {
-    constructor(app) {
-        this.app = app;
+    constructor() {
+    }
+    
+    /**
+     * Get services
+     */
+    _getAppState() {
+        return getService(SERVICES.APP_STATE);
+    }
+    
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
     }
     
     /**
@@ -15,7 +26,9 @@ export class DailyResetManager {
         const today = new Date();
         const todayDateString = today.toDateString();
         
-        this.app.appState.pages.forEach(page => {
+        const appState = this._getAppState();
+        if (!appState || !appState.pages) return;
+        appState.pages.forEach(page => {
             // Filter out completed one-time tasks first (but not persistent elements)
             page.elements = page.elements.filter(element => {
                 // Skip persistent elements entirely
@@ -105,9 +118,12 @@ export class DailyResetManager {
             });
         });
         
-        localStorage.setItem(this.app.dataManager.lastResetKey, todayDateString);
-        this.app.dataManager.saveData();
-        this.app.render();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            localStorage.setItem(dataManager.lastResetKey, todayDateString);
+            dataManager.saveData();
+        }
+        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
     }
 }
 
