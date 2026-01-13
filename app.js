@@ -312,6 +312,10 @@ class TodoApp {
             
             // Update app with loaded file data
             this.appState.pages = data.pages;
+            // Set timestamp to prevent stale sync data from overwriting freshly loaded data
+            if (this.dataManager) {
+                this.dataManager._lastSyncTimestamp = Date.now();
+            }
             console.log(`Loaded last opened file: ${lastOpenedFile}`);
             // Don't render here - let init() handle rendering after load completes
             
@@ -788,21 +792,45 @@ class TodoApp {
         return this.contextMenuHandler.showPageContextMenu(e, pageId);
     }
     
+    /**
+     * Helper to validate elementIndex
+     * @param {*} elementIndex - Element index to validate
+     * @returns {boolean} True if elementIndex is a valid number
+     */
+    _isValidElementIndex(elementIndex) {
+        return elementIndex !== null && 
+               elementIndex !== undefined && 
+               !isNaN(elementIndex) && 
+               (typeof elementIndex === 'number' || (typeof elementIndex === 'string' && !isNaN(parseInt(elementIndex, 10))));
+    }
+    
     handleContextEdit() {
         const { pageId, binId, elementIndex } = this.appState.contextMenuState;
-        if (pageId === null) return;
+        console.log('[handleContextEdit] Called with:', { pageId, binId, elementIndex, contextMenuState: this.appState.contextMenuState });
+        
+        if (pageId === null) {
+            console.warn('[handleContextEdit] pageId is null');
+            return;
+        }
         
         const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        if (!page) {
+            console.warn('[handleContextEdit] Page not found:', pageId);
+            return;
+        }
         
         this.hideContextMenu();
         
         // Determine what we're editing:
-        // - If elementIndex is not null → element edit
+        // - If elementIndex is a valid number → element edit
         // - If elementIndex is null and binId is explicitly set (not undefined) → bin edit
         // - If elementIndex is null and binId is undefined → page edit
         
-        if (elementIndex !== null && elementIndex !== undefined) {
+        // Check if elementIndex is a valid number (not null, not undefined, not NaN)
+        const isValidElementIndex = this._isValidElementIndex(elementIndex);
+        console.log('[handleContextEdit] isValidElementIndex:', isValidElementIndex);
+        
+        if (isValidElementIndex) {
             // Edit element - find binId from contextMenuState or use active bin
             let targetBinId = binId || this.appState.activeBinId;
             if (!targetBinId) {
@@ -818,9 +846,15 @@ class TodoApp {
                 }
             }
             const bin = page.bins?.find(b => b.id === targetBinId);
-            if (!bin) return;
+            if (!bin) {
+                console.warn('[handleContextEdit] Bin not found:', { pageId, targetBinId, elementIndex });
+                return;
+            }
             const element = bin.elements[elementIndex];
-            if (!element) return;
+            if (!element) {
+                console.warn('[handleContextEdit] Element not found:', { pageId, targetBinId, elementIndex, elementsLength: bin.elements?.length });
+                return;
+            }
             this.showEditModal(pageId, targetBinId, elementIndex, element);
         } else if (binId !== null && binId !== undefined) {
             // Edit bin - show bin edit modal
@@ -836,12 +870,12 @@ class TodoApp {
         this.hideContextMenu();
         
         // Determine what we're customizing:
-        // - If elementIndex is not null → element visual customization
+        // - If elementIndex is a valid number → element visual customization
         // - If elementIndex is null and binId is explicitly set (not undefined) → bin visual customization
         // - If elementIndex is null and binId is undefined → page visual customization
         // - Check for pane customization (from pane context menu)
         
-        if (elementIndex !== null && elementIndex !== undefined && pageId) {
+        if (this._isValidElementIndex(elementIndex) && pageId) {
             // Customize element visuals
             const page = this.appState.pages.find(p => p.id === pageId);
             if (!page) return;
@@ -985,7 +1019,7 @@ class TodoApp {
     
     handleContextAddSubtasks() {
         const { pageId, binId, elementIndex } = this.appState.contextMenuState;
-        if (pageId === null || elementIndex === null) return;
+        if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
         const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
@@ -1008,7 +1042,7 @@ class TodoApp {
     
     handleContextViewData() {
         const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
-        if (pageId === null || elementIndex === null) return;
+        if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
         const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
@@ -1032,7 +1066,7 @@ class TodoApp {
     
     handleContextDeleteElement() {
         const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
-        if (pageId === null || elementIndex === null) return;
+        if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
         const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
@@ -1104,7 +1138,7 @@ class TodoApp {
     
     handleContextAddElement() {
         const { pageId, binId, elementIndex } = this.appState.contextMenuState;
-        if (pageId === null || elementIndex === null) return;
+        if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
         const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
@@ -1118,7 +1152,7 @@ class TodoApp {
     
     handleContextAddChildElement() {
         const { pageId, binId, elementIndex } = this.appState.contextMenuState;
-        if (pageId === null || elementIndex === null) return;
+        if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
         const page = this.appState.pages.find(p => p.id === pageId);
         if (!page) return;
@@ -1245,10 +1279,13 @@ class TodoApp {
         if (!page) return;
         
         // Toggle page collapse state
-        if (!(pageId in this.pageStates)) {
-            this.pageStates[pageId] = true;
+        const pageStates = this.appState.pageStates || {};
+        if (!(pageId in pageStates)) {
+            this.appState.setPageState(pageId, true);
+        } else {
+            const currentState = this.appState.getPageState(pageId);
+            this.appState.setPageState(pageId, !currentState);
         }
-        this.pageStates[pageId] = !this.pageStates[pageId];
         
         this.hideContextMenu();
         

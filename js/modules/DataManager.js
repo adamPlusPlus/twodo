@@ -321,6 +321,9 @@ export class DataManager {
             this._autosaveToServer();
         }, 500); // Wait 500ms after last change before saving
         
+        // Track that there's a pending save
+        this._hasPendingSave = true;
+        
         // Debounce WebSocket sync (shorter delay for real-time feel)
             // Skip sync if this is from a remote update to prevent loops
         if (!skipSync) {
@@ -419,10 +422,30 @@ export class DataManager {
             // Use FileManager's saveFile method to save to server (silent mode for autosave)
             await fileManager.saveFile(currentFilename, data, true);
             console.log('[DataManager] Autosave successful:', currentFilename);
+            // Mark save as complete
+            this._hasPendingSave = false;
             // Silently save - don't show alerts for autosave
         } catch (error) {
             // Silently fail for autosave - don't interrupt user workflow
             console.warn('[DataManager] Autosave failed:', error);
+            this._hasPendingSave = false;
+        }
+    }
+    
+    /**
+     * Flush any pending autosave before page unload
+     * This ensures changes are saved even if user refreshes quickly
+     */
+    async flushPendingSave() {
+        if (this._autosaveTimer) {
+            // Clear the timer and save immediately
+            clearTimeout(this._autosaveTimer);
+            this._autosaveTimer = null;
+            await this._autosaveToServer();
+        } else if (this._hasPendingSave) {
+            // Save is in progress, wait for it to complete
+            // Note: This is best-effort - we can't guarantee completion on unload
+            await this._autosaveToServer();
         }
     }
     

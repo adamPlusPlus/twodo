@@ -139,6 +139,14 @@ export class AppState {
         return this._binStates;
     }
     
+    set binStates(value) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            console.warn('[AppState] binStates must be an object');
+            return;
+        }
+        this._binStates = value || {};
+    }
+    
     setBinState(binId, state) {
         this._binStates[binId] = state;
     }
@@ -152,12 +160,41 @@ export class AppState {
         return this._subtaskStates;
     }
     
+    set subtaskStates(value) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            console.warn('[AppState] subtaskStates must be an object');
+            return;
+        }
+        this._subtaskStates = value || {};
+    }
+    
     setSubtaskState(key, state) {
         this._subtaskStates[key] = state;
     }
     
     getSubtaskState(key) {
         return this._subtaskStates[key];
+    }
+    
+    // Page states
+    get pageStates() {
+        return this._pageStates;
+    }
+    
+    set pageStates(value) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            console.warn('[AppState] pageStates must be an object');
+            return;
+        }
+        this._pageStates = value || {};
+    }
+    
+    setPageState(pageId, state) {
+        this._pageStates[pageId] = state;
+    }
+    
+    getPageState(pageId) {
+        return this._pageStates[pageId];
     }
     
     // Active bin ID

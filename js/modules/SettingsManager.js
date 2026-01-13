@@ -12,6 +12,17 @@ export class SettingsManager {
     }
     
     /**
+     * Get services
+     */
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
+    }
+    
+    _getUndoRedoManager() {
+        return getService(SERVICES.UNDO_REDO_MANAGER);
+    }
+    
+    /**
      * Get ThemeManager service
      */
     _getThemeManager() {
@@ -215,7 +226,8 @@ export class SettingsManager {
         
         // Generate QR code for current file at the top
         let qrCodeHtml = '';
-        const currentFilename = this.app.fileManager?.currentFilename;
+        const fileManager = this._getFileManager();
+        const currentFilename = fileManager?.currentFilename;
         if (currentFilename) {
             // Get current URL origin and construct file URL
             const currentUrl = window.location.origin + window.location.pathname;
@@ -436,12 +448,13 @@ export class SettingsManager {
         html += '<div class="settings-subsection">';
         
         // Buffer status
-        const bufferFilename = this.app.undoRedoManager?.currentBufferFilename || 'None';
-        const undoStackSize = this.app.undoRedoManager?.undoStack?.length || 0;
-        const redoStackSize = this.app.undoRedoManager?.redoStack?.length || 0;
-        const snapshotCount = this.app.undoRedoManager?.snapshots?.length || 0;
-        const lastSnapshot = this.app.undoRedoManager?.snapshots?.length > 0 
-            ? this.app.undoRedoManager.snapshots[this.app.undoRedoManager.snapshots.length - 1]
+        const undoRedoManager = this._getUndoRedoManager();
+        const bufferFilename = undoRedoManager?.currentBufferFilename || 'None';
+        const undoStackSize = undoRedoManager?.undoStack?.length || 0;
+        const redoStackSize = undoRedoManager?.redoStack?.length || 0;
+        const snapshotCount = undoRedoManager?.snapshots?.length || 0;
+        const lastSnapshot = undoRedoManager?.snapshots?.length > 0 
+            ? undoRedoManager.snapshots[undoRedoManager.snapshots.length - 1]
             : null;
         
         html += `<div style="margin-bottom: 15px; padding: 10px; background: #2a2a2a; border-radius: 4px;">`;
@@ -457,7 +470,7 @@ export class SettingsManager {
         html += `</div>`;
         
         // Validation results
-        const validation = this.app.undoRedoManager?.validateState();
+        const validation = undoRedoManager?.validateState();
         html += `<div style="margin-bottom: 15px; padding: 10px; background: #2a2a2a; border-radius: 4px;">`;
         html += `<div style="color: #ffffff; font-weight: 600; margin-bottom: 10px;">State Validation</div>`;
         if (validation) {
@@ -480,7 +493,7 @@ export class SettingsManager {
         html += `</div>`;
         
         // Undo issue diagnostics
-        const undoDiagnostics = this.app.undoRedoManager?.diagnoseUndoIssue();
+        const undoDiagnostics = undoRedoManager?.diagnoseUndoIssue();
         html += `<div style="margin-bottom: 15px; padding: 10px; background: #2a2a2a; border-radius: 4px;">`;
         html += `<div style="color: #ffffff; font-weight: 600; margin-bottom: 10px;">Undo/Redo Diagnostics</div>`;
         if (undoDiagnostics) {

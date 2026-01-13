@@ -175,14 +175,44 @@ export class SyncManager {
         if (message.data && fileManager) {
             // Update app data if it matches current file
             if (this.currentFilename === message.filename) {
-                // Check timestamp to prevent older changes from overwriting newer ones
-                const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
+                const appState = this._getAppState();
                 const dataManager = this._getDataManager();
+                
+                // Compare data FIRST - if identical, skip entirely
+                const currentData = JSON.stringify(appState.pages);
+                const newData = JSON.stringify(message.data.pages || []);
+                
+                if (currentData === newData) {
+                    console.log('[SyncManager] File join data matches local data exactly, skipping update');
+                    // Update timestamp to match remote but don't overwrite data
+                    const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
+                    if (remoteTimestamp > 0 && dataManager) {
+                        dataManager._lastSyncTimestamp = remoteTimestamp;
+                    }
+                    return;
+                }
+                
+                // Data is different - check timestamps
+                const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
                 const localTimestamp = dataManager?._lastSyncTimestamp || 0;
+                
+                // If we just loaded the file (timestamp was set recently), be very conservative
+                // Only apply remote if it's significantly newer (more than 2 seconds)
+                if (localTimestamp > 0) {
+                    const timeSinceLoad = Date.now() - localTimestamp;
+                    // If we loaded less than 3 seconds ago, only apply remote if it's significantly newer
+                    if (timeSinceLoad < 3000) {
+                        const timeDiff = remoteTimestamp - localTimestamp;
+                        if (timeDiff < 2000) {
+                            console.log(`[SyncManager] Ignoring file join - just loaded file ${timeSinceLoad}ms ago, remote not significantly newer (diff: ${timeDiff}ms)`);
+                            return;
+                        }
+                    }
+                }
                 
                 // Only apply if remote change is newer (or if we don't have a local timestamp)
                 if (remoteTimestamp < localTimestamp && localTimestamp > 0) {
-                    console.log(`Ignoring older file join (remote: ${remoteTimestamp}, local: ${localTimestamp})`);
+                    console.log(`[SyncManager] Ignoring older file join (remote: ${remoteTimestamp}, local: ${localTimestamp})`);
                     return;
                 }
                 
@@ -193,24 +223,20 @@ export class SyncManager {
                     }
                 }
                 
-                // Only update if data is different to avoid unnecessary renders
-                const appState = this._getAppState();
-                const currentData = JSON.stringify(appState.pages);
-                const newData = JSON.stringify(message.data.pages || []);
-                if (currentData !== newData) {
-                    appState.pages = message.data.pages || [];
-                    appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
-                    appState.binStates = message.data.binStates || {};
-                    appState.subtaskStates = message.data.subtaskStates || {};
-                    appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
-                    if (message.data.settings) {
-                        const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
-                        if (settingsManager) {
-                            settingsManager.saveSettings(message.data.settings);
-                        }
+                // Apply remote data
+                console.log('[SyncManager] Applying file join data (remote is newer or equal)');
+                appState.pages = message.data.pages || [];
+                appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
+                appState.binStates = message.data.binStates || {};
+                appState.subtaskStates = message.data.subtaskStates || {};
+                appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
+                if (message.data.settings) {
+                    const settingsManager = getService(SERVICES.SETTINGS_MANAGER);
+                    if (settingsManager) {
+                        settingsManager.saveSettings(message.data.settings);
                     }
-                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
+                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             }
         }
     }

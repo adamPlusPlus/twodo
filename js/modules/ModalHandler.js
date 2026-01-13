@@ -34,6 +34,43 @@ export class ModalHandler {
         return getService(SERVICES.UNDO_REDO_MANAGER);
     }
     
+    _getTagManager() {
+        return getService(SERVICES.TAG_MANAGER);
+    }
+    
+    _getFileManager() {
+        return getService(SERVICES.FILE_MANAGER);
+    }
+    
+    _getFormatRendererManager() {
+        return getService(SERVICES.FORMAT_RENDERER_MANAGER);
+    }
+    
+    _getPagePluginManager() {
+        return getService(SERVICES.PAGE_PLUGIN_MANAGER);
+    }
+    
+    _getBinPluginManager() {
+        return getService(SERVICES.BIN_PLUGIN_MANAGER);
+    }
+    
+    _getVisualSettingsManager() {
+        return getService(SERVICES.VISUAL_SETTINGS_MANAGER);
+    }
+    
+    _getThemeManager() {
+        return getService(SERVICES.THEME_MANAGER);
+    }
+    
+    _getSettingsManager() {
+        return getService(SERVICES.SETTINGS_MANAGER);
+    }
+    
+    _getApp() {
+        // Try to get app from window (set during initialization)
+        return window.app || null;
+    }
+    
     escapeHtml(text) {
         return StringUtils.escapeHtml(text);
     }
@@ -144,7 +181,7 @@ export class ModalHandler {
         
         // Store original closeModal
         const originalCloseModal = this.closeModal.bind(this);
-        const app = this.app;
+        const app = this._getApp();
         
         // Track element count for drag functionality
         let elementCount = 1;
@@ -168,6 +205,11 @@ export class ModalHandler {
         // Click handler for numbered options
         const handleOptionClick = (type, count = 1) => {
             document.removeEventListener('keydown', keyHandler);
+            if (!app) {
+                console.error('[ModalHandler] app is undefined in handleOptionClick');
+                this.closeModal();
+                return;
+            }
             app.modalHandler.closeModal = originalCloseModal;
             app.modalHandler.closeModal();
             
@@ -484,7 +526,7 @@ export class ModalHandler {
         
         // Store original closeModal
         const originalCloseModal = this.closeModal.bind(this);
-        const app = this.app;
+        const app = this._getApp();
         
         // Track element count for drag functionality
         let elementCount = 1;
@@ -505,6 +547,11 @@ export class ModalHandler {
         // Click handler for numbered options
         const handleOptionClick = (type, count = 1) => {
             document.removeEventListener('keydown', keyHandler);
+            if (!app) {
+                console.error('[ModalHandler] app is undefined in handleOptionClick');
+                this.closeModal();
+                return;
+            }
             app.modalHandler.closeModal = originalCloseModal;
             app.modalHandler.closeModal();
             
@@ -1095,8 +1142,9 @@ export class ModalHandler {
         }
         
         // Tags section (available for all element types)
-        const defaultTags = this.app.tagManager ? this.app.tagManager.getDefaultTags() : ['work', 'personal', 'urgent', 'important', 'meeting', 'deadline', 'chore', 'hobby'];
-        const allTags = this.app.tagManager ? this.app.tagManager.getAvailableTags() : [...new Set([...defaultTags, ...(element.tags || [])])];
+        const tagManager = this._getTagManager();
+        const defaultTags = tagManager ? tagManager.getDefaultTags() : ['work', 'personal', 'urgent', 'important', 'meeting', 'deadline', 'chore', 'hobby'];
+        const allTags = tagManager ? tagManager.getAvailableTags() : [...new Set([...defaultTags, ...(element.tags || [])])];
         
         html += `
             <div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 4px; border: 1px solid #444;">
@@ -1488,8 +1536,9 @@ export class ModalHandler {
                 if (!element.tags) element.tags = [];
                 if (!element.tags.includes(tag)) {
                     element.tags.push(tag);
-                    if (this.app.tagManager) {
-                        this.app.tagManager.addTag(tag);
+                    const tagManager = this._getTagManager();
+                    if (tagManager) {
+                        tagManager.addTag(tag);
                     }
                     const dataManager = this._getDataManager();
                     if (dataManager) {
@@ -1522,8 +1571,9 @@ export class ModalHandler {
                 if (tag && !element.tags?.includes(tag)) {
                     if (!element.tags) element.tags = [];
                     element.tags.push(tag);
-                    if (this.app.tagManager) {
-                        this.app.tagManager.addTag(tag);
+                    const tagManager = this._getTagManager();
+                    if (tagManager) {
+                        tagManager.addTag(tag);
                     }
                     const dataManager = this._getDataManager();
                     if (dataManager) {
@@ -2157,8 +2207,9 @@ export class ModalHandler {
         // Tags are already updated via event listeners, just ensure they're normalized
         if (element.tags && Array.isArray(element.tags)) {
             element.tags = element.tags.map(tag => tag.trim().toLowerCase()).filter(tag => tag);
-            if (this.app.tagManager) {
-                element.tags.forEach(tag => this.app.tagManager.addTag(tag));
+            const tagManager = this._getTagManager();
+            if (tagManager) {
+                element.tags.forEach(tag => tagManager.addTag(tag));
             }
         }
         
@@ -2181,7 +2232,10 @@ export class ModalHandler {
             element.customProperties = newProperties;
         }
         
-        this.app.dataManager.saveData();
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
         if (!skipClose) {
         this.closeModal();
         }
@@ -2288,7 +2342,10 @@ export class ModalHandler {
         }
         
         // Start recording with overwrite flag
-        await this.app.startInlineRecording(pageId, binId, audioElementIndex, elementIndex, true);
+        const app = this._getApp();
+        if (app && app.startInlineRecording) {
+            await app.startInlineRecording(pageId, binId, audioElementIndex, elementIndex, true);
+        }
         eventBus.emit(EVENTS.APP.RENDER_REQUESTED); // Re-render to update UI
     }
     
@@ -2316,9 +2373,10 @@ export class ModalHandler {
         `;
         
         // Bin Plugins Section
-        if (this.app.binPluginManager) {
-            const allPlugins = this.app.binPluginManager.getAvailablePlugins();
-            const enabledPlugins = this.app.binPluginManager.getBinPlugins(pageId, binId);
+        const binPluginManager = this._getBinPluginManager();
+        if (binPluginManager) {
+            const allPlugins = binPluginManager.getAvailablePlugins();
+            const enabledPlugins = binPluginManager.getBinPlugins(pageId, binId);
             const enabledPluginIds = new Set(enabledPlugins.map(p => p.id));
             
             if (allPlugins.length > 0) {
@@ -2360,9 +2418,9 @@ export class ModalHandler {
             checkbox.addEventListener('change', async (e) => {
                 const pluginId = e.target.dataset.pluginId;
                 if (e.target.checked) {
-                    await this.app.binPluginManager.enablePlugin(pageId, binId, pluginId);
+                    await binPluginManager.enablePlugin(pageId, binId, pluginId);
                 } else {
-                    await this.app.binPluginManager.disablePlugin(pageId, binId, pluginId);
+                    await binPluginManager.disablePlugin(pageId, binId, pluginId);
                 }
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
@@ -2391,18 +2449,20 @@ export class ModalHandler {
         `;
         
         // Format Renderer Section
-        if (this.app.formatRendererManager) {
-            const allFormats = this.app.formatRendererManager.getAllFormats();
+        const formatRendererManager = this._getFormatRendererManager();
+        if (formatRendererManager) {
+            const allFormats = formatRendererManager.getAllFormats();
             
             // Check if we're editing a tab (from pane context menu)
             let currentFormat = null;
             let editingTabInfo = null;
             const appState = this._getAppState();
+            const app = this._getApp();
             if (appState && appState._editingTabInfo) {
-                editingTabInfo = this.app.appState._editingTabInfo;
+                editingTabInfo = appState._editingTabInfo;
                 // Get format from the tab being edited
-                if (this.app.renderService && this.app.renderService.getRenderer) {
-                    const appRenderer = this.app.renderService.getRenderer();
+                if (app && app.renderService && app.renderService.getRenderer) {
+                    const appRenderer = app.renderService.getRenderer();
                     if (appRenderer && appRenderer.paneManager) {
                         const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
                         if (pane) {
@@ -2524,13 +2584,14 @@ export class ModalHandler {
         }
         
         // Page Plugins Section
-        if (this.app.pagePluginManager) {
-            const allPlugins = this.app.pagePluginManager.getAvailablePlugins();
-            const enabledPlugins = this.app.pagePluginManager.getPagePlugins(pageId);
+        const pagePluginManager = this._getPagePluginManager();
+        if (pagePluginManager) {
+            const allPlugins = pagePluginManager.getAvailablePlugins();
+            const enabledPlugins = pagePluginManager.getPagePlugins(pageId);
             const enabledPluginIds = new Set(enabledPlugins.map(p => p.id));
             
             console.log('[ModalHandler] Page plugins check:', {
-                hasPagePluginManager: !!this.app.pagePluginManager,
+                hasPagePluginManager: !!pagePluginManager,
                 allPluginsCount: allPlugins.length,
                 allPlugins: allPlugins.map(p => ({ id: p.id, name: p.name, type: p.type })),
                 enabledPluginsCount: enabledPlugins.length
@@ -2582,18 +2643,20 @@ export class ModalHandler {
         
         // Listen for format registration events and update dropdown dynamically
         const updateFormatsDropdown = () => {
-            if (!this.app.formatRendererManager) return;
+            if (!formatRendererManager) return;
             
             const formatSelect = modalBody.querySelector('#page-format-select');
             if (!formatSelect) return;
             
-            const allFormats = this.app.formatRendererManager.getAllFormats();
+            const allFormats = formatRendererManager.getAllFormats();
             
             // Check if we're editing a tab (from pane context menu)
             let currentFormat = null;
-            const editingTabInfo = this.app.appState?._editingTabInfo;
-            if (editingTabInfo && this.app.renderService && this.app.renderService.getRenderer) {
-                const appRenderer = this.app.renderService.getRenderer();
+            const appState = this._getAppState();
+            const app = this._getApp();
+            const editingTabInfo = appState?._editingTabInfo;
+            if (editingTabInfo && app && app.renderService && app.renderService.getRenderer) {
+                const appRenderer = app.renderService.getRenderer();
                 if (appRenderer && appRenderer.paneManager) {
                     const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
                     if (pane) {
@@ -2607,7 +2670,7 @@ export class ModalHandler {
             
             // Fallback to page format if not editing a tab
             if (currentFormat === null) {
-                currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+                currentFormat = formatRendererManager.getPageFormat(pageId);
             }
             // Filter to only show formats that support pages
             const filteredFormats = allFormats.filter(format => {
@@ -2670,11 +2733,12 @@ export class ModalHandler {
         };
         
         // Update formats when they're registered
-        if (this.app.eventBus) {
+        const eventBus = getService(SERVICES.EVENT_BUS);
+        if (eventBus) {
             const formatRegisteredHandler = () => {
                 updateFormatsDropdown();
             };
-            this.app.eventBus.on('format:registered', formatRegisteredHandler);
+            eventBus.on('format:registered', formatRegisteredHandler);
             
             // Store handler for cleanup
             if (!this._formatRegisteredHandlers) {
@@ -2703,9 +2767,11 @@ export class ModalHandler {
                 const formatName = e.target.value || null;
                 
                 // Check if we're editing a tab (from pane context menu)
-                const editingTabInfo = this.app.appState?._editingTabInfo;
-                if (editingTabInfo && this.app.renderService && this.app.renderService.getRenderer) {
-                    const appRenderer = this.app.renderService.getRenderer();
+                const appState = this._getAppState();
+                const app = this._getApp();
+                const editingTabInfo = appState?._editingTabInfo;
+                if (editingTabInfo && app && app.renderService && app.renderService.getRenderer) {
+                    const appRenderer = app.renderService.getRenderer();
                     if (appRenderer && appRenderer.paneManager) {
                         const pane = appRenderer.paneManager.getPane(editingTabInfo.paneId);
                         if (pane) {
@@ -2716,7 +2782,9 @@ export class ModalHandler {
                                 // Re-render the pane to show the new format
                                 appRenderer.paneManager.renderPane(pane);
                                 // Clear the editing tab info
-                                delete this.app.appState._editingTabInfo;
+                                if (appState) {
+                                    delete appState._editingTabInfo;
+                                }
                                 // Update grid config visibility
                                 updateGridConfigVisibility();
                                 // Close modal to show format change immediately
@@ -2728,11 +2796,14 @@ export class ModalHandler {
                 }
                 
                 // Fallback: update page format (for non-tab context)
-                if (formatName) {
-                    await this.app.formatRendererManager.setPageFormat(pageId, formatName);
-                } else {
-                    // Clear format (use default) - use the proper method to clear from activeFormats too
-                    this.app.formatRendererManager.clearPageFormat(pageId);
+                const formatRendererManager = this._getFormatRendererManager();
+                if (formatRendererManager) {
+                    if (formatName) {
+                        await formatRendererManager.setPageFormat(pageId, formatName);
+                    } else {
+                        // Clear format (use default) - use the proper method to clear from activeFormats too
+                        formatRendererManager.clearPageFormat(pageId);
+                    }
                 }
                 // Update grid config visibility
                 updateGridConfigVisibility();
@@ -2746,9 +2817,9 @@ export class ModalHandler {
             checkbox.addEventListener('change', async (e) => {
                 const pluginId = e.target.dataset.pluginId;
                 if (e.target.checked) {
-                    await this.app.pagePluginManager.enablePlugin(pageId, pluginId);
+                    await pagePluginManager.enablePlugin(pageId, pluginId);
                 } else {
-                    await this.app.pagePluginManager.disablePlugin(pageId, pluginId);
+                    await pagePluginManager.disablePlugin(pageId, pluginId);
                 }
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
@@ -2826,7 +2897,8 @@ export class ModalHandler {
         html += '<option value="">-- Select or Create Tag --</option>';
         
         // Get all available tags
-        const allTags = this.app.tagManager?.getAvailableTags() || [];
+        const tagManager = this._getTagManager();
+        const allTags = tagManager?.getAvailableTags() || [];
         allTags.forEach(tag => {
             html += `<option value="${this.escapeHtml(tag)}">${this.escapeHtml(tag)}</option>`;
         });
@@ -2839,7 +2911,8 @@ export class ModalHandler {
         html += '<label>Apply to View:</label>';
         html += '<select id="visual-tag-view-format" style="width: 100%; padding: 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
         html += '<option value="">All Views</option>';
-        const viewFormats = this.app.themeManager?.getViewFormats() || [];
+        const themeManager = this._getThemeManager();
+        const viewFormats = themeManager?.getViewFormats() || [];
         viewFormats.forEach(format => {
             const formatName = format === 'default' ? 'Default' : format.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             html += `<option value="${format}">${formatName}</option>`;
@@ -3295,7 +3368,8 @@ export class ModalHandler {
                 
                 // Add tag to tag manager if it's new
                 if (newTagInput?.value?.trim() && !allTags.includes(selectedTag)) {
-                    this.app.tagManager?.addTag(selectedTag);
+                    const tagManager = this._getTagManager();
+                    tagManager?.addTag(selectedTag);
                 }
                 
                 this.closeModal();

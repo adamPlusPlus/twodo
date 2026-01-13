@@ -1,0 +1,27 @@
+Fix autosave persistence and sync overwrite issues
+
+- Fixed autosave not persisting on page refresh
+  - Added cache-busting with timestamp query parameter in FileManager.loadFile()
+  - Changed cache policy from 'no-cache' to 'no-store' for stronger cache bypass
+  - Added flushPendingSave() method to DataManager to save immediately on page unload
+  - Added beforeunload and visibilitychange event listeners to flush pending saves
+
+- Fixed SyncManager overwriting freshly loaded data
+  - Set _lastSyncTimestamp when files are loaded in app.js and FileManager.js
+  - Improved handleFileJoined() to compare data first before applying updates
+  - Added time-based protection: ignore remote updates if file was just loaded (< 3 seconds ago) unless remote is significantly newer (> 2 seconds)
+  - Skip updates entirely if remote data is identical to local data
+
+- Fixed context menu dismissal on outside click
+  - Improved click-outside handler to use capture phase for early execution
+  - Added visibility check to only process clicks when context menu is active
+  - Simplified logic to hide menu when clicking outside
+
+- Fixed AppState setters for binStates and subtaskStates
+  - Added setter methods to allow SyncManager to set these properties
+  - Added pageStates getter/setter with helper methods setPageState() and getPageState()
+
+- Fixed SettingsManager and ModalHandler undefined app references
+  - Replaced all this.app.* references with ServiceLocator pattern
+  - Added helper methods to get services via ServiceLocator
+  - Added null checks and fallbacks for app instance access

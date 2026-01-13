@@ -5,7 +5,8 @@ import { EventHelper } from '../utils/EventHelper.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
 
 export class EventHandler {
-    constructor() {
+    constructor(app = null) {
+        this.app = app;
     }
     
     /**
@@ -40,6 +41,29 @@ export class EventHandler {
     }
     
     setupEventListeners() {
+        // Flush pending autosave before page unload
+        window.addEventListener('beforeunload', async (e) => {
+            const dataManager = this._getDataManager();
+            if (dataManager && typeof dataManager.flushPendingSave === 'function') {
+                // Use sendBeacon or synchronous XHR for reliable save on unload
+                // For now, try to flush but don't block unload
+                dataManager.flushPendingSave().catch(err => {
+                    console.warn('[EventHandler] Failed to flush pending save on unload:', err);
+                });
+            }
+        });
+        
+        // Also flush on visibility change (tab switch, minimize, etc.)
+        document.addEventListener('visibilitychange', async () => {
+            if (document.hidden) {
+                const dataManager = this._getDataManager();
+                if (dataManager && typeof dataManager.flushPendingSave === 'function') {
+                    dataManager.flushPendingSave().catch(err => {
+                        console.warn('[EventHandler] Failed to flush pending save on visibility change:', err);
+                    });
+                }
+            }
+        });
         const loadDefaultBtn = document.getElementById('load-default');
         if (loadDefaultBtn) {
             loadDefaultBtn.addEventListener('click', () => {
@@ -248,84 +272,179 @@ export class EventHandler {
         }
         
         // Context menu event listeners
-        document.getElementById('context-edit').addEventListener('click', () => {
-            this.app.handleContextEdit();
+        document.getElementById('context-edit').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[EventHandler] context-edit clicked');
+            const app = this.app || window.app;
+            if (app && app.handleContextEdit) {
+                app.handleContextEdit();
+            } else {
+                console.error('[EventHandler] app.handleContextEdit not available', { hasThisApp: !!this.app, hasWindowApp: !!window.app });
+            }
         });
         
         const customizeVisualsBtn = document.getElementById('context-customize-visuals');
         if (customizeVisualsBtn) {
-            customizeVisualsBtn.addEventListener('click', () => {
-                this.app.handleContextCustomizeVisuals();
+            customizeVisualsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const app = this.app || window.app;
+                if (app && app.handleContextCustomizeVisuals) {
+                    app.handleContextCustomizeVisuals();
+                }
             });
         }
         
-        document.getElementById('context-view-data').addEventListener('click', () => {
-            this.app.handleContextViewData();
-        });
-        
-        document.getElementById('context-add-element').addEventListener('click', () => {
-            this.app.handleContextAddElement();
-        });
-        
-        document.getElementById('context-add-child-element').addEventListener('click', () => {
-            this.app.handleContextAddChildElement();
-        });
-        
-        document.getElementById('context-add-element-page').addEventListener('click', () => {
-            this.app.handleContextAddElementPage();
-        });
-        
-        document.getElementById('context-delete-element').addEventListener('click', () => {
-            this.app.handleContextDeleteElement();
-        });
-        
-        document.getElementById('context-collapse-page').addEventListener('click', () => {
-            this.app.handleContextCollapsePage();
-        });
-        
-        document.getElementById('context-add-page').addEventListener('click', () => {
-            this.app.handleContextAddPage();
-        });
-        
-        document.getElementById('context-add-bin').addEventListener('click', () => {
-            this.app.handleContextAddBin();
-        });
-        
-        document.getElementById('context-delete-bin').addEventListener('click', () => {
-            this.app.handleContextDeleteBin();
-        });
-        
-        document.getElementById('context-delete-page').addEventListener('click', () => {
-            this.app.handleContextDeletePage();
-        });
-        
-        document.getElementById('context-toggle-subtasks').addEventListener('click', () => {
-            this.app.handleContextToggleSubtasks();
-        });
-        
-        document.getElementById('context-reset-day').addEventListener('click', () => {
-            this.app.handleContextResetDay();
-        });
-        
-        document.getElementById('context-collapse-all-pages').addEventListener('click', () => {
-            this.app.handleContextCollapseAllPages();
-        });
-        
-        // Close context menu on outside click
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.context-menu')) {
-                const contextMenuHandler = this._getContextMenuHandler();
-                if (contextMenuHandler) {
-                    contextMenuHandler.hideContextMenu();
-                }
+        document.getElementById('context-view-data').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextViewData) {
+                app.handleContextViewData();
             }
+        });
+        
+        document.getElementById('context-add-element').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextAddElement) {
+                app.handleContextAddElement();
+            }
+        });
+        
+        document.getElementById('context-add-child-element').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextAddChildElement) {
+                app.handleContextAddChildElement();
+            }
+        });
+        
+        document.getElementById('context-add-element-page').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextAddElementPage) {
+                app.handleContextAddElementPage();
+            }
+        });
+        
+        document.getElementById('context-delete-element').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextDeleteElement) {
+                app.handleContextDeleteElement();
+            }
+        });
+        
+        document.getElementById('context-collapse-page').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextCollapsePage) {
+                app.handleContextCollapsePage();
+            }
+        });
+        
+        document.getElementById('context-add-page').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextAddPage) {
+                app.handleContextAddPage();
+            }
+        });
+        
+        document.getElementById('context-add-bin').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextAddBin) {
+                app.handleContextAddBin();
+            }
+        });
+        
+        document.getElementById('context-delete-bin').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextDeleteBin) {
+                app.handleContextDeleteBin();
+            }
+        });
+        
+        document.getElementById('context-delete-page').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextDeletePage) {
+                app.handleContextDeletePage();
+            }
+        });
+        
+        document.getElementById('context-toggle-subtasks').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextToggleSubtasks) {
+                app.handleContextToggleSubtasks();
+            }
+        });
+        
+        document.getElementById('context-reset-day').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextResetDay) {
+                app.handleContextResetDay();
+            }
+        });
+        
+        document.getElementById('context-collapse-all-pages').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const app = this.app || window.app;
+            if (app && app.handleContextCollapseAllPages) {
+                app.handleContextCollapseAllPages();
+            }
+        });
+        
+        // Close context menu on outside click (use capture phase to run early)
+        document.addEventListener('click', (e) => {
+            const contextMenuHandler = this._getContextMenuHandler();
+            if (!contextMenuHandler) return;
+            
+            const appState = this._getAppState();
+            const menu = document.getElementById('context-menu');
+            
+            // Only process if context menu is visible
+            if (!menu || !menu.classList.contains('active')) {
+                // Track active page when clicking on pages
+                const pageEl = e.target.closest('.page');
+                if (pageEl) {
+                    appState.currentPageId = pageEl.dataset.pageId;
+                }
+                return;
+            }
+            
+            // Don't close if clicking on the context menu or its items
+            if (e.target.closest('.context-menu')) {
+                return;
+            }
+            
+            // Click is outside the context menu - hide it
+            contextMenuHandler.hideContextMenu();
+            
             // Track active page when clicking on pages
             const pageEl = e.target.closest('.page');
             if (pageEl) {
-                const appState = this._getAppState();
                 appState.currentPageId = pageEl.dataset.pageId;
             }
-        });
+        }, true); // Use capture phase to ensure this runs before other handlers
         
         // Keyboard shortcuts for adding elements
         document.addEventListener('keydown', (e) => {
@@ -576,7 +695,8 @@ export class EventHandler {
                 const appState = this._getAppState();
                 const pageId = elementEl.dataset.pageId || appState.currentPageId;
                 const binId = elementEl.dataset.binId;
-                const elementIndex = parseInt(elementEl.dataset.elementIndex);
+                const elementIndexStr = elementEl.dataset.elementIndex;
+                const elementIndex = elementIndexStr !== undefined && elementIndexStr !== '' ? parseInt(elementIndexStr, 10) : null;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {
                     contextMenuHandler.showContextMenu(e, pageId, binId, elementIndex);

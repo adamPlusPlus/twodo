@@ -162,7 +162,8 @@ export class FileManager {
             
             try {
                 const fetchStart = performance.now();
-                const fetchUrl = `/files/${encodedFilename}`;
+                // Add timestamp to bypass browser cache and ensure fresh data
+                const fetchUrl = `/files/${encodedFilename}?t=${Date.now()}`;
                 
                 // Check how many requests are in flight before our fetch
                 const requestsBefore = performance.getEntriesByType('resource').length;
@@ -170,7 +171,7 @@ export class FileManager {
                 
                 const response = await fetch(fetchUrl, {
                     signal: controller.signal,
-                    cache: 'no-cache'
+                    cache: 'no-store' // Use no-store instead of no-cache for stronger cache bypass
                 });
                 const fetchTime = performance.now() - fetchStart;
                 clearTimeout(timeoutId);
@@ -209,6 +210,12 @@ export class FileManager {
                 
                 if (result.success) {
                     this.currentFilename = result.filename;
+                    
+                    // Set timestamp to prevent stale sync data from overwriting freshly loaded data
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager._lastSyncTimestamp = Date.now();
+                    }
                     
                     // Load corresponding buffer file after loading main file (if requested)
                     if (loadBuffer) {
