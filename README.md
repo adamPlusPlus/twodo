@@ -182,6 +182,14 @@ Plugins can be loaded via the browser console or will be automatically loaded wh
 - `js/plugins/` - Plugin implementations
 - `js/utils/` - Utility functions
 
+## Documentation
+
+- `docs/WORKSPACE_STORAGE_ARCHITECTURE.md` - Vault + pack layout, authority modes, CLI sync
+- `docs/NAMING_REVIEW.md` - Canonical vocabulary, naming rules, migration notes
+- `docs/VISION.md` - JSON coherence, authority rules, performance non-negotiables
+- `docs/plugin_plan.md` - Plugin architecture foundation + performance discipline
+- `docs/UI_ARCHITECTURE_STRATEGY.md` - Extensibility under performance constraints
+
 ## Data Storage
 
 All data is stored in browser localStorage with the key `twodo-data`. The last reset date is tracked to enable automatic daily resets. Audio files are stored in the `saved_files/recordings/` directory and archived data is stored in localStorage with the key `twodo-audio-archive`.

@@ -41,7 +41,7 @@ import { StringUtils } from './js/utils/string.js';
 import { DailyResetManager } from './js/modules/DailyResetManager.js';
 import { InlineEditor } from './js/modules/InlineEditor.js';
 import { LinkHandler } from './js/utils/LinkHandler.js';
-import { modalEventHandlers } from './js/core/ModalEventHandlers.js';
+import { modalEventBridge } from './js/core/ModalEventBridge.js';
 import { pluginDiscovery } from './js/core/PluginDiscovery.js';
 
 class TodoApp {
@@ -156,9 +156,9 @@ class TodoApp {
         // Initialize render service (registers itself in ServiceLocator)
         this.renderService = new RenderService(this);
         
-        // Initialize modal event handlers (listens to UI events)
+        // Initialize modal event bridge (bridges UI events to modal methods)
         // This is initialized after services are registered
-        this.modalEventHandlers = modalEventHandlers;
+        this.modalEventBridge = modalEventBridge;
         
         // Initialize app initializer
         this.appInitializer = new AppInitializer(this);

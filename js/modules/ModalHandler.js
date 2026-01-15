@@ -2450,6 +2450,9 @@ export class ModalHandler {
         
         // Format Renderer Section
         const formatRendererManager = this._getFormatRendererManager();
+        if (!formatRendererManager) {
+            console.warn('[ModalHandler] formatRendererManager not available in showEditPageModal');
+        }
         if (formatRendererManager) {
             const allFormats = formatRendererManager.getAllFormats();
             
@@ -2477,7 +2480,7 @@ export class ModalHandler {
             
             // Fallback to page format if not editing a tab
             if (currentFormat === null) {
-                currentFormat = this.app.formatRendererManager.getPageFormat(pageId);
+                currentFormat = formatRendererManager.getPageFormat(pageId);
             }
             
             // Debug: log all formats to help diagnose missing formats
@@ -2585,6 +2588,9 @@ export class ModalHandler {
         
         // Page Plugins Section
         const pagePluginManager = this._getPagePluginManager();
+        if (!pagePluginManager) {
+            console.warn('[ModalHandler] pagePluginManager not available in showEditPageModal');
+        }
         if (pagePluginManager) {
             const allPlugins = pagePluginManager.getAvailablePlugins();
             const enabledPlugins = pagePluginManager.getPagePlugins(pageId);
@@ -2837,28 +2843,30 @@ export class ModalHandler {
         const modalBody = document.getElementById('modal-body');
         
         // Get current effective settings
+        const visualSettingsManager = this._getVisualSettingsManager();
         let currentSettings = {};
-        if (this.app.visualSettingsManager) {
+        if (visualSettingsManager) {
             const pageId = options.pageId || null;
             const viewFormat = options.viewFormat || 'default';
-            currentSettings = this.app.visualSettingsManager.getEffectiveSettings(type, id, pageId, viewFormat);
+            currentSettings = visualSettingsManager.getEffectiveSettings(type, id, pageId, viewFormat);
         }
         
         // Get object-specific settings
         let objectSettings = { custom: {}, preserveAll: false };
-        if (this.app.visualSettingsManager) {
-            objectSettings = this.app.visualSettingsManager.getObjectSettings(type, id);
+        if (visualSettingsManager) {
+            objectSettings = visualSettingsManager.getObjectSettings(type, id);
         }
         
         // Determine object name
+        const appState = this._getAppState();
         let objectName = type;
         if (type === 'pane') {
             objectName = 'Pane';
         } else if (type === 'page') {
-            const page = this.app.appState?.pages?.find(p => p.id === id);
+            const page = appState?.pages?.find(p => p.id === id);
             objectName = page ? `Page: ${page.title || id}` : 'Page';
         } else if (type === 'bin') {
-            const page = this.app.appState?.pages?.find(p => p.id === options.pageId);
+            const page = appState?.pages?.find(p => p.id === options.pageId);
             const bin = page?.bins?.find(b => b.id === id);
             objectName = bin ? `Bin: ${bin.title || id}` : 'Bin';
         } else if (type === 'element') {
@@ -2987,7 +2995,7 @@ export class ModalHandler {
                 }
             } else {
                 // Instance-specific: apply only to this object
-                if (this.app.visualSettingsManager) {
+                if (visualSettingsManager) {
                     const customSettings = {};
                     const pathParts = path.split('.');
                     let target = customSettings;
@@ -2997,7 +3005,7 @@ export class ModalHandler {
                     }
                     target[pathParts[pathParts.length - 1]] = value;
                     
-                    this.app.visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
+                    visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
                 }
             }
             
@@ -3023,10 +3031,10 @@ export class ModalHandler {
             }
             
             // For instance-specific, find and update specific elements
-            if (isInstanceSpecific && this.app.visualSettingsManager) {
+            if (isInstanceSpecific && visualSettingsManager) {
                 const elements = document.querySelectorAll(`[data-${type}-id="${id}"]`);
                 elements.forEach(el => {
-                    this.app.visualSettingsManager.applyVisualSettings(el, type, id);
+                    visualSettingsManager.applyVisualSettings(el, type, id);
                 });
             }
         };
@@ -3112,7 +3120,7 @@ export class ModalHandler {
         
         // Save button handler
         const saveVisualSettings = () => {
-            if (!this.app.visualSettingsManager) return;
+            if (!visualSettingsManager) return;
             
             const instanceSpecific = instanceSpecificCheckbox?.checked || false;
             const preserveAll = document.getElementById('visual-preserve-all')?.checked || false;
@@ -3238,7 +3246,9 @@ export class ModalHandler {
                 }
             }
             
-            this.app.visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
+            if (visualSettingsManager) {
+                visualSettingsManager.setObjectSettings(type, id, customSettings, preserveAll);
+            }
             this.closeModal();
             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         };
@@ -3364,7 +3374,7 @@ export class ModalHandler {
                 }
                 
                 // Save tag settings
-                this.app.visualSettingsManager.setTagSettings(selectedTag, customSettings, preserveAll, viewFormat);
+                visualSettingsManager.setTagSettings(selectedTag, customSettings, preserveAll, viewFormat);
                 
                 // Add tag to tag manager if it's new
                 if (newTagInput?.value?.trim() && !allTags.includes(selectedTag)) {
@@ -3389,7 +3399,8 @@ export class ModalHandler {
         const exportBtn = document.getElementById('visual-export-btn');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
-                const settings = this.app.visualSettingsManager.exportSettings(type, id);
+                if (!visualSettingsManager) return;
+                const settings = visualSettingsManager.exportSettings(type, id);
                 const blob = new Blob([settings], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -3411,9 +3422,9 @@ export class ModalHandler {
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const imported = JSON.parse(event.target.result);
-                        if (imported.custom) {
+                        if (imported.custom && visualSettingsManager) {
                             const preserveAll = imported.preserveAll || false;
-                            this.app.visualSettingsManager.setObjectSettings(type, id, imported.custom, preserveAll);
+                            visualSettingsManager.setObjectSettings(type, id, imported.custom, preserveAll);
                             this.closeModal();
                             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                         }
@@ -3427,8 +3438,8 @@ export class ModalHandler {
         const resetBtn = document.getElementById('visual-reset-btn');
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
-                if (confirm('Remove all custom visual settings for this object?')) {
-                    this.app.visualSettingsManager.removeObjectSettings(type, id);
+                if (confirm('Remove all custom visual settings for this object?') && visualSettingsManager) {
+                    visualSettingsManager.removeObjectSettings(type, id);
                     this.closeModal();
                     eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
