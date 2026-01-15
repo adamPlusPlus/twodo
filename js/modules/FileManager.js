@@ -444,7 +444,7 @@ export class FileManager {
             if (choice) {
                 // Overwrite original file
                 try {
-                    const data = {
+                    const fileData = {
                         pages: this._getAppState().pages
                     };
                     
@@ -459,7 +459,7 @@ export class FileManager {
                     this.backupDiffers = false;
                     
                     // Now save to original file
-                    await this.saveFile(originalFile, data);
+                    await this.saveFile(originalFile, fileData);
                     
                     // Clean up temporary file
                     if (tempFileToDelete) {
@@ -491,12 +491,12 @@ export class FileManager {
         }
         
         try {
-            const data = {
+            const fileData = {
                 pages: this._getAppState().pages
             };
             
             console.log('[FileManager] Manual save - currentFilename:', this.currentFilename);
-            await this.saveFile(this.currentFilename, data);
+            await this.saveFile(this.currentFilename, fileData);
             console.log('[FileManager] Manual save successful');
             
             // If we just saved and had a temp file, clean it up and reset state
@@ -533,7 +533,7 @@ export class FileManager {
         if (!filename) return;
         
         try {
-            const data = {
+            const fileData = {
                 pages: this._getAppState().pages
             };
             
@@ -546,7 +546,7 @@ export class FileManager {
             this.isBackupLoaded = false;
             this.backupDiffers = false;
             
-            await this.saveAsFile(filename, data);
+            await this.saveAsFile(filename, fileData);
             
             // Clean up temporary file if backup was loaded
             if (tempFileToDelete) {
@@ -579,9 +579,9 @@ export class FileManager {
         }
         
         try {
-            const data = await this.loadFile(filename);
+            const fileData = await this.loadFile(filename);
             
-            if (!data.pages || !Array.isArray(data.pages)) {
+            if (!fileData.pages || !Array.isArray(fileData.pages)) {
                 if (this.app && this.app.modalHandler) {
                     await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
                 } else {
@@ -592,10 +592,10 @@ export class FileManager {
             
             // Update appState.pages
             const appState = this._getAppState();
-            appState.pages = data.pages;
+            appState.pages = fileData.pages;
             // Update currentPageId if needed
-            if (data.pages.length > 0 && !data.pages.find(p => p.id === appState.currentPageId)) {
-                appState.currentPageId = data.pages[0].id;
+            if (fileData.pages.length > 0 && !fileData.pages.find(p => p.id === appState.currentPageId)) {
+                appState.currentPageId = fileData.pages[0].id;
             }
             
             // Store last opened file in localStorage (device-specific)
@@ -892,9 +892,9 @@ export class FileManager {
         
         try {
             // Load the file
-            const data = await this.loadFile(filename);
+            const fileData = await this.loadFile(filename);
             
-            if (!data || !data.pages) {
+            if (!fileData || !fileData.pages) {
                 issues.push({
                     type: 'missing_pages',
                     location: 'root',
@@ -908,7 +908,7 @@ export class FileManager {
                 };
             }
             
-            if (!Array.isArray(data.pages)) {
+            if (!Array.isArray(fileData.pages)) {
                 issues.push({
                     type: 'invalid_pages',
                     location: 'root',
@@ -922,10 +922,10 @@ export class FileManager {
                 };
             }
             
-            elementCounts.pages = data.pages.length;
+            elementCounts.pages = fileData.pages.length;
             
             // Check each page
-            data.pages.forEach((page, pageIndex) => {
+            fileData.pages.forEach((page, pageIndex) => {
                 const pageId = page.id || `page-${pageIndex}`;
                 structure.pages.push({ id: pageId, index: pageIndex });
                 

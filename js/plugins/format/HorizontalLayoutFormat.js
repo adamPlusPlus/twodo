@@ -64,19 +64,19 @@ export default class HorizontalLayoutFormat extends BaseFormatRenderer {
                     existingBin.remove();
                 }
                 // Render the bin (will be added below)
-                const binEl = app.renderBin(page.id, bin);
+                const binElement = app.renderBin(page.id, bin);
                 // Add min-width to bins in horizontal layout to prevent squishing
-                binEl.style.minWidth = '350px';
-                binEl.style.maxWidth = '450px';
-                container.appendChild(binEl);
+                binElement.style.minWidth = '350px';
+                binElement.style.maxWidth = '450px';
+                container.appendChild(binElement);
             });
             
             // Remove bins that no longer exist
             const existingBins = container.querySelectorAll('.bin');
-            existingBins.forEach(binEl => {
-                const binId = binEl.dataset.binId;
+            existingBins.forEach(binElement => {
+                const binId = binElement.dataset.binId;
                 if (!page.bins.find(b => b.id === binId)) {
-                    binEl.remove();
+                    binElement.remove();
                 }
             });
         } else {
@@ -85,11 +85,11 @@ export default class HorizontalLayoutFormat extends BaseFormatRenderer {
             // Render each bin using the same renderBin method as default view
             // This ensures identical behavior and functionality
             page.bins.forEach((bin) => {
-                const binEl = app.renderBin(page.id, bin);
+                const binElement = app.renderBin(page.id, bin);
                 // Add min-width to bins in horizontal layout to prevent squishing
-                binEl.style.minWidth = '350px';
-                binEl.style.maxWidth = '450px';
-                container.appendChild(binEl);
+                binElement.style.minWidth = '350px';
+                binElement.style.maxWidth = '450px';
+                container.appendChild(binElement);
             });
         }
         

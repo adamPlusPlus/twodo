@@ -122,7 +122,7 @@ export class InteropSyncManager {
         };
         
         try {
-            const page = this.app.pages.find(p => p.id === pageId);
+            const page = this.app.pages.find(page => page.id === pageId);
             if (!page) {
                 throw new Error('Page not found');
             }
@@ -164,7 +164,7 @@ export class InteropSyncManager {
      * Export page to external service
      */
     async exportToService(pageId, client, config) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.pages.find(page => page.id === pageId);
         if (!page) return;
         
         // Transform page data to service format
@@ -178,7 +178,7 @@ export class InteropSyncManager {
      * Import from external service
      */
     async importFromService(pageId, client, config) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.pages.find(page => page.id === pageId);
         if (!page) return;
         
         // Fetch from service

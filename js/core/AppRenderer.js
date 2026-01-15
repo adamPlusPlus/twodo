@@ -168,7 +168,7 @@ export class AppRenderer {
         if (!container) return;
         
         // Get active page (reuse appState from line 63)
-        const activePage = appState.pages.find(p => p.id === appState.currentPageId);
+        const activePage = appState.pages.find(page => page.id === appState.currentPageId);
         
         // Store old positions before re-rendering (only if container has content)
         const hasContent = container.children.length > 0;
@@ -256,8 +256,8 @@ export class AppRenderer {
         if (activePage && activePage.bins && activePage.bins.length > 0) {
             console.log('[SCROLL DEBUG] Default render - before appending bins', { scrollBeforeAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             activePage.bins.forEach((bin, binIndex) => {
-                const binEl = this.binRenderer.renderBin(activePage.id, bin);
-                container.appendChild(binEl);
+                const binElement = this.binRenderer.renderBin(activePage.id, bin);
+                container.appendChild(binElement);
             });
             console.log('[SCROLL DEBUG] Default render - after appending bins', { scrollAfterAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             
@@ -345,10 +345,10 @@ export class AppRenderer {
         };
         
         // Get bin positions
-        document.querySelectorAll('.bin').forEach(binEl => {
-            const binId = binEl.dataset.binId;
+        document.querySelectorAll('.bin').forEach(binElement => {
+            const binId = binElement.dataset.binId;
             if (binId) {
-                const rect = binEl.getBoundingClientRect();
+                const rect = binElement.getBoundingClientRect();
                 positions.bins[binId] = {
                     top: rect.top,
                     left: rect.left
@@ -357,27 +357,27 @@ export class AppRenderer {
         });
         
         // Get element positions - use ElementFinder for consistency
-        document.querySelectorAll('.element').forEach(elementEl => {
-            const data = ElementFinder.getElementData(elementEl);
-            if (data.pageId && data.binId && data.elementIndex !== null) {
+        document.querySelectorAll('.element').forEach(elementElement => {
+            const elementData = ElementFinder.getElementData(elementElement);
+            if (elementData.pageId && elementData.binId && elementData.elementIndex !== null) {
                 // Create a stable key using element's text/content
-                let elementKey = `${data.pageId}-${data.binId}-${data.elementIndex}`;
+                let elementKey = `${elementData.pageId}-${elementData.binId}-${elementData.elementIndex}`;
                 
                 // Try to get element text for more stable matching
-                const textEl = elementEl.querySelector('.task-text, .header-text, .audio-status');
-                if (textEl) {
-                    const text = textEl.textContent || textEl.innerText || '';
+                const textElement = elementElement.querySelector('.task-text, .header-text, .audio-status');
+                if (textElement) {
+                    const text = textElement.textContent || textElement.innerText || '';
                     // Use first 20 chars of text as part of key for stability
-                    elementKey = `${data.pageId}-${data.binId}-${text.substring(0, 20)}-${data.elementIndex}`;
+                    elementKey = `${elementData.pageId}-${elementData.binId}-${text.substring(0, 20)}-${elementData.elementIndex}`;
                 }
                 
-                const rect = elementEl.getBoundingClientRect();
+                const rect = elementElement.getBoundingClientRect();
                 positions.elements[elementKey] = {
                     top: rect.top,
                     left: rect.left,
-                    pageId: data.pageId,
-                    binId: data.binId,
-                    elementIndex: data.elementIndex
+                    pageId: elementData.pageId,
+                    binId: elementData.binId,
+                    elementIndex: elementData.elementIndex
                 };
             }
         });

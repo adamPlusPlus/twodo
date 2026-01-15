@@ -52,7 +52,7 @@ export class SearchIndex {
      * Extract searchable data from an element
      */
     extractSearchableData(page, bin, element, elementIndex) {
-        const data = {
+        const searchableData = {
             pageId: page.id,
             pageTitle: page.title || '',
             binId: bin.id,
@@ -72,7 +72,7 @@ export class SearchIndex {
             itemsText: (element.items || []).map(item => item.text || '').join(' ')
         };
         
-        return data;
+        return searchableData;
     }
     
     /**
@@ -85,21 +85,21 @@ export class SearchIndex {
         const normalizedQuery = query ? query.toLowerCase().trim() : '';
         const results = [];
         
-        for (const [elementId, data] of this.index.entries()) {
+        for (const [elementId, elementData] of this.index.entries()) {
             let matches = true;
             
             // Text search
             if (normalizedQuery) {
                 const searchableText = [
-                    data.text,
-                    data.pageTitle,
-                    data.binTitle,
-                    data.timeAllocated,
-                    data.funModifier,
-                    data.childrenText,
-                    data.itemsText,
-                    ...data.tags,
-                    ...Object.values(data.customProperties)
+                    elementData.text,
+                    elementData.pageTitle,
+                    elementData.binTitle,
+                    elementData.timeAllocated,
+                    elementData.funModifier,
+                    elementData.childrenText,
+                    elementData.itemsText,
+                    ...elementData.tags,
+                    ...Object.values(elementData.customProperties)
                 ].join(' ').toLowerCase();
                 
                 if (!searchableText.includes(normalizedQuery)) {
@@ -110,46 +110,46 @@ export class SearchIndex {
             // Apply filters
             if (filters.tags && filters.tags.length > 0) {
                 const hasMatchingTag = filters.tags.some(tag => 
-                    data.tags.includes(tag.toLowerCase())
+                    elementData.tags.includes(tag.toLowerCase())
                 );
                 if (!hasMatchingTag) matches = false;
             }
             
             if (filters.completed !== undefined) {
-                if (data.completed !== filters.completed) matches = false;
+                if (elementData.completed !== filters.completed) matches = false;
             }
             
             if (filters.type && filters.type.length > 0) {
-                if (!filters.type.includes(data.type)) matches = false;
+                if (!filters.type.includes(elementData.type)) matches = false;
             }
             
             if (filters.pageId && filters.pageId.length > 0) {
-                if (!filters.pageId.includes(data.pageId)) matches = false;
+                if (!filters.pageId.includes(elementData.pageId)) matches = false;
             }
             
             if (filters.binId && filters.binId.length > 0) {
-                if (!filters.binId.includes(data.binId)) matches = false;
+                if (!filters.binId.includes(elementData.binId)) matches = false;
             }
             
             if (filters.hasDeadline !== undefined) {
-                if ((data.deadline !== null) !== filters.hasDeadline) matches = false;
+                if ((elementData.deadline !== null) !== filters.hasDeadline) matches = false;
             }
             
             if (filters.deadlineBefore) {
-                if (!data.deadline || new Date(data.deadline) > new Date(filters.deadlineBefore)) {
+                if (!elementData.deadline || new Date(elementData.deadline) > new Date(filters.deadlineBefore)) {
                     matches = false;
                 }
             }
             
             if (filters.deadlineAfter) {
-                if (!data.deadline || new Date(data.deadline) < new Date(filters.deadlineAfter)) {
+                if (!elementData.deadline || new Date(elementData.deadline) < new Date(filters.deadlineAfter)) {
                     matches = false;
                 }
             }
             
             if (matches) {
                 results.push({
-                    ...data,
+                    ...elementData,
                     elementId
                 });
             }
@@ -189,8 +189,8 @@ export class SearchIndex {
      */
     getAllTags() {
         const tags = new Set();
-        for (const data of this.index.values()) {
-            data.tags.forEach(tag => tags.add(tag));
+        for (const entry of this.index.values()) {
+            entry.tags.forEach(tag => tags.add(tag));
         }
         return Array.from(tags).sort();
     }
@@ -200,8 +200,8 @@ export class SearchIndex {
      */
     getAllTypes() {
         const types = new Set();
-        for (const data of this.index.values()) {
-            types.add(data.type);
+        for (const entry of this.index.values()) {
+            types.add(entry.type);
         }
         return Array.from(types).sort();
     }

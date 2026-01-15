@@ -213,10 +213,10 @@ export class ModalBuilder {
         
         // Add title if provided
         if (this.title) {
-            const titleEl = DOMBuilder.create('h3')
+            const titleElement = DOMBuilder.create('h3')
                 .text(this.title)
                 .build();
-            modalContent.appendChild(titleEl);
+            modalContent.appendChild(titleElement);
         }
         
         // Create modal body
@@ -238,7 +238,7 @@ export class ModalBuilder {
                 inputContainer.appendChild(label);
             }
             
-            const inputEl = DOMBuilder.create('input')
+            const inputElement = DOMBuilder.create('input')
                 .attr('id', input.id)
                 .attr('type', input.type)
                 .attr('value', input.value)
@@ -246,7 +246,7 @@ export class ModalBuilder {
                 .attr('required', input.required)
                 .build();
             
-            inputContainer.appendChild(inputEl);
+            inputContainer.appendChild(inputElement);
             modalBody.appendChild(inputContainer);
         });
         

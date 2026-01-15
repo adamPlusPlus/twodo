@@ -158,11 +158,11 @@ export const StorageUtils = {
         if (!this.has(oldKey)) return false;
         
         try {
-            let data = this.get(oldKey);
+            let storedValue = this.get(oldKey);
             if (transform && typeof transform === 'function') {
-                data = transform(data);
+                storedValue = transform(storedValue);
             }
-            this.set(newKey, data);
+            this.set(newKey, storedValue);
             this.remove(oldKey);
             return true;
         } catch (error) {

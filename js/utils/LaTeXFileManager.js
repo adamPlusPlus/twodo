@@ -58,11 +58,11 @@ export class LaTeXFileManager {
             // Try to load from FileManager first
             if (this.app && this.app.fileManager) {
                 const jsonFilename = `latex_${filename.replace('.tex', '.json')}`;
-                const data = await this.app.fileManager.loadFile(jsonFilename);
-                if (data && data.content) {
+                const latexMeta = await this.app.fileManager.loadFile(jsonFilename);
+                if (latexMeta && latexMeta.content) {
                     return {
-                        content: data.content,
-                        pageId: data.pageId || null
+                        content: latexMeta.content,
+                        pageId: latexMeta.pageId || null
                     };
                 }
             }

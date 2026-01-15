@@ -29,11 +29,11 @@ export class AppInitializer {
         if (fileParam) {
             try {
                 // Load the file specified in URL
-                const data = await this.app.fileManager.loadFile(fileParam);
-                if (data.pages && Array.isArray(data.pages)) {
-                    this.app.pages = data.pages;
+                const fileData = await this.app.fileManager.loadFile(fileParam);
+                if (fileData.pages && Array.isArray(fileData.pages)) {
+                    this.app.pages = fileData.pages;
                     if (this.app.appState) {
-                        this.app.appState.pages = data.pages;
+                        this.app.appState.pages = fileData.pages;
                     }
                     // Store as last opened file
                     localStorage.setItem('twodo-last-opened-file', fileParam);

@@ -21,8 +21,8 @@ export class ExportService {
         const page = appState.pages.find(p => p.id === pageId);
         if (!page) return null;
         
-        const data = DataUtils.deepClone(page);
-        return JSON.stringify(data, null, 2);
+        const exportData = DataUtils.deepClone(page);
+        return JSON.stringify(exportData, null, 2);
     }
     
     /**

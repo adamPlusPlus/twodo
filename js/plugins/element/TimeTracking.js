@@ -18,8 +18,8 @@ export default class TimeTracking extends BaseElementType {
     
     render(element, pageId, binId, elementIndex, container) {
         // Inject time tracking UI into existing element
-        const elementEl = container.querySelector(`[data-element-index="${elementIndex}"]`);
-        if (!elementEl) return;
+        const elementElement = container.querySelector(`[data-element-index="${elementIndex}"]`);
+        if (!elementElement) return;
         
         const isActive = this.app.timeTracker?.isTimerActive(pageId, binId, elementIndex);
         const totalTime = this.app.timeTracker?.getTotalTime(pageId, binId, elementIndex) || 0;
@@ -68,7 +68,7 @@ export default class TimeTracking extends BaseElementType {
         timeControls.appendChild(startBtn);
         timeControls.appendChild(stopBtn);
         
-        elementEl.appendChild(timeControls);
+        elementElement.appendChild(timeControls);
         
         // Update display if timer is active
         if (isActive) {

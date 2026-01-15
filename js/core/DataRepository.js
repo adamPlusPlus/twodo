@@ -29,7 +29,7 @@ export class DataRepository {
      */
     getPage(pageId) {
         const pages = this.getPages();
-        return pages.find(p => p.id === pageId) || null;
+        return pages.find(page => page.id === pageId) || null;
     }
     
     /**
@@ -111,7 +111,7 @@ export class AppStateRepository extends DataRepository {
     
     getPage(pageId) {
         const pages = this.getPages();
-        return pages.find(p => p.id === pageId) || null;
+        return pages.find(page => page.id === pageId) || null;
     }
     
     savePages(pages) {

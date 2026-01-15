@@ -29,7 +29,7 @@ export class BinRenderer {
         
         // Apply visual settings for this bin (includes tag-based settings)
         if (this.app.visualSettingsManager) {
-            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const page = this.app.appState?.pages?.find(page => page.id === pageId);
             const viewFormat = page?.format || 'default';
             // Tags are automatically retrieved and applied in applyVisualSettings
             this.app.visualSettingsManager.applyVisualSettings(binDiv, 'bin', bin.id, pageId, viewFormat);
@@ -80,8 +80,8 @@ export class BinRenderer {
         
         bin.elements.forEach((element, elIndex) => {
             // Delegate to ElementRenderer (will be created)
-            const elementEl = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
-            elementsList.appendChild(elementEl);
+            const elementElement = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
+            elementsList.appendChild(elementElement);
         });
         
         const addElementBtn = document.createElement('button');
@@ -99,17 +99,17 @@ export class BinRenderer {
         // Context menu is now handled by unified handler in EventHandler
         
         // Use EventHelper for double-click detection on bin title
-        const titleEl = binDiv.querySelector('.bin-title');
-        if (titleEl) {
+        const titleElement = binDiv.querySelector('.bin-title');
+        if (titleElement) {
             EventHelper.setupDoubleClick(
-                titleEl,
+                titleElement,
                 (e) => {
                     // Double click on title - make it editable
-                    titleEl.contentEditable = 'true';
-                    titleEl.focus();
+                    titleElement.contentEditable = 'true';
+                    titleElement.focus();
                     // Select all text for easy replacement
                     const range = document.createRange();
-                    range.selectNodeContents(titleEl);
+                    range.selectNodeContents(titleElement);
                     const selection = window.getSelection();
                     selection.removeAllRanges();
                     selection.addRange(range);
@@ -166,9 +166,9 @@ export class BinRenderer {
             });
         }
         
-        // Make bin title editable on double-click (reuse titleEl from above)
-        if (titleEl) {
-            titleEl.addEventListener('blur', (e) => {
+        // Make bin title editable on double-click (reuse titleElement from above)
+        if (titleElement) {
+            titleElement.addEventListener('blur', (e) => {
             // Only save if it was actually editable
             if (e.target.contentEditable === 'true') {
                 bin.title = e.target.textContent.trim() || 'Untitled Bin';
@@ -178,7 +178,7 @@ export class BinRenderer {
             });
             
             // Handle Enter key to finish editing
-            titleEl.addEventListener('keydown', (e) => {
+            titleElement.addEventListener('keydown', (e) => {
                 if (e.target.contentEditable === 'true' && e.key === 'Enter') {
                     e.preventDefault();
                     e.target.blur();
@@ -195,8 +195,8 @@ export class BinRenderer {
             }
             
             // Don't start drag if editing bin title
-            const titleEl = e.target.closest('.bin-title');
-            if (titleEl && titleEl.contentEditable === 'true') {
+            const titleElement = e.target.closest('.bin-title');
+            if (titleElement && titleElement.contentEditable === 'true') {
                 e.preventDefault();
                 return;
             }
@@ -208,14 +208,14 @@ export class BinRenderer {
             }
             
             e.dataTransfer.effectAllowed = 'move';
-            const data = {
+            const dragPayload = {
                 type: 'bin',
                 pageId: pageId,
                 binId: bin.id
             };
-            // console.log('Bin dragstart:', data);
-            e.dataTransfer.setData('text/plain', JSON.stringify(data));
-            this.app.appState.dragData = data;
+            // console.log('Bin dragstart:', dragPayload);
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            this.app.appState.dragData = dragPayload;
             binDiv.classList.add('dragging');
             this.app.appState.isDragging = true; // Track dragging state for scroll handlers
             
@@ -318,8 +318,8 @@ export class BinRenderer {
                 // If this is a nested element being dragged to a bin, un-nest it
                 if (dragData.isChild && dragData.parentElementIndex !== null) {
                     // Find the parent element to place the un-nested element immediately below it
-                    const sourcePage = this.app.appState.pages.find(p => p.id === dragData.pageId);
-                    const sourceBin = sourcePage?.bins?.find(b => b.id === dragData.binId);
+                    const sourcePage = this.app.appState.pages.find(page => page.id === dragData.pageId);
+                    const sourceBin = sourcePage?.bins?.find(bin => bin.id === dragData.binId);
                     if (sourceBin && sourceBin.elements[dragData.parentElementIndex]) {
                         // If dropping on the same bin as parent, place immediately after parent
                         if (bin.id === dragData.binId && pageId === dragData.pageId) {
@@ -540,7 +540,7 @@ export class BinRenderer {
                 
                 // PRIORITY: Always use the indicator position if available
                 let targetIndex = bin.elements.length; // Default to end
-                let elementEl = null; // Declare outside if/else so it's available later
+                let elementElement = null; // Declare outside if/else so it's available later
                 
                 if (elementsList._dropTargetIndex !== null && elementsList._dropTargetIndex !== undefined) {
                     // Use indicator position (this is where the user intended to drop)
@@ -548,10 +548,10 @@ export class BinRenderer {
                     elementsList._dropTargetIndex = null;
                 } else {
                     // Fallback: calculate from element position (only if no indicator)
-                    elementEl = e.target.closest('.element');
-                    if (elementEl) {
+                    elementElement = e.target.closest('.element');
+                    if (elementElement) {
                         // Handle both regular elements and child elements
-                        const targetElementIndexStr = elementEl.dataset.elementIndex;
+                        const targetElementIndexStr = elementElement.dataset.elementIndex;
                         if (targetElementIndexStr) {
                             if (typeof targetElementIndexStr === 'string' && targetElementIndexStr.includes('-')) {
                                 // Target is a child element - get its parent's index
@@ -572,9 +572,9 @@ export class BinRenderer {
                 }
                 
                 // If this is a nested element being dropped on empty space, un-nest and place below parent
-                if (dragData.isChild && dragData.parentElementIndex !== null && !elementEl) {
-                    const sourcePage = this.app.appState.pages.find(p => p.id === dragData.pageId);
-                    const sourceBin = sourcePage?.bins?.find(b => b.id === dragData.binId);
+                if (dragData.isChild && dragData.parentElementIndex !== null && !elementElement) {
+                    const sourcePage = this.app.appState.pages.find(page => page.id === dragData.pageId);
+                    const sourceBin = sourcePage?.bins?.find(bin => bin.id === dragData.binId);
                     if (sourceBin && bin.id === dragData.binId && pageId === dragData.pageId && sourceBin.elements[dragData.parentElementIndex]) {
                         // Place immediately after parent
                         targetIndex = dragData.parentElementIndex + 1;

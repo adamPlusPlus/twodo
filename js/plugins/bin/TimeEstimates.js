@@ -54,10 +54,10 @@ export default class TimeEstimates extends BasePlugin {
         }
 
         // Add time display to each element
-        binElement.querySelectorAll('.element').forEach((elementEl, index) => {
+        binElement.querySelectorAll('.element').forEach((elementElement, index) => {
             const element = elements[index];
             if (element && element.timeAllocated) {
-                const existingTime = elementEl.querySelector('.element-time-estimate');
+                const existingTime = elementElement.querySelector('.element-time-estimate');
                 if (existingTime) existingTime.remove();
 
                 const timeSpan = DOMUtils.createElement('span', {
@@ -65,9 +65,9 @@ export default class TimeEstimates extends BasePlugin {
                     style: 'font-size: 10px; color: #888; margin-left: 5px;'
                 }, `(${element.timeAllocated})`);
 
-                const textSpan = elementEl.querySelector('.task-text, .element-text');
-                if (textSpan) {
-                    textSpan.appendChild(timeSpan);
+                const textElement = elementElement.querySelector('.task-text, .element-text');
+                if (textElement) {
+                    textElement.appendChild(timeSpan);
                 }
             }
         });

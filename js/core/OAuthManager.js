@@ -30,8 +30,8 @@ export class OAuthManager {
         } = config;
         
         // Generate state for CSRF protection
-        const state = this.generateState();
-        this.callbacks.set(state, { serviceName, config });
+        const oauthState = this.generateState();
+        this.callbacks.set(oauthState, { serviceName, config });
         
         // Build authorization URL
         const params = new URLSearchParams({
@@ -39,7 +39,7 @@ export class OAuthManager {
             redirect_uri: redirectUri,
             response_type: 'code',
             scope: scope.join(' '),
-            state: state
+            state: oauthState
         });
         
         const authUrl = `${authURL}?${params.toString()}`;

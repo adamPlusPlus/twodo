@@ -553,7 +553,7 @@ export class PaneManager {
         
         // Render active tab's page in pane
         
-        const page = this.app.appState.pages.find(p => p.id === activeTab.pageId);
+        const page = this.app.appState.pages.find(page => page.id === activeTab.pageId);
         if (page) {
             // Check if format renderer exists
             const format = activeTab.format 
@@ -579,8 +579,8 @@ export class PaneManager {
                                        this.app.renderService?.getRenderer()?.binRenderer;
                     if (binRenderer) {
                         page.bins.forEach((bin) => {
-                            const binEl = binRenderer.renderBin(page.id, bin);
-                            content.appendChild(binEl);
+                            const binElement = binRenderer.renderBin(page.id, bin);
+                            content.appendChild(binElement);
                         });
                     } else {
                         console.warn('binRenderer not available');
@@ -642,7 +642,7 @@ export class PaneManager {
             if (!activeTab) return;
             
             // Get the page
-            const page = this.app.appState.pages.find(p => p.id === activeTab.pageId);
+            const page = this.app.appState.pages.find(page => page.id === activeTab.pageId);
             if (!page) return;
             
             // Determine view format
@@ -687,8 +687,8 @@ export class PaneManager {
         
         // Render tabs
         pane.tabs.forEach((tab, index) => {
-            const tabEl = this.createTabElement(pane, tab, index);
-            tabsContainer.appendChild(tabEl);
+            const tabElement = this.createTabElement(pane, tab, index);
+            tabsContainer.appendChild(tabElement);
         });
         
         header.appendChild(tabsContainer);
@@ -789,7 +789,7 @@ export class PaneManager {
      */
     createTabElement(pane, tab, index) {
         const isActive = index === pane.activeTabIndex;
-        const page = this.app.appState.pages.find(p => p.id === tab.pageId);
+        const page = this.app.appState.pages.find(page => page.id === tab.pageId);
         const pageTitle = page ? (page.title || page.id) : tab.pageId;
         const formatName = tab.format 
             ? (this.app.formatRendererManager?.getFormat(tab.format)?.name || tab.format)
@@ -824,7 +824,7 @@ export class PaneManager {
             })
             .build();
         
-        const tabEl = DOMBuilder.create('div')
+        const tabElement = DOMBuilder.create('div')
             .class('pane-tab')
             .dataset({ tabId: tab.id, paneId: pane.id })
             .attr('draggable', 'true')
@@ -857,20 +857,20 @@ export class PaneManager {
                     opacity: '0.7'
                 })
                 .build();
-            tabEl.appendChild(formatBadge);
+            tabElement.appendChild(formatBadge);
         }
         
-        tabEl.appendChild(closeBtn);
+        tabElement.appendChild(closeBtn);
         
         // Click to activate tab
-        tabEl.addEventListener('click', (e) => {
+        tabElement.addEventListener('click', (e) => {
             if (e.target !== closeBtn && !closeBtn.contains(e.target)) {
                 this.setActiveTab(pane.id, tab.id);
             }
         });
         
         // Right-click to show context menu for page
-        tabEl.addEventListener('contextmenu', (e) => {
+        tabElement.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -912,19 +912,19 @@ export class PaneManager {
         });
         
         // Drag and drop for tabs
-        this.setupTabDragDrop(tabEl, pane, tab, index);
+        this.setupTabDragDrop(tabElement, pane, tab, index);
         
-        return tabEl;
+        return tabElement;
     }
     
     /**
      * Setup drag and drop for tab
      */
-    setupTabDragDrop(tabEl, pane, tab, index) {
+    setupTabDragDrop(tabElement, pane, tab, index) {
         let dragData = null;
         let edgeIndicator = null;
         
-        tabEl.addEventListener('dragstart', (e) => {
+        tabElement.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             dragData = {
                 type: 'tab',
@@ -933,11 +933,11 @@ export class PaneManager {
                 tabIndex: index
             };
             e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
-            tabEl.style.opacity = '0.5';
+            tabElement.style.opacity = '0.5';
         });
         
-        tabEl.addEventListener('dragend', (e) => {
-            tabEl.style.opacity = '1';
+        tabElement.addEventListener('dragend', (e) => {
+            tabElement.style.opacity = '1';
             // Remove all drop indicators
             document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
             if (edgeIndicator) {
@@ -1104,51 +1104,51 @@ export class PaneManager {
         }, true); // Use capture phase
         
         // Allow dropping tabs on other tabs
-        tabEl.addEventListener('dragover', (e) => {
+        tabElement.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
             const dragData = e.dataTransfer.getData('text/plain');
             if (!dragData) return;
             
-            let data;
+            let dragPayload;
             try {
-                data = JSON.parse(dragData);
+                dragPayload = JSON.parse(dragData);
             } catch (err) {
                 return;
             }
             
-            if (data.type !== 'tab') return;
+            if (dragPayload.type !== 'tab') return;
             
             // Show drop indicator
-            this.showTabDropIndicator(tabEl, e);
+            this.showTabDropIndicator(tabElement, e);
             e.dataTransfer.dropEffect = 'move';
         });
         
-        tabEl.addEventListener('drop', (e) => {
+        tabElement.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
             const dragData = e.dataTransfer.getData('text/plain');
             if (!dragData) return;
             
-            let data;
+            let dragPayload;
             try {
-                data = JSON.parse(dragData);
+                dragPayload = JSON.parse(dragData);
             } catch (err) {
                 return;
             }
             
-            if (data.type !== 'tab') return;
+            if (dragPayload.type !== 'tab') return;
             
-            this.moveTab(data.paneId, data.tabId, pane.id, tab.id, index);
+            this.moveTab(dragPayload.paneId, dragPayload.tabId, pane.id, tab.id, index);
             
             // Remove drop indicators
             document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
         });
         
         // Allow dropping tabs on pane headers (to move to different pane)
-        const header = tabEl.closest('.pane-header');
+        const header = tabElement.closest('.pane-header');
         if (header) {
             header.addEventListener('dragover', (e) => {
                 if (e.target.closest('.pane-tab')) return; // Handled by tab
@@ -1159,14 +1159,14 @@ export class PaneManager {
                 const dragData = e.dataTransfer.getData('text/plain');
                 if (!dragData) return;
                 
-                let data;
+                let dragPayload;
                 try {
-                    data = JSON.parse(dragData);
+                    dragPayload = JSON.parse(dragData);
                 } catch (err) {
                     return;
                 }
                 
-                if (data.type !== 'tab') return;
+                if (dragPayload.type !== 'tab') return;
                 
                 e.dataTransfer.dropEffect = 'move';
             });
@@ -1180,17 +1180,17 @@ export class PaneManager {
                 const dragData = e.dataTransfer.getData('text/plain');
                 if (!dragData) return;
                 
-                let data;
+                let dragPayload;
                 try {
-                    data = JSON.parse(dragData);
+                    dragPayload = JSON.parse(dragData);
                 } catch (err) {
                     return;
                 }
                 
-                if (data.type !== 'tab') return;
+                if (dragPayload.type !== 'tab') return;
                 
                 // Move tab to this pane
-                this.moveTabToPane(data.paneId, data.tabId, pane.id);
+                this.moveTabToPane(dragPayload.paneId, dragPayload.tabId, pane.id);
                 
                 // Remove drop indicators
                 document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
@@ -1201,7 +1201,7 @@ export class PaneManager {
     /**
      * Show drop indicator for tab
      */
-    showTabDropIndicator(tabEl, e) {
+    showTabDropIndicator(tabElement, e) {
         // Remove existing indicators
         document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
         
@@ -1217,19 +1217,19 @@ export class PaneManager {
             pointer-events: none;
         `;
         
-        const rect = tabEl.getBoundingClientRect();
+        const rect = tabElement.getBoundingClientRect();
         const x = e.clientX - rect.left;
         
         if (x < rect.width / 2) {
             // Insert before
             indicator.style.left = '0';
-            tabEl.style.position = 'relative';
-            tabEl.appendChild(indicator);
+            tabElement.style.position = 'relative';
+            tabElement.appendChild(indicator);
         } else {
             // Insert after
             indicator.style.right = '0';
-            tabEl.style.position = 'relative';
-            tabEl.appendChild(indicator);
+            tabElement.style.position = 'relative';
+            tabElement.appendChild(indicator);
         }
     }
     

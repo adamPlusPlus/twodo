@@ -11,27 +11,27 @@ export class SharedDragDrop {
     /**
      * Setup drag and drop for an element in vertical/horizontal layouts
      * Allows nesting when dragging over elements with title/text
-     * @param {HTMLElement} elementEl - The element DOM node
+     * @param {HTMLElement} elementElement - The element DOM node
      * @param {string} pageId - Page ID
      * @param {string} binId - Bin ID
      * @param {number} elementIndex - Element index
      * @param {Object} element - Element data
      */
-    setupElementDragDrop(elementEl, pageId, binId, elementIndex, element) {
+    setupElementDragDrop(elementElement, pageId, binId, elementIndex, element) {
         // Only allow dragging for text/note and task/checkbox elements
         const draggableTypes = ['task', 'note', 'header-checkbox', 'text'];
         if (!draggableTypes.includes(element.type)) {
             return; // Don't make non-text/checkbox elements draggable
         }
         
-        elementEl.draggable = true;
-        elementEl.dataset.dragType = 'element';
-        elementEl.dataset.pageId = pageId;
-        elementEl.dataset.binId = binId;
-        elementEl.dataset.elementIndex = elementIndex;
+        elementElement.draggable = true;
+        elementElement.dataset.dragType = 'element';
+        elementElement.dataset.pageId = pageId;
+        elementElement.dataset.binId = binId;
+        elementElement.dataset.elementIndex = elementIndex;
         
         // Drag start
-        elementEl.addEventListener('dragstart', (e) => {
+        elementElement.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', JSON.stringify({
                 type: 'element',
@@ -39,12 +39,12 @@ export class SharedDragDrop {
                 binId,
                 elementIndex
             }));
-            elementEl.style.opacity = '0.5';
+            elementElement.style.opacity = '0.5';
         });
         
         // Drag end
-        elementEl.addEventListener('dragend', (e) => {
-            elementEl.style.opacity = '1';
+        elementElement.addEventListener('dragend', (e) => {
+            elementElement.style.opacity = '1';
             this.clearNestIndicator();
             if (this.dragOverTimeout) {
                 clearTimeout(this.dragOverTimeout);
@@ -53,89 +53,89 @@ export class SharedDragDrop {
         });
         
         // Drag over - allow nesting on elements with title/text
-        elementEl.addEventListener('dragover', (e) => {
+        elementElement.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
             const dragData = e.dataTransfer.getData('text/plain');
             if (!dragData) return;
             
-            let data;
+            let dragPayload;
             try {
-                data = JSON.parse(dragData);
+                dragPayload = JSON.parse(dragData);
             } catch (err) {
                 return;
             }
             
             // Only allow nesting if source is a text/checkbox element
-            if (data.type !== 'element') return;
+            if (dragPayload.type !== 'element') return;
             
             // Check if target element has title or text (can be nested into)
             const hasTitleOrText = element.title || element.text || element.content;
             if (!hasTitleOrText) return;
             
             // Check if source element is a text/checkbox type
-            const sourcePage = this.app.appState?.pages?.find(p => p.id === data.pageId) || 
-                             this.app.pages?.find(p => p.id === data.pageId);
+            const sourcePage = this.app.appState?.pages?.find(p => p.id === dragPayload.pageId) || 
+                             this.app.pages?.find(p => p.id === dragPayload.pageId);
             if (!sourcePage) return;
             
-            const sourceBin = sourcePage.bins?.find(b => b.id === data.binId);
+            const sourceBin = sourcePage.bins?.find(b => b.id === dragPayload.binId);
             if (!sourceBin || !sourceBin.elements) return;
             
-            const sourceElement = sourceBin.elements[data.elementIndex];
+            const sourceElement = sourceBin.elements[dragPayload.elementIndex];
             if (!sourceElement) return;
             
             const sourceTypes = ['task', 'note', 'header-checkbox', 'text'];
             if (!sourceTypes.includes(sourceElement.type)) return;
             
             // Prevent nesting into self or descendants
-            if (data.pageId === pageId && data.binId === binId && data.elementIndex === elementIndex) {
+            if (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex) {
                 return;
             }
             
             // Show nest indicator
-            this.showNestIndicator(elementEl);
+            this.showNestIndicator(elementElement);
             e.dataTransfer.dropEffect = 'move';
         });
         
         // Drag leave
-        elementEl.addEventListener('dragleave', (e) => {
+        elementElement.addEventListener('dragleave', (e) => {
             // Only clear if we're leaving the element (not entering a child)
-            if (!elementEl.contains(e.relatedTarget)) {
+            if (!elementElement.contains(e.relatedTarget)) {
                 this.clearNestIndicator();
             }
         });
         
         // Drop - nest the element
-        elementEl.addEventListener('drop', (e) => {
+        elementElement.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
             const dragData = e.dataTransfer.getData('text/plain');
             if (!dragData) return;
             
-            let data;
+            let dragPayload;
             try {
-                data = JSON.parse(dragData);
+                dragPayload = JSON.parse(dragData);
             } catch (err) {
                 return;
             }
             
-            if (data.type !== 'element') return;
+            if (dragPayload.type !== 'element') return;
             
             // Check if target element has title or text
             const hasTitleOrText = element.title || element.text || element.content;
             if (!hasTitleOrText) return;
             
             // Prevent nesting into self
-            if (data.pageId === pageId && data.binId === binId && data.elementIndex === elementIndex) {
+            if (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex) {
                 return;
             }
             
             // Use DragDropHandler to nest the element
             if (this.app.dragDropHandler) {
                 this.app.dragDropHandler.nestElement(
-                    data.pageId, data.binId, data.elementIndex,
+                    dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
                     pageId, binId, elementIndex
                 );
             }
@@ -146,9 +146,9 @@ export class SharedDragDrop {
     
     /**
      * Show visual indicator that element can be nested
-     * @param {HTMLElement} elementEl - The target element
+     * @param {HTMLElement} elementElement - The target element
      */
-    showNestIndicator(elementEl) {
+    showNestIndicator(elementElement) {
         this.clearNestIndicator();
         
         const indicator = document.createElement('div');
@@ -167,12 +167,12 @@ export class SharedDragDrop {
         `;
         
         // Make sure element has position relative
-        const computedStyle = window.getComputedStyle(elementEl);
+        const computedStyle = window.getComputedStyle(elementElement);
         if (computedStyle.position === 'static') {
-            elementEl.style.position = 'relative';
+            elementElement.style.position = 'relative';
         }
         
-        elementEl.appendChild(indicator);
+        elementElement.appendChild(indicator);
         this.nestIndicator = indicator;
     }
     

@@ -10,14 +10,15 @@ This document identifies naming issues, overlapping terminology, and potential c
 ### Internal nouns (data + code + UI)
 - **Vault / Workspace**: root folder containing many packs
 - **Pack**: on-disk folder-file unit (do not call this "file" in code)
-- **Document / View**: user-facing presentation of content (a view, not necessarily the on-disk unit)
+- **Document / View**: user-facing presentation of content (formerly "page")
 - **Group**: container within a pack (formerly "bin")
 - **Item**: atomic content block (formerly "element")
 - **Section**: projection-only concept derived from headers/rules, not necessarily stored
 
 ### Naming rules
-- **DOM vs data**: DOM nodes use `El` suffix (`itemEl`, `groupEl`, `modalEl`), data objects use plain nouns (`item`, `group`, `modalData`).
-- **IDs over indices**: indices are view-local and unstable; identity must use `itemId`, `groupId`, `packId`, etc.
+- **DOM vs data**: DOM nodes use `Element` suffix (`itemElement`, `groupElement`, `modalElement`), data objects use plain nouns (`item`, `group`, `modalData`).
+- **IDs over indices**: indices are view-local and unstable; identity must use `itemId`, `groupId`, `packId`, etc. Set `data-element-id` alongside `data-element-index`.
+- **Reserved words**: avoid `file` for the canonical unit; use `pack` or `document` instead.
 
 ### Rename conflicts already resolved in this worktree
 - `SyncManager` duplicate resolved: keep websocket one as `SyncManager`, rename the other to `InteropSyncManager`.
@@ -41,9 +42,7 @@ This document identifies naming issues, overlapping terminology, and potential c
 #### Decisions Made
 - ✅ **"Element" → "Item"**: Confirmed - more specific, clearer purpose
 - ✅ **"Bin" → "Group"**: Confirmed - better reflects organizational role
-- ⚠️ **"Page" → ???**: Under discussion - considering alternatives:
-  - Document, Set, Board, Space, Workspace, Collection, Context
-  - Also questioning if hierarchy needs restructuring (headers as organizational units?)
+- ✅ **"Page" → Document (UI)**: Pack remains storage container only
 
 #### JSON Coherence Architecture (Naming + Semantics)
 We are standardizing terminology around a canonical JSON model and semantic operations:
@@ -75,7 +74,6 @@ Multiple representations must not compete:
 - Should there be a level between Document and Group?
 - Should Groups be more flexible (header-based, manual, auto-generated)?
 - Should Headers create implicit organizational units?
-- What term best describes the current "page" level (groups of groups, data container with multiple views)?
 
 #### External Access Naming (Users + AI Agents)
 We assume external access is common, so names should reflect tooling:
@@ -136,7 +134,7 @@ Multiple classes with "Modal" in the name:
 #### `element` / `page` / `bin` / `modal` / `item` / `group` / `document`
 - Used as both DOM elements and data objects
 - **Recommendation**: 
-  - DOM elements: `itemEl`, `groupEl`, `documentEl`, `modalEl` (use `El` suffix)
+  - DOM elements: `itemElement`, `groupElement`, `documentElement`, `modalElement` (use `Element` suffix)
   - Data objects: `item`, `group`, `document`, `modalData` (no suffix)
 - **Note**: As we rename "element" → "item" and "bin" → "group", ensure DOM vs data distinction is maintained
 
@@ -213,6 +211,13 @@ Multiple classes with "Modal" in the name:
 - **Usage**: Various data objects
 - **Status**: ⚠️ Potential confusion - use specific names when possible
 
+#### Resolution (decided)
+- Avoid browser-global or Web API constructor names for app-local variables:
+  - `event`, `data`, `file`, `history`, `location`, `name`, `status`, `length`, `type`
+- Prefer domain-specific prefixes/suffixes:
+  - `appEvent`, `modalData`, `fileMeta`, `syncStatus`, `objectType`, `itemType`
+- For DOM nodes, always use the `Element` suffix (never plain `element`).
+
 ---
 
 ## 📋 NAMING PATTERNS ANALYSIS
@@ -230,6 +235,13 @@ Multiple classes with "Modal" in the name:
 - `TimeTracker` - Not a manager (but acceptable)
 - `InlineEditor` - Not a manager (but acceptable)
 
+#### Resolution (decided)
+- Allow these suffixes when they convey a concrete responsibility:
+  - `*Index` (read-optimized index)
+  - `*Tracker` (time/state tracking)
+  - `*Editor` (UI or text editing surface)
+- New classes should prefer the base patterns unless there is a clear mismatch.
+
 ### 7. Variable Naming Patterns
 
 #### ✅ Good Patterns
@@ -244,57 +256,15 @@ Multiple classes with "Modal" in the name:
 - Short names (`i`, `e`, `p`, `b`) in complex contexts
 - Reusing same variable name for different types (`element` as DOM vs data)
 
----
-
-## 🎯 RECOMMENDATIONS SUMMARY
-
-### High Priority
-1. ✅ **Rename duplicate `SyncManager`**: **COMPLETED**
-   - `js/core/SyncManager.js` → `InteropSyncManager` ✅
-   - All imports and references updated ✅
-
-2. ✅ **Clarify modal-related classes**: **COMPLETED**
-   - `ModalEventHandlers` → `ModalEventBridge` ✅
-   - Clear separation of concerns maintained ✅
-
-3. **Content Hierarchy Renaming** (In Progress):
-   - ✅ "Element" → "Item" (confirmed, pending implementation)
-   - ✅ "Bin" → "Group" (confirmed, pending implementation)
-   - ⚠️ "Page" → ??? (under discussion - hierarchy structure being evaluated)
-   - ✅ **JSON coherence approach defined**: semantic ops + IDs-over-indices + view adapters (documented in `docs/VISION.md` and `docs/plugin_plan.md`)
-
-### Medium Priority
-3. **Improve generic variable names** (Discussed, pending implementation):
-   - Replace `data` with specific names (`fileData`, `formData`, `appData`)
-   - Replace `p` → `page`/`document`, `b` → `group`, `opt` → `option`, `idx` → `index`
-   - Replace `key` with specific names (`keyboardKey`, `objectKey`, `dataKey`)
-
-4. **Distinguish DOM vs Data** (Discussed, pending implementation):
-   - DOM elements: `itemEl`, `groupEl`, `documentEl`, `modalEl` (use `El` suffix)
-   - Data objects: `item`, `group`, `document`, `modalData` (no suffix)
-   - **Standard**: DOM-first naming (e.g., `e` for events), data terms should be unique and not share names with DOM language
-
-### Low Priority
-5. **Improve loop variable names**:
-   - Simple loops: `i` is acceptable
-   - Nested loops: Use descriptive names (`elementIndex`, `itemIndex`)
-
-6. **URL/anchor element naming**:
-   - `url` → `objectUrl` or `blobUrl`
-   - `a` → `anchorElement` or `downloadLink`
+#### Resolution (decided)
+- Ban unqualified `data`/`state`/`event` in non-trivial scopes.
+- Use `itemId`/`groupId`/`documentId` for identity; indices only for local rendering.
+- DOM nodes must use `Element` suffix; data objects must not.
 
 ---
 
-## 📝 NOTES
+## ✅ Resolved Issues (Decisions Applied)
+- **Page naming**: UI container is **Document**; **Pack** is storage-only.
+- **Browser API conflicts**: avoid API constructor/global names for local vars.
+- **Inconsistent patterns**: `*Index`, `*Tracker`, `*Editor` are allowed exceptions.
 
-- Most naming follows JavaScript conventions
-- Class names are generally clear and descriptive
-- Main issues addressed:
-  1. ✅ Duplicate class name (`SyncManager` → `InteropSyncManager`) - **FIXED**
-  2. ✅ Modal class naming (`ModalEventHandlers` → `ModalEventBridge`) - **FIXED**
-  3. ⚠️ Generic variable names in complex contexts - **DISCUSSED, PENDING**
-  4. ⚠️ Potential confusion between DOM elements and data objects - **DISCUSSED, PENDING**
-  5. ⚠️ Content hierarchy terminology - **IN PROGRESS**
-
-- Browser API usage is correct (no actual conflicts)
-- ServiceLocator pattern helps avoid naming conflicts for services

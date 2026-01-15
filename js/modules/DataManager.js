@@ -54,10 +54,10 @@ export class DataManager {
         
         if (lastReset !== today) {
             // Reset all repeating tasks
-            const data = this.loadFromStorage();
-            if (data && data.pages) {
+            const storedData = this.loadFromStorage();
+            if (storedData && storedData.pages) {
                 // Delete completed one-time tasks first
-                data.pages.forEach(page => {
+                storedData.pages.forEach(page => {
                     if (page.bins) {
                         page.bins.forEach(bin => {
                             if (bin.elements) {
@@ -115,7 +115,7 @@ export class DataManager {
                     }
                 };
                 
-                data.pages.forEach(page => {
+                storedData.pages.forEach(page => {
                     if (page.bins) {
                         page.bins.forEach(bin => {
                             if (bin.elements) {
@@ -132,7 +132,7 @@ export class DataManager {
                     }
                 });
                 const appState = this._getAppState();
-                appState.pages = data.pages;
+                appState.pages = storedData.pages;
                 this.saveData();
             }
             localStorage.setItem(this.lastResetKey, today);
@@ -343,7 +343,7 @@ export class DataManager {
         
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
-        const data = {
+        const localData = {
             pages: appState.pages,
             currentPageId: appState.currentPageId,
             lastModified: new Date().toISOString(),
@@ -352,7 +352,7 @@ export class DataManager {
             allSubtasksExpanded: appState.allSubtasksExpanded,
             settings: settingsManager ? settingsManager.loadSettings() : {}
         };
-        localStorage.setItem(this.storageKey, JSON.stringify(data));
+        localStorage.setItem(this.storageKey, JSON.stringify(localData));
     }
     
     /**
@@ -376,7 +376,7 @@ export class DataManager {
         // Send full data state for sync
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
-        const data = {
+        const syncPayload = {
             pages: appState.pages,
             currentPageId: appState.currentPageId,
             binStates: appState.binStates || {},
@@ -390,7 +390,7 @@ export class DataManager {
         syncManager.send({
             type: 'full_sync',
             filename: fileManager.currentFilename,
-            data: data,
+            data: syncPayload,
             timestamp: this._lastSyncTimestamp
         });
     }
@@ -415,12 +415,12 @@ export class DataManager {
         
         try {
             const appState = this._getAppState();
-            const data = {
+            const autosaveData = {
                 pages: appState.pages
             };
             
             // Use FileManager's saveFile method to save to server (silent mode for autosave)
-            await fileManager.saveFile(currentFilename, data, true);
+            await fileManager.saveFile(currentFilename, autosaveData, true);
             console.log('[DataManager] Autosave successful:', currentFilename);
             // Mark save as complete
             this._hasPendingSave = false;
@@ -455,26 +455,26 @@ export class DataManager {
             const response = await fetch('default.json?' + Date.now(), {
                 cache: 'no-store'
             });
-            const data = await response.json();
+            const defaultData = await response.json();
             
-            if (!data.pages || !Array.isArray(data.pages)) {
+            if (!defaultData.pages || !Array.isArray(defaultData.pages)) {
                 alert('Invalid default.json format. Expected a JSON file with a "pages" array.');
                 return;
             }
             
-            if (confirm(`Load ${data.pages.length} page(s) from default.json? This will replace your current data.`)) {
+            if (confirm(`Load ${defaultData.pages.length} page(s) from default.json? This will replace your current data.`)) {
                 // Migrate subtasks to children before loading
-                const migratedData = this.migrateSubtasksToChildren(data);
+                const migratedData = this.migrateSubtasksToChildren(defaultData);
                 const appState = this._getAppState();
                 appState.pages = migratedData.pages;
                 
                 // Restore collapse states if they exist, otherwise reset to closed state
-                if (data.pageStates) {
+                if (defaultData.pageStates) {
                     // Migrate pageStates to binStates
-                    Object.keys(data.pageStates).forEach(pageId => {
+                    Object.keys(defaultData.pageStates).forEach(pageId => {
                         const binId = pageId.replace(/^page-/, 'bin-');
                         if (appState.setBinState) {
-                            appState.setBinState(binId, data.pageStates[pageId]);
+                            appState.setBinState(binId, defaultData.pageStates[pageId]);
                         }
                     });
                 }
@@ -487,17 +487,17 @@ export class DataManager {
                     });
                 }
                 
-                if (data.allSubtasksExpanded !== undefined) {
-                    appState.allSubtasksExpanded = data.allSubtasksExpanded;
+                if (defaultData.allSubtasksExpanded !== undefined) {
+                    appState.allSubtasksExpanded = defaultData.allSubtasksExpanded;
                 } else {
                     appState.allSubtasksExpanded = false;
                 }
                 
                 // Restore settings if they exist
-                if (data.settings) {
+                if (defaultData.settings) {
                     const settingsManager = this._getSettingsManager();
                     if (settingsManager) {
-                        settingsManager.saveSettings(data.settings);
+                        settingsManager.saveSettings(defaultData.settings);
                     }
                 }
                 
@@ -514,7 +514,7 @@ export class DataManager {
     saveToFile() {
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
-        const data = {
+        const exportData = {
             pages: appState.pages,
             lastModified: new Date().toISOString(),
             version: '1.0',
@@ -524,7 +524,7 @@ export class DataManager {
             settings: settingsManager ? settingsManager.loadSettings() : {}
         };
         
-        const json = JSON.stringify(data, null, 2);
+        const json = JSON.stringify(exportData, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         
@@ -545,7 +545,7 @@ export class DataManager {
         
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
-        const data = {
+        const defaultPayload = {
             pages: appState.pages,
             lastModified: new Date().toISOString(),
             version: '1.0',
@@ -565,7 +565,7 @@ export class DataManager {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify(defaultPayload)
             });
             
             if (!response.ok) {
@@ -592,27 +592,27 @@ export class DataManager {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const data = JSON.parse(e.target.result);
+                const importedData = JSON.parse(e.target.result);
                 
-                if (!data.pages || !Array.isArray(data.pages)) {
+                if (!importedData.pages || !Array.isArray(importedData.pages)) {
                     alert('Invalid file format. Expected a JSON file with a "pages" array.');
                     return;
                 }
                 
                 // Ask for confirmation
-                if (confirm(`Load ${data.pages.length} page(s) from file? This will replace your current data.`)) {
+                if (confirm(`Load ${importedData.pages.length} page(s) from file? This will replace your current data.`)) {
                     // Migrate subtasks to children before loading
-                    const migratedData = this.migrateSubtasksToChildren(data);
+                    const migratedData = this.migrateSubtasksToChildren(importedData);
                     const appState = this._getAppState();
                     appState.pages = migratedData.pages;
                     
                     // Restore collapse states if they exist, otherwise reset to closed state
-                    if (data.pageStates) {
+                    if (importedData.pageStates) {
                         // Migrate pageStates to binStates
-                        Object.keys(data.pageStates).forEach(pageId => {
+                        Object.keys(importedData.pageStates).forEach(pageId => {
                             const binId = pageId.replace(/^page-/, 'bin-');
                             if (appState.setBinState) {
-                                appState.setBinState(binId, data.pageStates[pageId]);
+                                appState.setBinState(binId, importedData.pageStates[pageId]);
                             }
                         });
                     }
@@ -625,17 +625,17 @@ export class DataManager {
                         });
                     }
                     
-                    if (data.allSubtasksExpanded !== undefined) {
-                        appState.allSubtasksExpanded = data.allSubtasksExpanded;
+                    if (importedData.allSubtasksExpanded !== undefined) {
+                        appState.allSubtasksExpanded = importedData.allSubtasksExpanded;
                     } else {
                         appState.allSubtasksExpanded = false;
                     }
                     
                     // Restore settings if they exist
-                    if (data.settings) {
+                    if (importedData.settings) {
                         const settingsManager = this._getSettingsManager();
                         if (settingsManager) {
-                            settingsManager.saveSettings(data.settings);
+                            settingsManager.saveSettings(importedData.settings);
                         }
                     }
                     

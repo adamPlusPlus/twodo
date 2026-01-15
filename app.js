@@ -272,7 +272,7 @@ class TodoApp {
             }
             
             // Use preloaded data if available (started in constructor)
-            let data;
+            let fileData;
             if (this._fileLoadPromise) {
                 // console.log('[DIAG] Preload promise exists, awaiting...');
                 const preloadAwaitStart = performance.now();
@@ -283,7 +283,7 @@ class TodoApp {
                 if (preloadedData) {
                     // Use preloaded data - fetch already completed!
                     // console.log('[DIAG] Using preloaded data');
-                    data = preloadedData;
+                    fileData = preloadedData;
                     this.fileManager.currentFilename = lastOpenedFile;
                 } else {
                     // Preload failed or file doesn't exist, try normal load
@@ -292,7 +292,7 @@ class TodoApp {
                     const timeoutPromise = new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('File load timeout')), 5000)
                     );
-                    data = await Promise.race([loadPromise, timeoutPromise]);
+                    fileData = await Promise.race([loadPromise, timeoutPromise]);
                 }
             } else {
                 // No preload started, do normal load
@@ -301,17 +301,17 @@ class TodoApp {
                 const timeoutPromise = new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('File load timeout')), 5000)
                 );
-                data = await Promise.race([loadPromise, timeoutPromise]);
+                fileData = await Promise.race([loadPromise, timeoutPromise]);
             }
             
-            if (!data.pages || !Array.isArray(data.pages)) {
+            if (!fileData.pages || !Array.isArray(fileData.pages)) {
                 console.warn('Last opened file has invalid format, using default data');
                 localStorage.removeItem('twodo-last-opened-file');
                 return;
             }
             
             // Update app with loaded file data
-            this.appState.pages = data.pages;
+            this.appState.pages = fileData.pages;
             // Set timestamp to prevent stale sync data from overwriting freshly loaded data
             if (this.dataManager) {
                 this.dataManager._lastSyncTimestamp = Date.now();
@@ -352,9 +352,9 @@ class TodoApp {
         if (fileParam) {
             try {
                 // Load the file specified in URL
-                const data = await this.fileManager.loadFile(fileParam);
-                if (data.pages && Array.isArray(data.pages)) {
-                    this.appState.pages = data.pages;
+                const fileData = await this.fileManager.loadFile(fileParam);
+                if (fileData.pages && Array.isArray(fileData.pages)) {
+                    this.appState.pages = fileData.pages;
                     // Store as last opened file
                     localStorage.setItem('twodo-last-opened-file', fileParam);
                     console.log(`Loaded file from URL: ${fileParam}`);

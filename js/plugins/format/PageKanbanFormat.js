@@ -93,9 +93,9 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                         }
                         
                         // Update count
-                        const countEl = existingColumn.querySelector('.kanban-column-count');
-                        if (countEl) {
-                            countEl.textContent = (bin.elements?.length || 0).toString();
+                        const countElement = existingColumn.querySelector('.kanban-column-count');
+                        if (countElement) {
+                            countElement.textContent = (bin.elements?.length || 0).toString();
                         }
                     }
                 } else {
@@ -499,10 +499,10 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                 style: 'display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;'
             });
             element.tags.forEach(tag => {
-                const tagEl = DOMUtils.createElement('span', {
+                const tagElement = DOMUtils.createElement('span', {
                     style: 'background: #2a2a2a; color: #888; font-size: 10px; padding: 2px 6px; border-radius: 3px;'
                 }, StringUtils.escapeHtml(tag));
-                tagsContainer.appendChild(tagEl);
+                tagsContainer.appendChild(tagElement);
             });
             cardContent.appendChild(tagsContainer);
         }
@@ -589,18 +589,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             columnContent.style.background = '';
             
             try {
-                const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                const dragPayload = JSON.parse(e.dataTransfer.getData('text/plain'));
                 
-                if (data.type === 'kanban-card') {
+                if (dragPayload.type === 'kanban-card') {
                     // Use DragDropHandler for proper element movement (handles children, relationships, etc.)
-                    const sourcePage = app.pages.find(p => p.id === data.pageId);
-                    const sourceBin = sourcePage?.bins?.find(b => b.id === data.binId);
+                    const sourcePage = app.pages.find(p => p.id === dragPayload.pageId);
+                    const sourceBin = sourcePage?.bins?.find(b => b.id === dragPayload.binId);
                     const targetPage = app.pages.find(p => p.id === pageId);
                     const targetBin = targetPage?.bins?.find(b => b.id === binId);
                     
-                    if (sourceBin && targetBin && sourceBin.elements[data.elementIndex]) {
+                    if (sourceBin && targetBin && sourceBin.elements[dragPayload.elementIndex]) {
                         // Check if element is a child
-                        const elementIndexStr = String(data.elementIndex);
+                        const elementIndexStr = String(dragPayload.elementIndex);
                         const isChild = elementIndexStr.includes('-');
                         let parentElementIndex = null;
                         let childIndex = null;
@@ -616,14 +616,14 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                             // Move to end of target bin
                             const targetIndex = targetBin.elements.length;
                             app.dragDropHandler.moveElement(
-                                data.pageId, data.binId, data.elementIndex,
+                                dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
                                 pageId, binId, targetIndex,
                                 isChild, parentElementIndex, childIndex
                             );
                         } else {
                             // Fallback if DragDropHandler not available
-                            const element = sourceBin.elements[data.elementIndex];
-                            sourceBin.elements.splice(data.elementIndex, 1);
+                            const element = sourceBin.elements[dragPayload.elementIndex];
+                            sourceBin.elements.splice(dragPayload.elementIndex, 1);
                             targetBin.elements.push(element);
                             app.dataManager.saveData();
                             
@@ -632,18 +632,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                             app.render();
                         }
                     }
-                } else if (data.type === 'element') {
+                } else if (dragPayload.type === 'element') {
                     // Handle drag from bin view or other sources
                     if (app.dragDropHandler) {
                         const targetIndex = targetBin.elements.length;
                         app.dragDropHandler.moveElement(
-                            data.pageId || data.sourcePageId, 
-                            data.binId || data.sourceBinId, 
-                            data.elementIndex || data.sourceElementIndex,
+                            dragPayload.pageId || dragPayload.sourcePageId, 
+                            dragPayload.binId || dragPayload.sourceBinId, 
+                            dragPayload.elementIndex || dragPayload.sourceElementIndex,
                             pageId, binId, targetIndex,
-                            data.isChild || false,
-                            data.parentElementIndex || null,
-                            data.childIndex || null
+                            dragPayload.isChild || false,
+                            dragPayload.parentElementIndex || null,
+                            dragPayload.childIndex || null
                         );
                     }
                 }

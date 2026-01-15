@@ -656,26 +656,26 @@ export default class KanbanBoard extends BasePlugin {
         if (!this.app) return;
         
         try {
-            let data = this.app.dragData;
-            if (!data) {
+            let dragPayload = this.app.dragData;
+            if (!dragPayload) {
                 const dataStr = e.dataTransfer.getData('text/plain');
                 if (dataStr) {
-                    data = JSON.parse(dataStr);
+                    dragPayload = JSON.parse(dataStr);
                 }
             }
             
-            if (!data || data.type !== 'element') return;
+            if (!dragPayload || dragPayload.type !== 'element') return;
             
             const appInstance = window.app || this.app;
             const page = appInstance.pages?.find(p => p.id === pageId);
             const bin = page?.bins?.find(b => b.id === binId);
-            if (!bin || !bin.elements || !bin.elements[data.elementIndex]) return;
+            if (!bin || !bin.elements || !bin.elements[dragPayload.elementIndex]) return;
             
-            const element = bin.elements[data.elementIndex];
+            const element = bin.elements[dragPayload.elementIndex];
             if (element.type === 'header-checkbox') return;
             
             if (appInstance.dragDropHandler) {
-                const currentIndex = parseInt(data.elementIndex);
+                const currentIndex = parseInt(dragPayload.elementIndex);
                 let targetIndex = parseInt(targetElementIndex);
                 
                 // Check if using custom columns or status columns
@@ -766,13 +766,13 @@ export default class KanbanBoard extends BasePlugin {
             
             try {
                 // Try to get data from app.dragData first (set by dragstart)
-                let data = this.app.dragData;
-                if (!data) {
+                let dragPayload = this.app.dragData;
+                if (!dragPayload) {
                     // Fallback: don't handle if no data
                     return;
                 }
                 
-                if (!data || data.type !== 'element') {
+                if (!dragPayload || dragPayload.type !== 'element') {
                     return;
                 }
                 
@@ -780,9 +780,9 @@ export default class KanbanBoard extends BasePlugin {
                 const appInstance = window.app || this.app;
                 const page = appInstance.pages?.find(p => p.id === pageId);
                 const bin = page?.bins?.find(b => b.id === binId);
-                if (!bin || !bin.elements || !bin.elements[data.elementIndex]) return;
+                if (!bin || !bin.elements || !bin.elements[dragPayload.elementIndex]) return;
                 
-                const element = bin.elements[data.elementIndex];
+                const element = bin.elements[dragPayload.elementIndex];
                 
                 // Don't move headers themselves
                 if (element.type === 'header-checkbox') {

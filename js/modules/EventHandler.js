@@ -424,9 +424,9 @@ export class EventHandler {
             // Only process if context menu is visible
             if (!menu || !menu.classList.contains('active')) {
                 // Track active page when clicking on pages
-                const pageEl = e.target.closest('.page');
-                if (pageEl) {
-                    appState.currentPageId = pageEl.dataset.pageId;
+                const pageElement = e.target.closest('.page');
+                if (pageElement) {
+                    appState.currentPageId = pageElement.dataset.pageId;
                 }
                 return;
             }
@@ -440,9 +440,9 @@ export class EventHandler {
             contextMenuHandler.hideContextMenu();
             
             // Track active page when clicking on pages
-            const pageEl = e.target.closest('.page');
-            if (pageEl) {
-                appState.currentPageId = pageEl.dataset.pageId;
+            const pageElement = e.target.closest('.page');
+            if (pageElement) {
+                appState.currentPageId = pageElement.dataset.pageId;
             }
         }, true); // Use capture phase to ensure this runs before other handlers
         
@@ -582,9 +582,9 @@ export class EventHandler {
             
             if (dragData.type === 'bin') {
                 // Find the bin we're hovering over
-                const binEl = e.target.closest('.bin');
-                if (binEl) {
-                    binEl.classList.add('drag-over');
+                const binElement = e.target.closest('.bin');
+                if (binElement) {
+                    binElement.classList.add('drag-over');
                 } else if (!e.target.closest('.bin')) {
                     // Hovering over empty space, add class to container
                     binsContainer.classList.add('drag-over');
@@ -634,10 +634,10 @@ export class EventHandler {
             }
             
             if (dragData && dragData.type === 'bin') {
-                const binEl = e.target.closest('.bin');
-                if (binEl) {
-                    const targetPageId = binEl.dataset.pageId;
-                    const targetBinId = binEl.dataset.binId;
+                const binElement = e.target.closest('.bin');
+                if (binElement) {
+                    const targetPageId = binElement.dataset.pageId;
+                    const targetBinId = binElement.dataset.binId;
                     const binManager = this._getBinManager();
                     if (binManager) {
                         binManager.moveBin(dragData.pageId, dragData.binId, targetPageId, targetBinId);
@@ -685,17 +685,17 @@ export class EventHandler {
             const binsContainer = document.getElementById('bins-container');
             
             // Find the closest element, bin, or page tab
-            const elementEl = target.closest('.element');
-            const binEl = target.closest('.bin');
-            const pageTabEl = target.closest('.page-tab');
+            const elementElement = target.closest('.element');
+            const binElement = target.closest('.bin');
+            const pageTabElement = target.closest('.page-tab');
             
             // Route to appropriate handler
-            if (elementEl) {
+            if (elementElement) {
                 // Element context menu
                 const appState = this._getAppState();
-                const pageId = elementEl.dataset.pageId || appState.currentPageId;
-                const binId = elementEl.dataset.binId;
-                const elementIndexStr = elementEl.dataset.elementIndex;
+                const pageId = elementElement.dataset.pageId || appState.currentPageId;
+                const binId = elementElement.dataset.binId;
+                const elementIndexStr = elementElement.dataset.elementIndex;
                 const elementIndex = elementIndexStr !== undefined && elementIndexStr !== '' ? parseInt(elementIndexStr, 10) : null;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {
@@ -704,10 +704,10 @@ export class EventHandler {
                 return;
             }
             
-            if (binEl && !elementEl) {
+            if (binElement && !elementElement) {
                 // Bin context menu
-                const pageId = binEl.dataset.pageId || appState.currentPageId;
-                const binId = binEl.dataset.binId;
+                const pageId = binElement.dataset.pageId || appState.currentPageId;
+                const binId = binElement.dataset.binId;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {
                     contextMenuHandler.showBinContextMenu(e, pageId, binId);
@@ -715,9 +715,9 @@ export class EventHandler {
                 return;
             }
             
-            if (pageTabEl) {
+            if (pageTabElement) {
                 // Page tab context menu
-                const pageId = pageTabEl.dataset.pageId;
+                const pageId = pageTabElement.dataset.pageId;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {
                     contextMenuHandler.showPageContextMenu(e, pageId);
@@ -779,14 +779,14 @@ export class EventHandler {
         
         // Track mouse down location to prevent closing when clicking inside and releasing outside
         let modalMouseDownTarget = null;
-        const modalEl = document.getElementById('modal');
+        const modalElement = document.getElementById('modal');
         
-        modalEl.addEventListener('mousedown', (e) => {
+        modalElement.addEventListener('mousedown', (e) => {
             // Track what element was clicked on mousedown
             modalMouseDownTarget = e.target;
         });
         
-        modalEl.addEventListener('click', (e) => {
+        modalElement.addEventListener('click', (e) => {
             // Only close if both mousedown and click were on the modal background (not modal-content)
             // This prevents closing when clicking inside and releasing outside
             if (e.target.id === 'modal' && modalMouseDownTarget && modalMouseDownTarget.id === 'modal') {

@@ -42,8 +42,8 @@ export const UIUtils = {
         }
         
         if (title) {
-            const titleEl = DOMUtils.createElement('h3', {}, title);
-            modalContent.appendChild(titleEl);
+            const titleElement = DOMUtils.createElement('h3', {}, title);
+            modalContent.appendChild(titleElement);
         }
         
         const body = DOMUtils.createElement('div', {
@@ -59,17 +59,17 @@ export const UIUtils = {
         modalContent.appendChild(body);
         
         if (footer) {
-            const footerEl = DOMUtils.createElement('div', {
+            const footerElement = DOMUtils.createElement('div', {
                 class: 'modal-footer'
             });
             
             if (typeof footer === 'string') {
-                footerEl.innerHTML = footer;
+                footerElement.innerHTML = footer;
             } else if (footer instanceof Node) {
-                footerEl.appendChild(footer);
+                footerElement.appendChild(footer);
             }
             
-            modalContent.appendChild(footerEl);
+            modalContent.appendChild(footerElement);
         }
         
         modal.appendChild(modalContent);
@@ -82,12 +82,12 @@ export const UIUtils = {
      * @param {HTMLElement|string} modal - Modal element or ID
      */
     showModal(modal) {
-        const modalEl = typeof modal === 'string' 
+        const modalElement = typeof modal === 'string' 
             ? document.getElementById(modal) 
             : modal;
         
-        if (modalEl) {
-            DOMUtils.addClass(modalEl, 'active');
+        if (modalElement) {
+            DOMUtils.addClass(modalElement, 'active');
         }
     },
     
@@ -96,12 +96,12 @@ export const UIUtils = {
      * @param {HTMLElement|string} modal - Modal element or ID
      */
     hideModal(modal) {
-        const modalEl = typeof modal === 'string' 
+        const modalElement = typeof modal === 'string' 
             ? document.getElementById(modal) 
             : modal;
         
-        if (modalEl) {
-            DOMUtils.removeClass(modalEl, 'active');
+        if (modalElement) {
+            DOMUtils.removeClass(modalElement, 'active');
         }
     },
     
@@ -127,10 +127,10 @@ export const UIUtils = {
         });
         
         if (icon) {
-            const iconEl = DOMUtils.createElement('span', {
+            const iconElement = DOMUtils.createElement('span', {
                 class: 'button-icon'
             }, icon);
-            button.appendChild(iconEl);
+            button.appendChild(iconElement);
         }
         
         button.appendChild(document.createTextNode(text));
@@ -330,11 +330,11 @@ export const UIUtils = {
      * @param {string} text - Loading text
      */
     showLoading(container, text = 'Loading...') {
-        const containerEl = typeof container === 'string' 
+        const containerElement = typeof container === 'string' 
             ? document.getElementById(container) 
             : container;
         
-        if (!containerEl) return;
+        if (!containerElement) return;
         
         const loader = DOMUtils.createElement('div', {
             class: 'loading-indicator'
@@ -346,13 +346,13 @@ export const UIUtils = {
         loader.appendChild(spinner);
         
         if (text) {
-            const textEl = DOMUtils.createElement('div', {
+            const textElement = DOMUtils.createElement('div', {
                 class: 'loading-text'
             }, text);
-            loader.appendChild(textEl);
+            loader.appendChild(textElement);
         }
         
-        containerEl.appendChild(loader);
+        containerElement.appendChild(loader);
         
         return () => {
             DOMUtils.remove(loader);

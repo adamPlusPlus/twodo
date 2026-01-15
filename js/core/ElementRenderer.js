@@ -229,11 +229,11 @@ export class ElementRenderer {
         parentElement.children.forEach((child, childIndex) => {
             // For nested children, we use a special identifier: parentIndex-childIndex
             // But for rendering purposes, we still need to track the parent
-            const childEl = this.renderElement(pageId, binId, child, `${parentElementIndex}-${childIndex}`, childIndex, depth + 1);
-            if (childEl) {
+            const childElement = this.renderElement(pageId, binId, child, `${parentElementIndex}-${childIndex}`, childIndex, depth + 1);
+            if (childElement) {
                 // Mark as child element for styling
-                childEl.classList.add('child-element');
-                content.appendChild(childEl);
+                childElement.classList.add('child-element');
+                content.appendChild(childElement);
             }
         });
         
@@ -282,9 +282,10 @@ export class ElementRenderer {
         
         div.className = classes.join(' ');
         
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
+        
         // Apply visual settings for this element (includes tag-based settings)
         if (this.app.visualSettingsManager) {
-            const elementId = `${pageId}-${binId}-${elementIndex}`;
             const page = this.app.appState?.pages?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
             // Tags are automatically retrieved and applied in applyVisualSettings
@@ -379,6 +380,7 @@ export class ElementRenderer {
             div.dataset.isChild = 'false';
         }
         div.dataset.pageId = pageId;
+        div.dataset.elementId = elementId;
         
         // Context menu is now handled by unified handler in EventHandler
         
@@ -499,7 +501,7 @@ export class ElementRenderer {
                 actualElementIndex = parseInt(elementIndex);
             }
             
-            const data = {
+            const dragPayload = {
                 type: 'element',
                 pageId: actualPageId,
                 binId: binId,
@@ -526,8 +528,8 @@ export class ElementRenderer {
                 location: `${actualPageId}-${actualElementIndex}${isChild ? ` (child of ${parentElementIndex})` : ''}`
             });
             
-            e.dataTransfer.setData('text/plain', JSON.stringify(data));
-            this.app.appState.dragData = data;
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            this.app.appState.dragData = dragPayload;
             div.classList.add('dragging');
             
             // Show trash icon
@@ -1318,9 +1320,9 @@ export class ElementRenderer {
                 let targetElementText = 'N/A';
                 
                 if (targetIsChild && targetParentIndex !== null) {
-                    const parentEl = targetBin?.elements?.[targetParentIndex];
+                    const parentElement = targetBin?.elements?.[targetParentIndex];
                     const childIdx = typeof actualElementIndex === 'string' ? parseInt(actualElementIndex.split('-')[1]) : 0;
-                    targetElement = parentEl?.children?.[childIdx];
+                    targetElement = parentElement?.children?.[childIdx];
                     targetElementText = targetElement?.text || 'N/A';
                 } else {
                     targetElement = targetBin?.elements?.[targetElementIndex];

@@ -298,15 +298,15 @@ export class ContextMenuHandler {
         // Determine which page to use (parameter, the one being right-clicked on, or active page)
         let pageIdToUse = pageId;
         if (!pageIdToUse) {
-            const pageEl = e.target.closest('.page-tab');
-            if (pageEl) {
-                pageIdToUse = pageEl.dataset.pageId;
+            const pageElement = e.target.closest('.page-tab');
+            if (pageElement) {
+                pageIdToUse = pageElement.dataset.pageId;
             }
         }
         if (!pageIdToUse) {
-            const pageEl = e.target.closest('.page');
-            if (pageEl) {
-                pageIdToUse = pageEl.dataset.pageId;
+            const pageElement = e.target.closest('.page');
+            if (pageElement) {
+                pageIdToUse = pageElement.dataset.pageId;
             }
         }
         if (!pageIdToUse) {

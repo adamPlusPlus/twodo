@@ -37,8 +37,8 @@ export class AnimationRenderer {
         
         // Animate pages
         let pageAnimations = 0;
-        document.querySelectorAll('.page').forEach(pageEl => {
-            const pageId = pageEl.dataset.pageId;
+        document.querySelectorAll('.page').forEach(pageElement => {
+            const pageId = pageElement.dataset.pageId;
             if (!pageId) return;
             
             const oldPos = oldPositions.pages[pageId];
@@ -47,7 +47,7 @@ export class AnimationRenderer {
                 return; // New page, no animation needed
             }
             
-            const newRect = pageEl.getBoundingClientRect();
+            const newRect = pageElement.getBoundingClientRect();
             const deltaY = oldPos.top - newRect.top;
             const deltaX = oldPos.left - newRect.left;
             
@@ -55,22 +55,22 @@ export class AnimationRenderer {
                 pageAnimations++;
                 console.log(`📄 Page ${pageId}: Animating (deltaY: ${deltaY.toFixed(2)}px, deltaX: ${deltaX.toFixed(2)}px)`);
                 // Pages just slide smoothly - no pop effects
-                pageEl.style.transition = 'transform 2.5s ease-out';
-                pageEl.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                pageElement.style.transition = 'transform 2.5s ease-out';
+                pageElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
                 
                 // Force reflow to ensure the transform is applied
-                void pageEl.offsetHeight;
+                void pageElement.offsetHeight;
                 
                 // Wait for next frame, then remove transform to trigger CSS transition
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         // Now remove transform - this should trigger the transition
-                        pageEl.style.transform = '';
+                        pageElement.style.transform = '';
                         
                         // Clean up inline styles after animation completes
                         setTimeout(() => {
-                            pageEl.style.transition = '';
-                            pageEl.style.transform = '';
+                            pageElement.style.transition = '';
+                            pageElement.style.transform = '';
                         }, 2500);
                     });
                 });
@@ -80,18 +80,18 @@ export class AnimationRenderer {
         // Animate elements - match by content/text since indices change
         let elementAnimations = 0;
         let movingElementFound = false;
-        document.querySelectorAll('.element').forEach(elementEl => {
-            const pageId = elementEl.dataset.pageId;
-            const elementIndex = elementEl.dataset.elementIndex;
+        document.querySelectorAll('.element').forEach(elementElement => {
+            const pageId = elementElement.dataset.pageId;
+            const elementIndex = elementElement.dataset.elementIndex;
             if (!pageId || elementIndex === undefined) return;
             
             // Try to find matching old position by text content
-            const textEl = elementEl.querySelector('.task-text, .header-text, .audio-status');
+            const textElement = elementElement.querySelector('.task-text, .header-text, .audio-status');
             let oldPos = null;
             let matchMethod = 'none';
             
-            if (textEl) {
-                const text = (textEl.textContent || textEl.innerText || '').substring(0, 20);
+            if (textElement) {
+                const text = (textElement.textContent || textElement.innerText || '').substring(0, 20);
                 // Search for matching element in old positions
                 for (const [key, pos] of Object.entries(oldPositions.elements)) {
                     if (pos.pageId === pageId && key.includes(text)) {
@@ -114,7 +114,7 @@ export class AnimationRenderer {
                 return; // New element, no animation needed
             }
             
-            const newRect = elementEl.getBoundingClientRect();
+            const newRect = elementElement.getBoundingClientRect();
             let deltaY = oldPos.top - newRect.top;
             let deltaX = oldPos.left - newRect.left;
             
@@ -133,8 +133,8 @@ export class AnimationRenderer {
                 // Use more precise matching: check both new position AND old position
                 let isMovingElement = false;
                 if (this.app.appState.lastMovedElement) {
-                    const currentIsChild = elementEl.dataset.isChild === 'true';
-                    const currentChildIndex = elementEl.dataset.childIndex;
+                    const currentIsChild = elementElement.dataset.isChild === 'true';
+                    const currentChildIndex = elementElement.dataset.childIndex;
                     const trackedWasChild = this.app.appState.lastMovedElement.oldElementIndex !== null && 
                         typeof this.app.appState.lastMovedElement.oldElementIndex === 'string' && 
                         this.app.appState.lastMovedElement.oldElementIndex.includes('-');
@@ -151,7 +151,7 @@ export class AnimationRenderer {
                         }
                     } else {
                         // Get element text for verification
-                        const currentText = textEl ? (textEl.textContent || textEl.innerText || '').trim().substring(0, 50) : '';
+                        const currentText = textElement ? (textElement.textContent || textElement.innerText || '').trim().substring(0, 50) : '';
                         const trackedText = (this.app.appState.lastMovedElement.element?.text || '').trim().substring(0, 50);
                         const textMatch = currentText === trackedText && currentText.length > 0;
                         
@@ -184,7 +184,7 @@ export class AnimationRenderer {
                     console.log(`🎯 MOVING ELEMENT ${pageId}-${elementIndex}:`);
                     console.log(`   📍 Position change: deltaY=${deltaY.toFixed(2)}px, deltaX=${deltaX.toFixed(2)}px`);
                     console.log(`   🔍 Matched by: ${matchMethod}`);
-                    console.log(`   📝 Text: ${textEl ? (textEl.textContent || textEl.innerText || '').substring(0, 40) : 'N/A'}`);
+                    console.log(`   📝 Text: ${textElement ? (textElement.textContent || textElement.innerText || '').substring(0, 40) : 'N/A'}`);
                 } else {
                     console.log(`⬇️  DISPLACED ELEMENT ${pageId}-${elementIndex}:`);
                     console.log(`   📍 Position change: deltaY=${deltaY.toFixed(2)}px, deltaX=${deltaX.toFixed(2)}px`);
@@ -199,34 +199,34 @@ export class AnimationRenderer {
                     console.log(`   🎬 Step 1: Starting at old position, POP-OUT (scale 1.15, z-index 1000)`);
                     console.log(`   🔍 Transform: translate(${deltaX.toFixed(2)}px, ${deltaY.toFixed(2)}px) scale(1.15)`);
                     console.log(`   📊 Old pos: (${oldPos.left.toFixed(2)}, ${oldPos.top.toFixed(2)}), New pos: (${newRect.left.toFixed(2)}, ${newRect.top.toFixed(2)})`);
-                    elementEl.style.transition = 'transform 0s, scale 0.3s ease-out, z-index 0s';
-                    elementEl.style.zIndex = '1000';
+                    elementElement.style.transition = 'transform 0s, scale 0.3s ease-out, z-index 0s';
+                    elementElement.style.zIndex = '1000';
                     // Invert the delta to start at old position, scale up for pop-out
-                    elementEl.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.15)`;
-                    void elementEl.offsetHeight;
+                    elementElement.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.15)`;
+                    void elementElement.offsetHeight;
                     
                     // Step 2: After pop-out, slide to new position (remove translate, keep scale)
                     setTimeout(() => {
                         console.log(`   🎬 Step 2: POP-OUT complete, SLIDE to new position (scale 1.0)`);
-                        elementEl.style.transition = 'transform 2.5s ease-out, scale 0.3s ease-out';
+                        elementElement.style.transition = 'transform 2.5s ease-out, scale 0.3s ease-out';
                         // Remove translate (goes to natural new position), scale back to 1.0
-                        elementEl.style.transform = 'scale(1.0)';
-                        void elementEl.offsetHeight;
+                        elementElement.style.transform = 'scale(1.0)';
+                        void elementElement.offsetHeight;
                         
                         // Step 3: After slide completes, pop in (slight scale down)
                         setTimeout(() => {
                             console.log(`   🎬 Step 3: SLIDE complete, POP-IN (scale 1.05 -> 1.0)`);
-                            elementEl.style.transition = 'scale 0.2s ease-out, z-index 0s 0.2s';
-                            elementEl.style.transform = 'scale(1.05)';
-                            void elementEl.offsetHeight;
+                            elementElement.style.transition = 'scale 0.2s ease-out, z-index 0s 0.2s';
+                            elementElement.style.transform = 'scale(1.05)';
+                            void elementElement.offsetHeight;
                             
                             requestAnimationFrame(() => {
-                                elementEl.style.transform = 'scale(1.0)';
+                                elementElement.style.transform = 'scale(1.0)';
                                 setTimeout(() => {
                                     console.log(`   ✅ Step 4: POP-IN complete, animation finished`);
-                                    elementEl.style.zIndex = '';
-                                    elementEl.style.transition = '';
-                                    elementEl.style.transform = '';
+                                    elementElement.style.zIndex = '';
+                                    elementElement.style.transition = '';
+                                    elementElement.style.transform = '';
                                     this.app.appState.lastMovedElement = null; // Clear after animation
                                 }, 200);
                             });
@@ -238,22 +238,22 @@ export class AnimationRenderer {
                     // deltaY = oldPos.top - newRect.top, so positive means moved UP
                     // To invert: translate DOWN by deltaY to appear at old position
                     console.log(`   🎬 Starting DISPLACE animation (2.5s slide)`);
-                    elementEl.style.transition = 'transform 2.5s ease-out';
+                    elementElement.style.transition = 'transform 2.5s ease-out';
                     // Invert the delta to start at old position
-                    elementEl.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                    void elementEl.offsetHeight;
+                    elementElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    void elementElement.offsetHeight;
                     
                     // Remove transform to trigger slide to new position
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             console.log(`   🎬 DISPLACE animation triggered (removing transform)`);
-                            elementEl.style.transform = '';
+                            elementElement.style.transform = '';
                             
                             // Clean up after animation
                             setTimeout(() => {
                                 console.log(`   ✅ DISPLACE animation complete`);
-                                elementEl.style.transition = '';
-                                elementEl.style.transform = '';
+                                elementElement.style.transition = '';
+                                elementElement.style.transform = '';
                             }, 2500);
                         });
                     });

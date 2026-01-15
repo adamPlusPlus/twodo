@@ -10,29 +10,29 @@ export class ImportService {
      */
     importFromJSON(jsonString, options = {}) {
         try {
-            const data = JSON.parse(jsonString);
+            const importedPage = JSON.parse(jsonString);
             
             // Validate structure
-            if (!data.id || !data.bins) {
+            if (!importedPage.id || !importedPage.bins) {
                 throw new Error('Invalid page structure');
             }
             
             // Generate new ID if needed
             if (options.newPageId) {
-                data.id = options.newPageId;
+                importedPage.id = options.newPageId;
             } else {
-                data.id = `page-${Date.now()}`;
+                importedPage.id = `page-${Date.now()}`;
             }
             
             // Re-index bins and elements
-            data.bins.forEach((bin, binIndex) => {
+            importedPage.bins.forEach((bin, binIndex) => {
                 bin.id = bin.id || `bin-${binIndex}`;
                 bin.elements?.forEach((element, elIndex) => {
-                    element.id = element.id || `element-${data.id}-${bin.id}-${elIndex}`;
+                    element.id = element.id || `element-${importedPage.id}-${bin.id}-${elIndex}`;
                 });
             });
             
-            return data;
+            return importedPage;
         } catch (error) {
             throw new Error(`Failed to parse JSON: ${error.message}`);
         }
@@ -257,18 +257,18 @@ export class ImportService {
      */
     importFromTrelloJSON(jsonString, options = {}) {
         try {
-            const data = JSON.parse(jsonString);
+            const trelloData = JSON.parse(jsonString);
             const pageId = options.newPageId || `page-${Date.now()}`;
             
             const page = {
                 id: pageId,
-                title: data.name || 'Imported from Trello',
+                title: trelloData.name || 'Imported from Trello',
                 bins: []
             };
             
             // Trello boards have lists (columns) which become bins
-            if (data.lists && Array.isArray(data.lists)) {
-                data.lists.forEach((list, listIndex) => {
+            if (trelloData.lists && Array.isArray(trelloData.lists)) {
+                trelloData.lists.forEach((list, listIndex) => {
                     const bin = {
                         id: `bin-${listIndex}`,
                         title: list.name || `List ${listIndex + 1}`,
@@ -276,8 +276,8 @@ export class ImportService {
                     };
                     
                     // Find cards in this list
-                    if (data.cards && Array.isArray(data.cards)) {
-                        data.cards
+                    if (trelloData.cards && Array.isArray(trelloData.cards)) {
+                        trelloData.cards
                             .filter(card => card.idList === list.id)
                             .forEach((card, cardIndex) => {
                                 const element = {
@@ -304,8 +304,8 @@ export class ImportService {
                                 }
                                 
                                 // Add checklists as children
-                                if (data.checklists && Array.isArray(data.checklists)) {
-                                    data.checklists
+                                if (trelloData.checklists && Array.isArray(trelloData.checklists)) {
+                                    trelloData.checklists
                                         .filter(checklist => checklist.idCard === card.id)
                                         .forEach(checklist => {
                                             if (checklist.checkItems) {
@@ -370,8 +370,8 @@ export class ImportService {
                         case 'json':
                             // Try Trello format first
                             try {
-                                const data = JSON.parse(content);
-                                if (data.lists && data.cards) {
+                                const parsedContent = JSON.parse(content);
+                                if (parsedContent.lists && parsedContent.cards) {
                                     page = this.importFromTrelloJSON(content);
                                 } else {
                                     page = this.importFromJSON(content);

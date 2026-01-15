@@ -39,7 +39,7 @@ export default class ColorCoding extends BasePlugin {
         const colorRules = binData.pluginConfigs[this.id]?.colorRules || this.config.colorRules || [];
         
         // Apply color coding to elements
-        binElement.querySelectorAll('.element').forEach((elementEl, index) => {
+        binElement.querySelectorAll('.element').forEach((elementElement, index) => {
             const element = binData.elements?.[index];
             if (!element) return;
 
@@ -53,7 +53,7 @@ export default class ColorCoding extends BasePlugin {
             }
 
             if (color) {
-                elementEl.style.borderLeft = `4px solid ${color}`;
+                elementElement.style.borderLeft = `4px solid ${color}`;
             }
         });
     }
