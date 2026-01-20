@@ -2,16 +2,16 @@
 
 /**
  * Parse markdown text and convert to app structure
- * - ## headers become bins
- * - ### headers become header elements within bins
+ * - ## headers become groups
+ * - ### headers become header items within groups
  * - Bullet points and text lines become checkbox elements
  * - Empty lines are removed
  * - Markdown formatting (bold, etc.) is preserved in text
  */
 export function parseMarkdownToAppStructure(markdownText) {
     const lines = markdownText.split('\n');
-    const bins = [];
-    let currentBin = null;
+    const groups = [];
+    let currentGroup = null;
     let currentHeader = null;
     
     for (let i = 0; i < lines.length; i++) {
@@ -22,28 +22,29 @@ export function parseMarkdownToAppStructure(markdownText) {
             continue;
         }
         
-        // Check for ## header (bin)
+        // Check for ## header (group)
         if (line.startsWith('## ')) {
-            // Save previous bin if exists
-            if (currentBin) {
-                bins.push(currentBin);
+            // Save previous group if exists
+            if (currentGroup) {
+                groups.push(currentGroup);
             }
             
-            // Create new bin
-            const binTitle = line.substring(3).trim();
-            currentBin = {
-                title: binTitle,
+            // Create new group
+            const groupTitle = line.substring(3).trim();
+            currentGroup = {
+                title: groupTitle,
+                items: [],
                 elements: []
             };
             currentHeader = null;
         }
-        // Check for ### header (header element within bin)
+        // Check for ### header (header item within group)
         else if (line.startsWith('### ')) {
-            if (!currentBin) {
-                // If no bin exists, create a default one
-                currentBin = {
+            if (!currentGroup) {
+                // If no group exists, create a default one
+                currentGroup = {
                     title: 'Imported Content',
-                    elements: []
+                    items: []
                 };
             }
             
@@ -53,15 +54,15 @@ export function parseMarkdownToAppStructure(markdownText) {
                 text: parseMarkdownText(headerText),
                 checked: false
             };
-            currentBin.elements.push(currentHeader);
+            currentGroup.items.push(currentHeader);
         }
         // Check for bullet points or regular text
         else {
-            if (!currentBin) {
-                // If no bin exists, create a default one
-                currentBin = {
+            if (!currentGroup) {
+                // If no group exists, create a default one
+                currentGroup = {
                     title: 'Imported Content',
-                    elements: []
+                    items: []
                 };
             }
             
@@ -78,7 +79,7 @@ export function parseMarkdownToAppStructure(markdownText) {
                         text: parseMarkdownText(taskText),
                         checked: isChecked
                     };
-                    currentBin.elements.push(element);
+                    currentGroup.items.push(element);
                 } else {
                     // Regular bullet point without checkbox
                     const element = {
@@ -86,7 +87,7 @@ export function parseMarkdownToAppStructure(markdownText) {
                         text: parseMarkdownText(text),
                         checked: false
                     };
-                    currentBin.elements.push(element);
+                    currentGroup.items.push(element);
                 }
             } else {
                 // Regular text line - create as checkbox element
@@ -95,19 +96,19 @@ export function parseMarkdownToAppStructure(markdownText) {
                     text: parseMarkdownText(line),
                     checked: false
                 };
-                currentBin.elements.push(element);
+                currentGroup.items.push(element);
             }
             
             currentHeader = null; // Reset header context after adding element
         }
     }
     
-    // Don't forget to add the last bin
-    if (currentBin) {
-        bins.push(currentBin);
+    // Don't forget to add the last group
+    if (currentGroup) {
+        groups.push(currentGroup);
     }
     
-    return bins;
+    return groups;
 }
 
 /**

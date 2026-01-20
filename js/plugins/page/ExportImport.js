@@ -8,7 +8,7 @@ export default class ExportImport extends BasePlugin {
         super({
             id: 'export-import',
             name: 'Export & Import',
-            description: 'Export pages to various formats and import from other apps.',
+            description: 'Export documents to various formats and import from other apps.',
             type: 'page',
             defaultConfig: {
                 enabled: true
@@ -78,7 +78,9 @@ export default class ExportImport extends BasePlugin {
                 
                 try {
                     const importedPage = await this.app.importService.importPage(file);
-                    this.app.pages.push(importedPage);
+                    const pages = this.app.documents || [];
+                    pages.push(importedPage);
+                    this.app.documents = pages;
                     this.app.dataManager.saveData();
                     this.app.render();
                     alert(`Page imported successfully!`);

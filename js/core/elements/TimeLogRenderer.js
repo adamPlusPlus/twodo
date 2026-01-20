@@ -23,6 +23,14 @@ export class TimeLogRenderer {
      * @returns {void}
      */
     render(div, pageId, binId, element, elementIndex, depth, renderChildren) {
+        const getTimeLogElement = () => {
+        const document = this.app.appState.documents?.find(page => page.id === pageId);
+        const group = document?.groups?.find(bin => bin.id === binId);
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return items[elementIndex];
+        };
         // Initialize time-log state if needed
         if (element.totalTime === undefined) element.totalTime = 0;
         if (element.isRunning === undefined) element.isRunning = false;
@@ -68,9 +76,7 @@ export class TimeLogRenderer {
         // Start/Stop button inline
         const timeLogStartStopBtn = this.app.styleButton(element.isRunning ? '⏸' : '▶', (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timeLogElement = bin?.elements[elementIndex];
+        const timeLogElement = getTimeLogElement();
         if (!timeLogElement) return;
     
         if (timeLogElement.isRunning) {
@@ -89,9 +95,7 @@ export class TimeLogRenderer {
         
         // Update display every second
         timeLogElement.intervalId = setInterval(() => {
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timeLogElement = bin?.elements[elementIndex];
+        const timeLogElement = getTimeLogElement();
         if (!timeLogElement || !timeLogElement.isRunning) return;
 
         timeLogElement.totalTime = Math.floor((Date.now() - timeLogElement.startTime) / 1000) +

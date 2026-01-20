@@ -39,15 +39,15 @@ export default class CustomScripts extends BasePlugin {
                 </label>
                 <div style="margin-top: 15px;">
                     <label>Script Code:</label>
-                    <textarea id="custom-script-code" rows="15" style="width: 100%; padding: 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; font-family: monospace; font-size: 12px;" placeholder="// Example:&#10;on('element:completed', (data) => {&#10;  api.log('Element completed:', data.element.text);&#10;});">${this.escapeHtml(script)}</textarea>
+                    <textarea id="custom-script-code" rows="15" style="width: 100%; padding: 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; font-family: monospace; font-size: 12px;" placeholder="// Example:&#10;on('element:completed', (data) => {&#10;  api.log('Item completed:', data.element.text);&#10;});">${this.escapeHtml(script)}</textarea>
                     <div style="margin-top: 10px; font-size: 11px; color: #888;">
                         <strong>Available API:</strong><br>
-                        • api.getPage() - Get current page<br>
-                        • api.getBins() - Get all bins in page<br>
-                        • api.getElements(binId) - Get elements in bin<br>
-                        • api.createElement(binId, elementData) - Create element<br>
-                        • api.updateElement(binId, elementIndex, updates) - Update element<br>
-                        • api.deleteElement(binId, elementIndex) - Delete element<br>
+                        • api.getDocument() - Get current document<br>
+                        • api.getGroups() - Get all groups in document<br>
+                        • api.getItems(groupId) - Get items in group<br>
+                        • api.createItem(groupId, itemData) - Create item<br>
+                        • api.updateItem(groupId, itemIndex, updates) - Update item<br>
+                        • api.deleteItem(groupId, itemIndex) - Delete item<br>
                         • api.emit(event, data) - Emit event<br>
                         • api.log(...args) - Log to console<br>
                         • on(eventName, handler) - Register event handler<br>

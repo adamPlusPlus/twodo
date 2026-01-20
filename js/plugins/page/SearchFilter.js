@@ -9,7 +9,7 @@ export default class SearchFilter extends BasePlugin {
         super({
             id: 'search-filter',
             name: 'Search & Filter',
-            description: 'Global search and filter across all pages and elements.',
+            description: 'Global search and filter across all documents and items.',
             type: 'page',
             defaultConfig: {
                 enabled: true,
@@ -43,7 +43,7 @@ export default class SearchFilter extends BasePlugin {
     }
 
     handleElementChange() {
-        // Rebuild search index when elements change
+        // Rebuild search index when items change
         if (this.app.searchIndex) {
             this.app.searchIndex.rebuildIndex();
         }
@@ -98,7 +98,7 @@ export default class SearchFilter extends BasePlugin {
 
         searchContainer.innerHTML = `
             <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="text" id="global-search-input" placeholder="Search all elements..." 
+                <input type="text" id="global-search-input" placeholder="Search all items..." 
                        style="flex: 1; padding: 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px;" />
                 <button id="global-search-btn" style="padding: 8px 15px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
                 <button id="global-filter-toggle" style="padding: 8px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; cursor: pointer;" title="Toggle Filters">⚙</button>
@@ -228,11 +228,11 @@ export default class SearchFilter extends BasePlugin {
             ).join('');
         }
 
-        // Populate pages
+        // Populate documents
         if (filterPage) {
             const appState = getService(SERVICES.APP_STATE);
-            const pages = appState?.pages || [];
-            filterPage.innerHTML = pages.map(page => 
+            const documents = appState?.documents || [];
+            filterPage.innerHTML = documents.map(page => 
                 `<option value="${StringUtils.escapeHtml(page.id)}">${StringUtils.escapeHtml(page.title || page.id)}</option>`
             ).join('');
         }

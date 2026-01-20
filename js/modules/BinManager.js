@@ -28,26 +28,26 @@ export class BinManager {
     
     async addBin(pageId, afterBinId = null) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = appState.documents.find(p => p.id === pageId);
+        if (!document) return;
 
-        if (!page.bins) {
-            page.bins = [];
+        if (!document.groups) {
+            document.groups = [];
         }
 
-        // Generate unique bin ID that doesn't conflict with existing bins
+        // Generate unique group ID that doesn't conflict with existing groups
         let binId;
         let counter = 0;
         do {
             binId = `bin-${counter}`;
             counter++;
-        } while (page.bins.some(b => b.id === binId));
+        } while (document.groups.some(b => b.id === binId));
 
-        const binNum = page.bins.length + 1;
-        const newBin = {
+        const binNum = document.groups.length + 1;
+        const newGroup = {
             id: binId,
-            title: `Bin ${binNum}`,
-            elements: [],
+            title: `Group ${binNum}`,
+            items: [],
             plugins: [],
             format: null,
             config: {}
@@ -56,26 +56,26 @@ export class BinManager {
         // Insert bin at specific position if afterBinId is provided
         let binIndex;
         if (afterBinId) {
-            const afterBinIndex = page.bins.findIndex(b => b.id === afterBinId);
+            const afterBinIndex = document.groups.findIndex(b => b.id === afterBinId);
             if (afterBinIndex !== -1) {
                 // Insert after the specified bin
                 binIndex = afterBinIndex + 1;
-                page.bins.splice(binIndex, 0, newBin);
+                document.groups.splice(binIndex, 0, newGroup);
             } else {
                 // Bin not found, just append
-                binIndex = page.bins.length;
-                page.bins.push(newBin);
+                binIndex = document.groups.length;
+                document.groups.push(newGroup);
             }
         } else {
             // No position specified, append to end
-            binIndex = page.bins.length;
-            page.bins.push(newBin);
+            binIndex = document.groups.length;
+            document.groups.push(newGroup);
         }
         
         // Record undo/redo change
         const undoRedoManager = this._getUndoRedoManager();
         if (undoRedoManager) {
-            undoRedoManager.recordBinAdd(pageId, binIndex, newBin);
+            undoRedoManager.recordBinAdd(pageId, binIndex, newGroup);
         }
         
         // Initialize plugins for new bin
@@ -85,7 +85,7 @@ export class BinManager {
         }
         
         // Emit event
-        eventBus.emit(EVENTS.BIN.CREATED, { pageId, binId, bin: newBin });
+        eventBus.emit(EVENTS.BIN.CREATED, { pageId, documentId: pageId, binId, groupId: binId, bin: newGroup, group: newGroup });
         
         const dataManager = this._getDataManager();
         if (dataManager) {
@@ -96,16 +96,16 @@ export class BinManager {
     
     async deleteBin(pageId, binId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-        if (!page || !page.bins) return;
+        const document = appState.documents.find(p => p.id === pageId);
+        if (!document || !document.groups) return;
         
-        const bin = page.bins.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups.find(b => b.id === binId);
+        if (!group) return;
         
         // Record undo/redo change before deletion
         const undoRedoManager = this._getUndoRedoManager();
         if (undoRedoManager) {
-            undoRedoManager.recordBinDelete(pageId, binId, JSON.parse(JSON.stringify(bin)));
+            undoRedoManager.recordBinDelete(pageId, binId, JSON.parse(JSON.stringify(group)));
         }
         
         // Cleanup plugins for bin
@@ -115,22 +115,22 @@ export class BinManager {
         }
         
         // Emit event before deletion
-        eventBus.emit(EVENTS.BIN.DELETED, { pageId, binId });
+        eventBus.emit(EVENTS.BIN.DELETED, { pageId, documentId: pageId, binId, groupId: binId });
         
-        page.bins = page.bins.filter(b => b.id !== binId);
+        document.groups = document.groups.filter(b => b.id !== binId);
         
-        // If no bins left, create a default one
-        if (page.bins.length === 0) {
-            const defaultBin = {
+        // If no groups left, create a default one
+        if (document.groups.length === 0) {
+            const defaultGroup = {
                 id: 'bin-0',
-                title: 'Bin 1',
-                elements: []
+                title: 'Group 1',
+                items: []
             };
-            page.bins = [defaultBin];
+            document.groups = [defaultGroup];
             
             // Record addition of default bin
             if (undoRedoManager) {
-                undoRedoManager.recordBinAdd(pageId, 0, defaultBin);
+                undoRedoManager.recordBinAdd(pageId, 0, defaultGroup);
             }
         }
         
@@ -145,28 +145,28 @@ export class BinManager {
         if (sourcePageId === targetPageId && sourceBinId === targetBinId) return;
         
         const appState = this._getAppState();
-        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
-        const targetPage = appState.pages.find(p => p.id === targetPageId);
+        const sourcePage = appState.documents.find(p => p.id === sourcePageId);
+        const targetPage = appState.documents.find(p => p.id === targetPageId);
         
-        if (!sourcePage || !targetPage || !sourcePage.bins || !targetPage.bins) return;
+        if (!sourcePage || !targetPage || !sourcePage.groups || !targetPage.groups) return;
         
-        const sourceBin = sourcePage.bins.find(b => b.id === sourceBinId);
-        const targetBin = targetPage.bins.find(b => b.id === targetBinId);
+        const sourceBin = sourcePage.groups.find(b => b.id === sourceBinId);
+        const targetBin = targetPage.groups.find(b => b.id === targetBinId);
         
         if (!sourceBin || !targetBin) return;
         
-        const sourceIndex = sourcePage.bins.indexOf(sourceBin);
-        const targetIndex = targetPage.bins.indexOf(targetBin);
+        const sourceIndex = sourcePage.groups.indexOf(sourceBin);
+        const targetIndex = targetPage.groups.indexOf(targetBin);
         
         // Remove from source
-        sourcePage.bins.splice(sourceIndex, 1);
+        sourcePage.groups.splice(sourceIndex, 1);
         
         // Insert at target (adjust if same page and source was before target)
         if (sourcePageId === targetPageId) {
             const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-            targetPage.bins.splice(insertIndex, 0, sourceBin);
+            targetPage.groups.splice(insertIndex, 0, sourceBin);
         } else {
-            targetPage.bins.splice(targetIndex, 0, sourceBin);
+            targetPage.groups.splice(targetIndex, 0, sourceBin);
         }
         
         const dataManager = this._getDataManager();

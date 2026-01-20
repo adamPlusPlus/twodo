@@ -25,6 +25,16 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
     async onInit() {
         // console.log(`${this.name} format renderer initialized.`);
     }
+
+    _getGroups(page) {
+        return page?.groups || [];
+    }
+
+    _getItems(bin) {
+        const items = bin.items || [];
+        bin.items = items;
+        return items;
+    }
     
     /**
      * Render a page in Trello format
@@ -54,15 +64,16 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             color: var(--page-color);
         `;
         
-        if (!page.bins || page.bins.length === 0) {
+        const groups = this._getGroups(page);
+        if (!groups.length) {
             if (!app._preservingFormat) {
-                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them as Trello columns.</p>`;
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No groups available. Add groups to see them as Trello columns.</p>`;
             }
             return;
         }
         
         // Render each bin as a column
-        page.bins.forEach(bin => {
+        groups.forEach(bin => {
             const column = this.renderColumn(bin, page.id, app);
             container.appendChild(column);
         });
@@ -114,7 +125,7 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         const count = DOMUtils.createElement('span', {
             class: 'trello-column-count',
             style: `background: var(--bg-color, #1a1a1a); padding: 4px 10px; border-radius: 12px; font-size: var(--element-font-size, 12px); color: var(--header-color, #888);`
-        }, (bin.elements?.length || 0).toString());
+        }, this._getItems(bin).length.toString());
         
         header.appendChild(title);
         header.appendChild(count);
@@ -133,8 +144,9 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         `;
         
         // Render cards
-        if (bin.elements && bin.elements.length > 0) {
-            bin.elements.forEach((element, index) => {
+        const items = this._getItems(bin);
+        if (items.length > 0) {
+            items.forEach((element, index) => {
                 const card = this.renderCard(element, pageId, bin.id, index, app);
                 content.appendChild(card);
             });
@@ -267,10 +279,12 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             checkbox.addEventListener('change', (e) => {
                 e.stopPropagation();
                 if (!app) return;
-                const page = app.pages.find(p => p.id === pageId);
-                const bin = page?.bins?.find(b => b.id === binId);
-                if (bin && bin.elements[elementIndex]) {
-                    bin.elements[elementIndex].completed = e.target.checked;
+                const page = app.documents?.find(p => p.id === pageId) ||
+                    app.appState?.documents?.find(p => p.id === pageId);
+                const bin = page?.groups?.find(b => b.id === binId);
+                const items = bin ? this._getItems(bin) : [];
+                if (items[elementIndex]) {
+                    items[elementIndex].completed = e.target.checked;
                     app.dataManager.saveData();
                     app._preservingFormat = true;
                     app.render();

@@ -3,33 +3,33 @@ import { ValidationUtils } from '../utils/validation.js';
 
 export const DataSchemas = {
     /**
-     * Page schema
+     * Document schema
      */
-    page: {
+    document: {
         id: { type: 'string', required: true },
         name: { type: 'string', required: true },
-        bins: { type: 'array', required: false },
+        groups: { type: 'array', required: false },
         plugins: { type: 'array', required: false },
         format: { type: 'string', required: false },
         config: { type: 'object', required: false }
     },
     
     /**
-     * Bin schema
+     * Group schema
      */
-    bin: {
+    group: {
         id: { type: 'string', required: true },
         name: { type: 'string', required: false },
-        elements: { type: 'array', required: false },
+        items: { type: 'array', required: false },
         plugins: { type: 'array', required: false },
         format: { type: 'string', required: false },
         config: { type: 'object', required: false }
     },
     
     /**
-     * Element schema
+     * Item schema
      */
-    element: {
+    item: {
         type: { type: 'string', required: true },
         text: { type: 'string', required: false },
         completed: { type: 'boolean', required: false },
@@ -59,30 +59,30 @@ export const DataSchemas = {
     },
     
     /**
-     * Validate page data
-     * @param {Object} page - Page data
+     * Validate document data
+     * @param {Object} document - Document data
      * @returns {Object} - { valid: boolean, errors: Object }
      */
-    validatePage(page) {
-        return this.validate(page, this.page);
+    validateDocument(document) {
+        return this.validate(document, this.document);
     },
     
     /**
-     * Validate bin data
-     * @param {Object} bin - Bin data
+     * Validate group data
+     * @param {Object} group - Group data
      * @returns {Object} - { valid: boolean, errors: Object }
      */
-    validateBin(bin) {
-        return this.validate(bin, this.bin);
+    validateGroup(group) {
+        return this.validate(group, this.group);
     },
     
     /**
-     * Validate element data
-     * @param {Object} element - Element data
+     * Validate item data
+     * @param {Object} item - Item data
      * @returns {Object} - { valid: boolean, errors: Object }
      */
-    validateElement(element) {
-        return this.validate(element, this.element);
+    validateItem(item) {
+        return this.validate(item, this.item);
     },
     
     /**
@@ -108,14 +108,15 @@ export const DataSchemas = {
     },
     
     /**
-     * Get default page structure
+     * Get default document structure
      * @returns {Object}
      */
-    getDefaultPage() {
+    getDefaultDocument() {
+        const groups = [];
         return {
             id: '',
-            name: 'New Page',
-            bins: [],
+            name: 'New Document',
+            groups,
             plugins: [],
             format: null,
             config: {}
@@ -123,14 +124,15 @@ export const DataSchemas = {
     },
     
     /**
-     * Get default bin structure
+     * Get default group structure
      * @returns {Object}
      */
-    getDefaultBin() {
+    getDefaultGroup() {
+        const items = [];
         return {
             id: '',
             name: '',
-            elements: [],
+            items,
             plugins: [],
             format: null,
             config: {}
@@ -138,10 +140,10 @@ export const DataSchemas = {
     },
     
     /**
-     * Get default element structure
+     * Get default item structure
      * @returns {Object}
      */
-    getDefaultElement() {
+    getDefaultItem() {
         return {
             type: 'task',
             text: '',
@@ -151,6 +153,19 @@ export const DataSchemas = {
             children: [],
             config: {}
         };
+    },
+    
+    // Backward-compatible defaults
+    getDefaultPage() {
+        return this.getDefaultDocument();
+    },
+    
+    getDefaultBin() {
+        return this.getDefaultGroup();
+    },
+    
+    getDefaultElement() {
+        return this.getDefaultItem();
     }
 };
 

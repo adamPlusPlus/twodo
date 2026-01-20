@@ -59,9 +59,11 @@ export default class ExampleBinPlugin extends BasePlugin {
         const title = DOMUtils.createElement('h4', {}, 'Example Bin Plugin');
         pluginDiv.appendChild(title);
         
-        if (this.config.showStats && bin.elements) {
-            const completed = bin.elements.filter(e => e.completed).length;
-            const total = bin.elements.length;
+        const items = bin.items || [];
+        bin.items = items;
+        if (this.config.showStats) {
+            const completed = items.filter(e => e.completed).length;
+            const total = items.length;
             const stats = DOMUtils.createElement('p', {}, 
                 `Completed: ${completed}/${total}`
             );

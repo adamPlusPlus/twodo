@@ -1,4 +1,4 @@
-// ColorCoding.js - Bin plugin for color coding elements
+// ColorCoding.js - Bin plugin for color coding items
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
@@ -8,7 +8,7 @@ export default class ColorCoding extends BasePlugin {
         super({
             id: 'color-coding',
             name: 'Color Coding',
-            description: 'Apply color coding to bin elements based on tags or properties.',
+            description: 'Apply color coding to group items based on tags or properties.',
             type: 'bin',
             defaultConfig: {
                 enabled: true,
@@ -38,9 +38,11 @@ export default class ColorCoding extends BasePlugin {
 
         const colorRules = binData.pluginConfigs[this.id]?.colorRules || this.config.colorRules || [];
         
-        // Apply color coding to elements
+        // Apply color coding to items
+        const items = binData.items || [];
+        binData.items = items;
         binElement.querySelectorAll('.element').forEach((elementElement, index) => {
-            const element = binData.elements?.[index];
+            const element = items[index];
             if (!element) return;
 
             // Find matching color rule

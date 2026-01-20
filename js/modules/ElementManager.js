@@ -30,20 +30,20 @@ export class ElementManager {
     }
     
     addElement(pageId, binId, elementType) {
-        const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === pageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === binId);
+        if (!group) return;
         
         const newElement = this.createElementTemplate(elementType);
         // Generate unique ID for the element
         if (!newElement.id) {
             newElement.id = `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         }
-        if (!bin.elements) bin.elements = [];
-        const newElementIndex = bin.elements.length;
-        bin.elements.push(newElement);
+        if (!group.items) group.items = [];
+        const newElementIndex = group.items.length;
+        group.items.push(newElement);
         
         // Record undo/redo change
         if (this.undoRedoManager) {
@@ -57,6 +57,8 @@ export class ElementManager {
         eventBus.emit(EVENTS.ELEMENT.CREATED, {
             pageId,
             binId,
+            documentId: pageId,
+            groupId: binId,
             elementIndex: newElementIndex,
             element: newElement
         });
@@ -69,6 +71,8 @@ export class ElementManager {
             eventBus.emit(EVENTS.UI.SHOW_EDIT_MODAL, {
                 pageId,
                 binId,
+                documentId: pageId,
+                groupId: binId,
                 elementIndex: newElementIndex,
                 element: newElement
             });
@@ -256,13 +260,15 @@ export class ElementManager {
             childIndex = parseInt(parts[1]);
         }
         
-        const page = this.appState.pages.find(p => p.id === actualPageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === actualPageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === actualBinId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === actualBinId);
+        if (!group) return;
+        const items = group.items || [];
+        group.items = items;
         
-        const element = bin.elements[actualElementIndex];
+        const element = items[actualElementIndex];
         if (!element) return;
         
         // If we have a childIndex, we're toggling a nested child
@@ -355,6 +361,8 @@ export class ElementManager {
                 eventBus.emit(EVENTS.ELEMENT.COMPLETED, {
                     pageId: actualPageId,
                     binId: actualBinId,
+                    documentId: actualPageId,
+                    groupId: actualBinId,
                     elementIndex: actualElementIndex,
                     element: element
                 });
@@ -364,6 +372,8 @@ export class ElementManager {
             eventBus.emit(EVENTS.ELEMENT.UPDATED, {
                 pageId: actualPageId,
                 binId: actualBinId,
+                documentId: actualPageId,
+                groupId: actualBinId,
                 elementIndex: actualElementIndex,
                 element: element
             });
@@ -384,15 +394,17 @@ export class ElementManager {
     }
     
     updateTrackers(pageId, binId, toggledElementIndex = null, wasChecked = false) {
-        const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === pageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === binId);
+        if (!group) return;
+        const items = group.items || [];
+        group.items = items;
         
         const today = new Date().toISOString().split('T')[0];
         
-        bin.elements.forEach((trackerElement, trackerIdx) => {
+        items.forEach((trackerElement, trackerIdx) => {
             if (trackerElement.type === 'tracker') {
                 if (trackerElement.mode === 'daily') {
                     // Track daily completions - one check per day per element
@@ -415,7 +427,7 @@ export class ElementManager {
                 } else if (trackerElement.mode === 'page') {
                     // Count unique checked elements in the page (each element counts once)
                     let uniqueCount = 0;
-                    bin.elements.forEach((el, elIdx) => {
+                    items.forEach((el, elIdx) => {
                         if (el.completed && el.type !== 'tracker') {
                             uniqueCount++;
                         }
@@ -429,13 +441,15 @@ export class ElementManager {
     }
     
     addMultiCheckboxItem(pageId, binId, elementIndex) {
-        const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === pageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === binId);
+        if (!group) return;
+        const items = group.items || [];
+        group.items = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (element && element.items) {
             const newItem = {
                 text: 'New item',
@@ -462,13 +476,15 @@ export class ElementManager {
     }
     
     removeMultiCheckboxItem(pageId, binId, elementIndex, itemIndex) {
-        const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === pageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === binId);
+        if (!group) return;
+        const items = group.items || [];
+        group.items = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (element && element.items && element.items.length > 1) {
             const removedItem = element.items[itemIndex];
             const oldCompleted = element.completed;
@@ -498,20 +514,22 @@ export class ElementManager {
     }
     
     addElementAfter(pageId, binId, elementIndex, elementType) {
-        const page = this.appState.pages.find(p => p.id === pageId);
-        if (!page) return;
+        const document = this.appState.documents.find(p => p.id === pageId);
+        if (!document) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin) return;
+        const group = document.groups?.find(b => b.id === binId);
+        if (!group) return;
+        const items = group.items || [];
+        group.items = items;
         
         const newElement = this.createElementTemplate(elementType);
         // Generate unique ID for the element
         if (!newElement.id) {
             newElement.id = `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         }
-        if (!bin.elements) bin.elements = [];
+        if (!group.items) group.items = items;
         const insertIndex = elementIndex + 1;
-        bin.elements.splice(insertIndex, 0, newElement);
+        group.items.splice(insertIndex, 0, newElement);
         
         // Record undo/redo change
         if (this.undoRedoManager) {

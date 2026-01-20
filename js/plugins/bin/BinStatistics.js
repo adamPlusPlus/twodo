@@ -8,7 +8,7 @@ export default class BinStatistics extends BasePlugin {
         super({
             id: 'bin-statistics',
             name: 'Bin Statistics',
-            description: 'Display statistics and metrics for bin elements.',
+            description: 'Display statistics and metrics for group items.',
             type: 'bin',
             defaultConfig: {
                 enabled: true
@@ -35,8 +35,9 @@ export default class BinStatistics extends BasePlugin {
             return;
         }
 
-        const elements = binData.elements || [];
-        const stats = this.calculateStats(elements);
+        const items = binData.items || [];
+        binData.items = items;
+        const stats = this.calculateStats(items);
 
         // Add statistics panel to bin header
         const binHeader = binElement.querySelector('.bin-header');

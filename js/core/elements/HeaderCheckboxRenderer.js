@@ -80,9 +80,13 @@ export class HeaderCheckboxRenderer {
         // This ensures it becomes a direct child, not a grandchild
         if (dragData.isChild && dragData.parentElementIndex !== null && dragData.childIndex !== null) {
         // Un-nest the child first, then nest it as a regular element
-        const sourcePage = this.app.appState.pages.find(p => p.id === dragData.pageId);
-        const sourceBin = sourcePage?.bins?.find(b => b.id === dragData.binId);
-        const parentElement = sourceBin?.elements[dragData.parentElementIndex];
+        const sourcePage = this.app.appState.documents?.find(p => p.id === dragData.pageId);
+        const sourceBin = sourcePage?.groups?.find(b => b.id === dragData.binId);
+        const items = sourceBin?.items || [];
+        if (sourceBin) {
+        sourceBin.items = items;
+        }
+        const parentElement = items[dragData.parentElementIndex];
         if (parentElement && parentElement.children && parentElement.children[dragData.childIndex]) {
         const childElement = parentElement.children[dragData.childIndex];
         // Remove from parent's children

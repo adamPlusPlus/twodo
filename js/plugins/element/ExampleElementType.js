@@ -42,10 +42,14 @@ export default class ExampleElementType extends BaseElementType {
         });
         
         checkbox.addEventListener('change', (e) => {
-            const page = this.app.pages.find(p => p.id === context.pageId);
-            const bin = page?.bins?.find(b => b.id === context.binId);
-            if (bin && bin.elements[context.elementIndex]) {
-                bin.elements[context.elementIndex].completed = e.target.checked;
+            const page = this.app.documents?.find(p => p.id === context.pageId);
+            const bin = page?.groups?.find(b => b.id === context.binId);
+            const items = bin?.items || [];
+            if (bin) {
+                bin.items = items;
+            }
+            if (items[context.elementIndex]) {
+                items[context.elementIndex].completed = e.target.checked;
                 this.app.dataManager.saveData();
                 this.app.render();
             }

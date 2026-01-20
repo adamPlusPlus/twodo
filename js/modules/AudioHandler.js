@@ -22,6 +22,16 @@ export class AudioHandler {
     _getAppState() {
         return getService(SERVICES.APP_STATE);
     }
+
+    _getGroup(pageId, binId) {
+        const appState = this._getAppState();
+        const page = appState.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        if (!bin) return null;
+        const items = bin.items || [];
+        bin.items = items;
+        return bin;
+    }
     
     showAudioRecordingModal() {
         const modal = document.getElementById('audio-recording-modal');
@@ -310,26 +320,28 @@ export class AudioHandler {
         }
         
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) {
             return;
         }
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) {
             return;
         }
+        const items = bin.items || [];
+        bin.items = items;
         
         // Find the element by checking if it exists at the given index
-        let element = bin.elements[elementIndex];
+        let element = items[elementIndex];
         if (!element) {
             // Try to find an audio element in the bin that might be the moved element
-            element = bin.elements.find(el => el.type === 'audio');
+            element = items.find(el => el.type === 'audio');
             if (!element) {
                 return;
             }
             // Update elementIndex to the correct index
-            elementIndex = bin.elements.indexOf(element);
+            elementIndex = items.indexOf(element);
         }
 
         // element is already declared above in error handling
@@ -397,18 +409,20 @@ export class AudioHandler {
         const domElementIndex = originalElementIndex !== null ? originalElementIndex : elementIndex;
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) {
             return;
         }
 
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) {
             return;
         }
+        const items = bin.items || [];
+        bin.items = items;
         
         // Use parsed elementIndex to access element (it's already parsed when passed from render)
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element || !element.audioFile) {
             alert('No existing recording to append to.');
             return;
@@ -441,19 +455,23 @@ export class AudioHandler {
     async playInlineAudio(pageId, binId, elementIndex) {
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         
         if (!page) {
             return;
         }
 
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements[elementIndex] || !bin.elements[elementIndex].audioFile) {
+        const bin = page.groups?.find(b => b.id === binId);
+        const items = bin?.items || [];
+        if (bin) {
+            bin.items = items;
+        }
+        if (!bin || !items[elementIndex] || !items[elementIndex].audioFile) {
             alert('No recording to play.');
             return;
         }
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         const filename = element.audioFile;
 
         try {
@@ -542,20 +560,24 @@ export class AudioHandler {
         const audioKey = `${pageId}-${binId}-${elementIndex}`;
         const appState = this._getAppState();
         const player = appState.inlineAudioPlayers?.[audioKey];
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
 
         if (!page) {
             console.error('Page not found:', pageId);
             return;
         }
 
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements[elementIndex]) {
+        const bin = page.groups?.find(b => b.id === binId);
+        const items = bin?.items || [];
+        if (bin) {
+            bin.items = items;
+        }
+        if (!bin || !items[elementIndex]) {
             console.error('Element not found:', elementIndex);
             return;
         }
 
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         
         if (player && player.audio) {
             player.audio.pause();

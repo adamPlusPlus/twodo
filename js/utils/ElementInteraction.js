@@ -27,7 +27,7 @@ export class ElementInteraction {
         // Apply visual settings
         if (enableVisualSettings && this.app.visualSettingsManager) {
             const elementId = `${pageId}-${binId}-${elementIndex}`;
-            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const page = this.app.appState?.documents?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
             this.app.visualSettingsManager.applyVisualSettings(elementElement, 'element', elementId, pageId, viewFormat);
         }
@@ -142,8 +142,8 @@ export class ElementInteraction {
                 if (this.app.appState.setContextMenuState) {
                     this.app.appState.setContextMenuState({
                         visible: true,
-                        pageId: pageId,
-                        binId: binId,
+                        documentId: pageId,
+                        groupId: binId,
                         elementIndex: elementIndex,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -152,8 +152,8 @@ export class ElementInteraction {
                 } else {
                     this.app.appState.contextMenuState = {
                         visible: true,
-                        pageId: pageId,
-                        binId: binId,
+                        documentId: pageId,
+                        groupId: binId,
                         elementIndex: elementIndex,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -178,7 +178,7 @@ export class ElementInteraction {
         // Apply visual settings
         if (this.app.visualSettingsManager) {
             const binIdStr = `${pageId}-${binId}`;
-            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const page = this.app.appState?.documents?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
             this.app.visualSettingsManager.applyVisualSettings(binElement, 'bin', binIdStr, pageId, viewFormat);
         }
@@ -192,8 +192,8 @@ export class ElementInteraction {
                 if (this.app.appState.setContextMenuState) {
                     this.app.appState.setContextMenuState({
                         visible: true,
-                        pageId: pageId,
-                        binId: binId,
+                        documentId: pageId,
+                        groupId: binId,
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -202,8 +202,8 @@ export class ElementInteraction {
                 } else {
                     this.app.appState.contextMenuState = {
                         visible: true,
-                        pageId: pageId,
-                        binId: binId,
+                        documentId: pageId,
+                        groupId: binId,
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -242,8 +242,8 @@ export class ElementInteraction {
                 if (this.app.appState.setContextMenuState) {
                     this.app.appState.setContextMenuState({
                         visible: true,
-                        pageId: pageId,
-                        binId: undefined, // undefined indicates page-level
+                        documentId: pageId,
+                        groupId: null, // null indicates page-level
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -252,8 +252,8 @@ export class ElementInteraction {
                 } else {
                     this.app.appState.contextMenuState = {
                         visible: true,
-                        pageId: pageId,
-                        binId: undefined,
+                        documentId: pageId,
+                        groupId: null,
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,

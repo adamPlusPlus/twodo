@@ -7,7 +7,7 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
             id: 'grid-layout-format',
             name: 'Grid Layout',
             formatName: 'grid-layout-format',
-            description: 'Display bins in a grid layout with identical functionality to default view.',
+            description: 'Display groups in a grid layout with identical functionality to default view.',
             supportsPages: true,
             defaultConfig: {
                 enabled: false
@@ -62,9 +62,10 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
         
         container.style.cssText = cssText;
         
-        if (!page.bins || page.bins.length === 0) {
+        const groups = page.groups || [];
+        if (!groups.length) {
             if (!app._preservingFormat) {
-                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them in grid layout.</p>`;
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No groups available. Add groups to see them in grid layout.</p>`;
             }
             return;
         }
@@ -72,7 +73,7 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
         // When preserving format, update existing bins instead of creating new ones
         if (app._preservingFormat && container.children.length > 0) {
             // Update existing bins - find and update each bin
-            page.bins.forEach((bin) => {
+            groups.forEach((bin) => {
                 const existingBin = container.querySelector(`[data-bin-id="${bin.id}"]`);
                 if (existingBin) {
                     // Bin already exists - remove it and re-render to update content
@@ -87,7 +88,7 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
             const existingBins = container.querySelectorAll('.bin');
             existingBins.forEach(binElement => {
                 const binId = binElement.dataset.binId;
-                if (!page.bins.find(b => b.id === binId)) {
+                if (!groups.find(b => b.id === binId)) {
                     binElement.remove();
                 }
             });
@@ -96,7 +97,7 @@ export default class GridLayoutFormat extends BaseFormatRenderer {
             container.innerHTML = '';
             // Render each bin using the same renderBin method as default view
             // This ensures identical behavior and functionality
-            page.bins.forEach((bin) => {
+            groups.forEach((bin) => {
                 const binElement = app.renderBin(page.id, bin);
                 container.appendChild(binElement);
             });

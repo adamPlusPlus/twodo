@@ -1,0 +1,100 @@
+Document vault/pack architecture and naming rules
+
+Add canonical docs for workspace storage, JSON coherence, and performance
+constraints, and link them from the README. Align modal event bridge
+and interop sync naming/usage while hardening modal handler lookups.
+
+Clarify unresolved naming review issues
+
+- settle browser API conflict guidance and reserved names
+- define allowed class suffix exceptions and ban ambiguous variable names
+- finalize Page vs Pack naming: Document for UI, Pack for storage
+
+Naming refactor pass (DOM Element suffix + data naming)
+
+- rename DOM node locals from *El to *Element across core/modules/utils/plugins
+- replace ambiguous data variables with scoped names (fileData, dragPayload, etc.)
+- add data-element-id alongside data-element-index in element rendering
+- update naming review doc with data-element-id guidance
+
+Introduce document/group/item data model aliases
+
+- add AppState aliases for documents/currentDocumentId/groupStates with backward-compatible page/bin access
+- normalize load/save paths to documents/groups/items while stripping legacy bins/elements on disk
+- update FileManager normalization and integrity checks for document/group/item schema
+
+Refactor core managers to documents/groups/items
+
+- update PageManager/BinManager/ElementManager to operate on documents/groups/items
+- adjust AppRenderer, PaneManager, BinRenderer for document/group access
+- add legacy alias accessors in DataManager and FileManager to keep bins/elements in sync
+
+Continue document/group/item refactor across core/modules
+
+- update ElementRenderer and element renderers to use documents/groups/items
+- normalize CalendarRenderer, SearchIndex, Import/Export, ScriptSandbox, AutomationEngine
+- adjust EventHandler, ContextMenuHandler, SyncManager, AppInitializer, InteropSyncManager
+
+Continue document/group/item refactor in modules/utils
+
+- update DragDropHandler, ModalHandler, AudioHandler, TimeTracker, TagManager, InlineEditor
+- align SettingsManager, DailyResetManager, TemplateManager, FormatRendererManager
+- update TouchGestureHandler, VisualSettingsManager, SharedDragDrop, LinkHandler, CardRenderer, GraphVisualization, markdown parser
+- add default schema aliases for bins/elements in DataSchemas
+
+Begin plugin pass for document/group/item naming
+
+- update PageKanbanFormat, DocumentViewFormat, HorizontalLayoutFormat, GridLayoutFormat
+- align LaTeXEditorFormat and ExampleFormatRenderer metadata to groups/items
+- adjust PageTemplates display to prefer groups count
+
+Continue plugin pass for document/group/item naming
+
+- update TrelloBoardFormat and PageGoalSetting to use groups/items accessors
+- align AnalyticsDashboard, HabitTracker, ExampleElementType to documents/groups/items
+- update bin plugins (KanbanBoard, BatchOperations, CustomSorting, BinArchive, etc.) to items aliasing
+
+Continue plugin pass for document/group/item naming (page utilities)
+
+- update PageTemplates, CustomViews, PageReminderSystem, ExportImport to use documents/currentDocumentId
+- adjust ElementRelationships options and DocumentViewFormat context to use documents/groups/items
+
+Continue document/group/item rename in app shell
+
+- update app.js load/init/context menu flows to use documents/groups/items and activeGroupId
+
+Continue document/group/item rename in navigation
+
+- update LinkHandler to set currentDocumentId when navigating
+
+Update default save data
+
+- rename default.json keys to documents/groups/items
+
+Update saved_files data
+
+- migrate saved_files JSON keys to documents/groups/items
+- update undo/redo buffer path segments to new names
+
+Build validation
+
+- npm run build (vite) succeeds
+
+Remove legacy aliases and finish strict document/group/item naming
+
+- drop AppState legacy accessors and context menu aliases
+- remove DataManager/FileManager legacy normalization/strip helpers
+- align UndoRedoManager paths/counts/validation to documents/groups/items
+- tighten remaining core/modules/utils/plugins to documents/groups/items only
+
+Cleanup and build prep
+
+- remove stray `nul` file blocking repo scans
+- run npm build after cleanup
+- stage changes for commit prep on success
+
+Legacy naming sweep
+
+- remove remaining .pages/.bins/.elements usage and alias fallbacks
+- rename theme/template storage to documents/groups
+- update UI strings/descriptions to document/group/item terms

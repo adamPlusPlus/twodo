@@ -17,6 +17,25 @@ export class ElementRenderer {
         this.typeRegistry = new ElementTypeRegistry(app);
         this.sharedDragDrop = null; // Initialize on first use
     }
+
+    _getDocument(pageId) {
+        return this.app.appState.documents?.find(page => page.id === pageId) || null;
+    }
+
+    _getGroup(document, binId) {
+        if (!document) return null;
+        const group = document.groups?.find(bin => bin.id === binId) || null;
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return group;
+    }
+
+    _getGroupByIds(pageId, binId) {
+        const document = this._getDocument(pageId);
+        const group = this._getGroup(document, binId);
+        return { document, group, items: group ? group.items : [] };
+    }
     
     /**
      * Render children elements
@@ -286,7 +305,7 @@ export class ElementRenderer {
         
         // Apply visual settings for this element (includes tag-based settings)
         if (this.app.visualSettingsManager) {
-            const page = this.app.appState?.pages?.find(p => p.id === pageId);
+            const page = this.app.appState?.documents?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
             // Tags are automatically retrieved and applied in applyVisualSettings
             this.app.visualSettingsManager.applyVisualSettings(div, 'element', elementId, pageId, viewFormat);
@@ -450,8 +469,8 @@ export class ElementRenderer {
                         mouseDownPos = null;
                         return false;
                     }
-                    // Track active page
-                    this.app.appState.currentPageId = pageId;
+                    // Track active document
+                    this.app.appState.currentDocumentId = pageId;
                     mouseDownTime = 0;
                     mouseDownPos = null;
                     return true;
@@ -511,11 +530,10 @@ export class ElementRenderer {
                 childIndex: childIndex
             };
             // Log element selected for nesting debugging
-            const sourcePage = this.app.appState.pages.find(p => p.id === actualPageId);
-            const sourceBin = sourcePage?.bins?.find(b => b.id === binId);
+            const { document: sourceDoc, group: sourceGroup } = this._getGroupByIds(actualPageId, binId);
             const sourceElement = isChild && parentElementIndex !== null && childIndex !== null
-                ? (sourceBin?.elements[parentElementIndex]?.children?.[childIndex])
-                : (sourceBin?.elements[actualElementIndex]);
+                ? (sourceGroup?.items?.[parentElementIndex]?.children?.[childIndex])
+                : (sourceGroup?.items?.[actualElementIndex]);
             const elementText = sourceElement?.text || 'N/A';
             
             console.log('📌 ELEMENT SELECTED:', {
@@ -648,8 +666,12 @@ export class ElementRenderer {
                     const relativeY = mouseY - contentRect.top;
                     
                     const childElements = Array.from(childrenContent.querySelectorAll('.element.child-element'));
-                    let insertIndex = childrenContent.dataset.parentElementIndex !== undefined ? 
-                        (this.app.appState.pages.find(p => p.id === pageId)?.bins?.find(b => b.id === binId)?.elements[parseInt(childrenContent.dataset.parentElementIndex)]?.children?.length || 0) : 0;
+                    let insertIndex = childrenContent.dataset.parentElementIndex !== undefined ? (() => {
+                        const parentIndex = parseInt(childrenContent.dataset.parentElementIndex);
+                        if (Number.isNaN(parentIndex)) return 0;
+                        const { group } = this._getGroupByIds(pageId, binId);
+                        return group?.items?.[parentIndex]?.children?.length || 0;
+                    })() : 0;
                     let targetElement = null;
                     
                     for (let i = 0; i < childElements.length; i++) {
@@ -769,9 +791,8 @@ export class ElementRenderer {
                     
                     // If we didn't find a target element, check if we should append at the end
                     if (targetElement === null) {
-                        const page = this.app.appState.pages.find(p => p.id === pageId);
-                        const bin = page?.bins?.find(b => b.id === binId);
-                        if (bin && insertIndex >= bin.elements.length) {
+                        const { group } = this._getGroupByIds(pageId, binId);
+                        if (group && insertIndex >= (group.items?.length || 0)) {
                             const addButton = elementsList.querySelector('.add-element-btn');
                             if (addButton) {
                                 targetElement = addButton;
@@ -914,9 +935,8 @@ export class ElementRenderer {
                     }
                     
                     // Check if this is a valid nesting target
-                    const targetPage = this.app.appState.pages.find(p => p.id === pageId);
-                    const targetBin = targetPage?.bins?.find(b => b.id === binId);
-                    const targetElement = targetBin && targetBin.elements[actualElementIndex];
+                    const { group: targetGroup } = this._getGroupByIds(pageId, binId);
+                    const targetElement = targetGroup && targetGroup.items[actualElementIndex];
                     // Check if any existing children have their own children (enforce one-level limit)
                     const hasNestedChildren = targetElement && targetElement.children &&
                         targetElement.children.some(child => child.children && child.children.length > 0);
@@ -1314,18 +1334,17 @@ export class ElementRenderer {
             
             if (dragData && dragData.type === 'element') {
                 // Log element mouse is released over
-                const targetPage = this.app.appState.pages.find(p => p.id === actualPageId);
-                const targetBin = targetPage?.bins?.find(b => b.id === actualBinId);
+                const { group: targetGroup } = this._getGroupByIds(actualPageId, actualBinId);
                 let targetElement = null;
                 let targetElementText = 'N/A';
                 
                 if (targetIsChild && targetParentIndex !== null) {
-                    const parentElement = targetBin?.elements?.[targetParentIndex];
+                    const parentElement = targetGroup?.items?.[targetParentIndex];
                     const childIdx = typeof actualElementIndex === 'string' ? parseInt(actualElementIndex.split('-')[1]) : 0;
                     targetElement = parentElement?.children?.[childIdx];
                     targetElementText = targetElement?.text || 'N/A';
                 } else {
-                    targetElement = targetBin?.elements?.[targetElementIndex];
+                    targetElement = targetGroup?.items?.[targetElementIndex];
                     targetElementText = targetElement?.text || 'N/A';
                 }
                 
@@ -1375,9 +1394,8 @@ export class ElementRenderer {
                         if (dragData.isChild && dragData.parentElementIndex !== null && dragData.childIndex !== null) {
                             // First un-nest: move the child to become a regular element
                             // We'll place it temporarily, then nest it
-                            const sourcePage = this.app.appState.pages.find(p => p.id === dragData.pageId);
-                            const sourceBin = sourcePage?.bins?.find(b => b.id === dragData.binId);
-                            const parentElement = sourceBin?.elements[dragData.parentElementIndex];
+                            const { group: sourceGroup } = this._getGroupByIds(dragData.pageId, dragData.binId);
+                            const parentElement = sourceGroup?.items?.[dragData.parentElementIndex];
                             if (parentElement && parentElement.children && parentElement.children[dragData.childIndex]) {
                                 const childElement = parentElement.children[dragData.childIndex];
                                 // Remove from parent's children
@@ -1481,9 +1499,8 @@ export class ElementRenderer {
                         // - Dropping before the parent (un-nest and place at target position, which is above)
                         // - Dropping on the parent itself (un-nest and place above parent)
                         // - Dropping on any other element (un-nest and place above target element)
-                        const sourcePage = this.app.appState.pages.find(p => p.id === dragData.pageId);
-                        const sourceBin = sourcePage?.bins?.find(b => b.id === dragData.binId);
-                        if (sourcePage && actualPageId === dragData.pageId && sourceBin?.elements[dragData.parentElementIndex]) {
+                        const { group: sourceGroup } = this._getGroupByIds(dragData.pageId, dragData.binId);
+                        if (sourceGroup && actualPageId === dragData.pageId && sourceGroup.items?.[dragData.parentElementIndex]) {
                             // Check if dropping on the parent itself
                             const isDroppingOnParent = targetElementIndex === dragData.parentElementIndex;
                             
@@ -1514,8 +1531,8 @@ export class ElementRenderer {
                         isDroppingOnParent: isDroppingOnParent,
                         isDroppingOnSibling: isDroppingOnSibling,
                         calculatedTargetIndex: unnestTargetIndex,
-                        sourceBinElementsLength: this.app.appState.pages.find(p => p.id === dragData.pageId)?.bins?.find(b => b.id === dragData.binId)?.elements.length,
-                        parentElementBefore: this.app.appState.pages.find(p => p.id === dragData.pageId)?.bins?.find(b => b.id === dragData.binId)?.elements[dragData.parentElementIndex]?.children?.length || 0,
+                        sourceBinElementsLength: this._getGroupByIds(dragData.pageId, dragData.binId).group?.items?.length || 0,
+                        parentElementBefore: this._getGroupByIds(dragData.pageId, dragData.binId).group?.items?.[dragData.parentElementIndex]?.children?.length || 0,
                         willUnnest: true
                     });
                     
@@ -1676,21 +1693,21 @@ export class ElementRenderer {
                                     ).join('')}
                                 </select>
                                 <select id="relationship-target">
-                                    <option value="">Select element...</option>
+                                    <option value="">Select item...</option>
                     `;
                     
-                    // Add all elements as options
-                    this.app.appState.pages.forEach(p => {
-                        if (p.bins) {
-                            p.bins.forEach(b => {
-                                if (b.elements) {
-                                    b.elements.forEach((el, idx) => {
-                                        const targetId = this.app.relationshipManager.getElementId(p.id, b.id, idx);
-                                        if (targetId !== elementId) {
-                                            html += `<option value="${targetId}">${this.app.escapeHtml(el.text || 'Untitled')}</option>`;
-                                        }
-                                    });
-                                }
+                    // Add all items as options
+                    this.app.appState.documents.forEach((doc) => {
+                        if (doc.groups) {
+                            doc.groups.forEach((group) => {
+                                const items = group.items || [];
+                                group.items = items;
+                                items.forEach((el, idx) => {
+                                    const targetId = this.app.relationshipManager.getElementId(doc.id, group.id, idx);
+                                    if (targetId !== elementId) {
+                                        html += `<option value="${targetId}">${this.app.escapeHtml(el.text || 'Untitled')}</option>`;
+                                    }
+                                });
                             });
                         }
                     });

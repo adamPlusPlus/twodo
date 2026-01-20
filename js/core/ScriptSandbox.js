@@ -12,46 +12,54 @@ export class ScriptSandbox {
      * @returns {Object} - Execution context
      */
     createContext(pageId) {
+        const getDocument = () => {
+            const documents = this.app.appState?.documents || this.app.documents || [];
+            return documents.find(p => p.id === pageId) || null;
+        };
+        const getGroup = (binId) => {
+            const document = getDocument();
+            const group = document?.groups?.find(b => b.id === binId) || null;
+            if (!group) return null;
+            const items = group.items || [];
+            group.items = items;
+            return group;
+        };
         const context = {
             pageId,
             app: this.app,
             scriptSandbox: this,
             // Expose safe API
             api: {
-                getPage: () => this.app.pages.find(p => p.id === pageId),
-                getBins: () => {
-                    const page = this.app.pages.find(p => p.id === pageId);
-                    return page?.bins || [];
+                getDocument: () => getDocument(),
+                getGroups: () => {
+                    const page = getDocument();
+                    return page?.groups || [];
                 },
-                getElements: (binId) => {
-                    const page = this.app.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    return bin?.elements || [];
+                getItems: (groupId) => {
+                    const group = getGroup(groupId);
+                    return group?.items || [];
                 },
-                createElement: (binId, elementData) => {
-                    const page = this.app.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    if (bin) {
-                        if (!bin.elements) bin.elements = [];
-                        bin.elements.push(elementData);
+                createItem: (groupId, itemData) => {
+                    const group = getGroup(groupId);
+                    if (group) {
+                        if (!group.items) group.items = [];
+                        group.items.push(itemData);
                         this.app.dataManager.saveData();
                         this.app.render();
                     }
                 },
-                updateElement: (binId, elementIndex, updates) => {
-                    const page = this.app.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    if (bin && bin.elements[elementIndex]) {
-                        Object.assign(bin.elements[elementIndex], updates);
+                updateItem: (groupId, itemIndex, updates) => {
+                    const group = getGroup(groupId);
+                    if (group && group.items[itemIndex]) {
+                        Object.assign(group.items[itemIndex], updates);
                         this.app.dataManager.saveData();
                         this.app.render();
                     }
                 },
-                deleteElement: (binId, elementIndex) => {
-                    const page = this.app.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    if (bin && bin.elements[elementIndex]) {
-                        bin.elements.splice(elementIndex, 1);
+                deleteItem: (groupId, itemIndex) => {
+                    const group = getGroup(groupId);
+                    if (group && group.items[itemIndex]) {
+                        group.items.splice(itemIndex, 1);
                         this.app.dataManager.saveData();
                         this.app.render();
                     }
@@ -62,7 +70,7 @@ export class ScriptSandbox {
                     }
                 },
                 log: (...args) => {
-                    console.log(`[Page ${pageId} Script]`, ...args);
+                    console.log(`[Document ${pageId} Script]`, ...args);
                 }
             }
         };

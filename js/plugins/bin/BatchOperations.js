@@ -1,4 +1,4 @@
-// BatchOperations.js - Bin plugin for batch operations on elements
+// BatchOperations.js - Bin plugin for batch operations on items
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
@@ -8,7 +8,7 @@ export default class BatchOperations extends BasePlugin {
         super({
             id: 'batch-operations',
             name: 'Batch Operations',
-            description: 'Select and perform bulk actions on multiple elements.',
+            description: 'Select and perform bulk actions on multiple items.',
             type: 'bin',
             defaultConfig: {
                 enabled: true
@@ -68,7 +68,7 @@ export default class BatchOperations extends BasePlugin {
             binHeader.insertBefore(selectAllCheckbox, binHeader.firstChild);
         }
 
-        // Add selection checkboxes to elements
+        // Add selection checkboxes to items
         this.addSelectionCheckboxes(binElement, pageId, binData.id);
 
         // Setup batch action handlers
@@ -109,11 +109,13 @@ export default class BatchOperations extends BasePlugin {
     }
 
     toggleSelectAll(pageId, binId, checked) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
 
-        bin.elements.forEach((element, index) => {
+        items.forEach((element, index) => {
             const key = `${pageId}-${binId}-${index}`;
             if (checked) {
                 this.selectedElements.add(key);
@@ -164,9 +166,11 @@ export default class BatchOperations extends BasePlugin {
     }
 
     performBatchAction(pageId, binId, action) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
 
         const selectedIndices = Array.from(this.selectedElements)
             .filter(key => key.startsWith(`${pageId}-${binId}-`))
@@ -174,22 +178,22 @@ export default class BatchOperations extends BasePlugin {
             .sort((a, b) => b - a); // Sort descending for safe deletion
 
         if (selectedIndices.length === 0) {
-            alert('No elements selected');
+            alert('No items selected');
             return;
         }
 
         switch (action) {
             case 'complete':
                 selectedIndices.forEach(index => {
-                    if (bin.elements[index]) {
-                        bin.elements[index].completed = true;
+                    if (items[index]) {
+                        items[index].completed = true;
                     }
                 });
                 break;
             case 'uncomplete':
                 selectedIndices.forEach(index => {
-                    if (bin.elements[index]) {
-                        bin.elements[index].completed = false;
+                    if (items[index]) {
+                        items[index].completed = false;
                     }
                 });
                 break;
@@ -198,24 +202,24 @@ export default class BatchOperations extends BasePlugin {
                 // Record undo/redo changes (in reverse order to maintain indices)
                 if (this.app.undoRedoManager) {
                     selectedIndices.forEach(index => {
-                        const deletedElement = bin.elements[index];
+                        const deletedElement = items[index];
                         if (deletedElement) {
                             this.app.undoRedoManager.recordElementDelete(pageId, binId, index, deletedElement);
                         }
                     });
                 }
                 selectedIndices.forEach(index => {
-                    bin.elements.splice(index, 1);
+                    items.splice(index, 1);
                 });
                 break;
             case 'tag':
                 const tag = prompt('Enter tag to add:');
                 if (tag) {
                     selectedIndices.forEach(index => {
-                        if (bin.elements[index]) {
-                            if (!bin.elements[index].tags) bin.elements[index].tags = [];
-                            if (!bin.elements[index].tags.includes(tag.toLowerCase())) {
-                                bin.elements[index].tags.push(tag.toLowerCase());
+                        if (items[index]) {
+                            if (!items[index].tags) items[index].tags = [];
+                            if (!items[index].tags.includes(tag.toLowerCase())) {
+                                items[index].tags.push(tag.toLowerCase());
                             }
                         }
                     });
@@ -224,17 +228,19 @@ export default class BatchOperations extends BasePlugin {
             case 'move':
                 const targetBinId = prompt('Enter target bin ID:');
                 if (targetBinId) {
-                    const targetPage = this.app.pages.find(p => {
-                        return p.bins?.some(b => b.id === targetBinId);
+                    const pages = this.app.documents || [];
+                    const targetPage = pages.find(p => {
+                        return p.groups?.some(b => b.id === targetBinId);
                     });
-                    const targetBin = targetPage?.bins?.find(b => b.id === targetBinId);
+                    const targetBin = targetPage?.groups?.find(b => b.id === targetBinId);
                     if (targetBin) {
+                        const targetItems = targetBin.items || [];
+                        targetBin.items = targetItems;
                         selectedIndices.forEach(index => {
-                            if (bin.elements[index]) {
-                                const element = bin.elements[index];
-                                bin.elements.splice(index, 1);
-                                if (!targetBin.elements) targetBin.elements = [];
-                                targetBin.elements.push(element);
+                            if (items[index]) {
+                                const element = items[index];
+                                items.splice(index, 1);
+                                targetItems.push(element);
                             }
                         });
                     } else {

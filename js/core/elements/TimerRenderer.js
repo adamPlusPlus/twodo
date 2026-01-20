@@ -23,6 +23,15 @@ export class TimerRenderer {
      * @returns {void}
      */
     render(div, pageId, binId, element, elementIndex, depth, renderChildren) {
+        const getTimerElement = () => {
+            const document = this.app.appState.documents?.find(page => page.id === pageId);
+            const group = document?.groups?.find(bin => bin.id === binId);
+            if (!group) return null;
+            const items = group.items || [];
+            group.items = items;
+            return items[elementIndex];
+        };
+
         // Initialize timer state if needed
         if (element.duration === undefined) element.duration = 3600;
         if (element.elapsed === undefined) element.elapsed = 0;
@@ -36,9 +45,7 @@ export class TimerRenderer {
         if (element.running && !element.intervalId) {
         element.startTime = Date.now() - (element.elapsed * 1000);
         element.intervalId = setInterval(() => {
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timerElement = bin?.elements[elementIndex];
+        const timerElement = getTimerElement();
         if (!timerElement || !timerElement.running) return;
 
         timerElement.elapsed = Math.floor((Date.now() - timerElement.startTime) / 1000) + timerElement.pausedAt;
@@ -128,9 +135,7 @@ export class TimerRenderer {
         // Start/Stop button inline (need to define before checkbox handler)
         const timerStartStopBtn = this.app.styleButton(element.running ? '⏸' : '▶', (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timerElement = bin?.elements[elementIndex];
+        const timerElement = getTimerElement();
         if (!timerElement) return;
     
         if (timerElement.running) {
@@ -147,9 +152,7 @@ export class TimerRenderer {
         timerElement.running = true;
         timerElement.startTime = Date.now() - (timerElement.elapsed * 1000);
         timerElement.intervalId = setInterval(() => {
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timerElement = bin?.elements[elementIndex];
+        const timerElement = getTimerElement();
         if (!timerElement || !timerElement.running) return;
             
         timerElement.elapsed = Math.floor((Date.now() - timerElement.startTime) / 1000) + timerElement.pausedAt;
@@ -194,9 +197,7 @@ export class TimerRenderer {
         // Now set up the checkbox handler (after timerStartStopBtn is defined)
         timerCheckbox.onchange = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timerElement = bin?.elements[elementIndex];
+        const timerElement = getTimerElement();
         if (!timerElement) return;
     
         timerElement.completed = timerCheckbox.checked;
@@ -234,9 +235,9 @@ export class TimerRenderer {
         // Reset button inline
         const timerResetBtn = this.app.styleButton('↻', (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const timerElement = bin?.elements[elementIndex];
+        const page = this.app.appState.documents.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        const timerElement = bin?.items?.[elementIndex];
         if (!timerElement) return;
     
         // Stop timer and reset to zero

@@ -8,7 +8,7 @@ export default class TimeTracking extends BaseElementType {
         super({
             id: 'time-tracking',
             name: 'Time Tracking',
-            description: 'Track time spent on elements with start/stop timer.',
+            description: 'Track time spent on items with start/stop timer.',
             elementType: 'task' // Extends existing task elements
         });
         if (app) {

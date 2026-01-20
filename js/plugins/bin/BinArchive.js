@@ -1,4 +1,4 @@
-// BinArchive.js - Bin plugin for archiving elements
+// BinArchive.js - Bin plugin for archiving items
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { StorageUtils } from '../../utils/storage.js';
 import { DOMUtils } from '../../utils/dom.js';
@@ -9,7 +9,7 @@ export default class BinArchive extends BasePlugin {
         super({
             id: 'bin-archive',
             name: 'Bin Archive',
-            description: 'Archive completed or old elements.',
+            description: 'Archive completed or old items.',
             type: 'bin',
             defaultConfig: {
                 enabled: true,
@@ -63,8 +63,8 @@ export default class BinArchive extends BasePlugin {
             });
 
             archiveControls.innerHTML = `
-                <button class="archive-completed-btn" style="padding: 4px 8px; background: #9b59b6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" title="Archive completed elements">Archive</button>
-                <button class="view-archive-btn" style="padding: 4px 8px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 12px;" title="View archived elements">View Archive</button>
+                <button class="archive-completed-btn" style="padding: 4px 8px; background: #9b59b6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" title="Archive completed items">Archive</button>
+                <button class="view-archive-btn" style="padding: 4px 8px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 12px;" title="View archived items">View Archive</button>
             `;
 
             binHeader.appendChild(archiveControls);
@@ -84,18 +84,20 @@ export default class BinArchive extends BasePlugin {
     }
 
     archiveCompleted(pageId, binId) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
 
         const archiveKey = `${pageId}-${binId}`;
         if (!this.archives[archiveKey]) {
             this.archives[archiveKey] = [];
         }
 
-        const completedElements = bin.elements.filter(el => el.completed);
+        const completedElements = items.filter(el => el.completed);
         if (completedElements.length === 0) {
-            alert('No completed elements to archive');
+            alert('No completed items to archive');
             return;
         }
 
@@ -112,7 +114,7 @@ export default class BinArchive extends BasePlugin {
         });
 
         // Remove from bin
-        bin.elements = bin.elements.filter(el => !el.completed);
+        bin.items = items.filter(el => !el.completed);
 
         this.saveArchives();
         this.app.dataManager.saveData();
@@ -126,9 +128,9 @@ export default class BinArchive extends BasePlugin {
         const archived = this.archives[archiveKey] || [];
 
         modalBody.innerHTML = `
-            <h3>Archived Elements</h3>
+            <h3>Archived Items</h3>
             <div id="archive-list" style="margin-top: 15px; max-height: 400px; overflow-y: auto;">
-                ${archived.length === 0 ? '<p style="color: #888;">No archived elements</p>' : ''}
+                ${archived.length === 0 ? '<p style="color: #888;">No archived items</p>' : ''}
                 ${archived.map((element, index) => `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2a2a2a; border-radius: 4px; margin-bottom: 5px;">
                         <div>
@@ -157,9 +159,11 @@ export default class BinArchive extends BasePlugin {
     }
 
     restoreElement(pageId, binId, archiveIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
 
         const archiveKey = `${pageId}-${binId}`;
         const archived = this.archives[archiveKey];
@@ -168,8 +172,7 @@ export default class BinArchive extends BasePlugin {
         const element = archived[archiveIndex];
         delete element.archivedAt;
 
-        if (!bin.elements) bin.elements = [];
-        bin.elements.push(element);
+        items.push(element);
         archived.splice(archiveIndex, 1);
 
         this.saveArchives();

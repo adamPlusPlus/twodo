@@ -183,7 +183,7 @@ export class SettingsManager {
         
         // Also update the main data structure to include settings
         const appState = this._getAppState();
-        if (appState?.pages && appState.pages.length > 0) {
+        if (appState?.documents && appState.documents.length > 0) {
             eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
         }
     }
@@ -287,13 +287,13 @@ export class SettingsManager {
             html += '</select>';
             html += '</div>';
             
-            // Page selector (shown when page-specific is selected)
+            // Document selector (shown when document-specific is selected)
             html += '<div class="settings-control" id="theme-page-selector" style="display: none;">';
-            html += '<label>Page:</label>';
+            html += '<label>Document:</label>';
             html += '<select id="theme-page-id" style="width: 100%; padding: 6px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #404040; border-radius: 4px;">';
             const appState = this._getAppState();
-            const pages = appState?.pages || [];
-            pages.forEach(page => {
+            const documents = appState?.documents || [];
+            documents.forEach(page => {
                 html += `<option value="${page.id}">${page.title || page.id}</option>`;
             });
             html += '</select>';
@@ -675,7 +675,7 @@ export class SettingsManager {
                     resultHtml += `<div style="color: ${report.isValid ? '#4a9eff' : '#ff5555'}; margin-bottom: 10px;">Status: ${report.isValid ? 'Valid' : 'Issues Found'}</div>`;
                     
                     resultHtml += `<div style="color: #e0e0e0; margin-bottom: 10px;">`;
-                    resultHtml += `Pages: ${report.elementCounts.pages}, Bins: ${report.elementCounts.bins}, Elements: ${report.elementCounts.elements}`;
+                    resultHtml += `Documents: ${report.elementCounts.documents}, Groups: ${report.elementCounts.groups}, Items: ${report.elementCounts.items}`;
                     resultHtml += `</div>`;
                     
                     if (report.issues && report.issues.length > 0) {

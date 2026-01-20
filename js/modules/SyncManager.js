@@ -179,8 +179,8 @@ export class SyncManager {
                 const dataManager = this._getDataManager();
                 
                 // Compare data FIRST - if identical, skip entirely
-                const currentData = JSON.stringify(appState.pages);
-                const newData = JSON.stringify(message.data.pages || []);
+                const currentData = JSON.stringify(appState.documents);
+                const newData = JSON.stringify(message.data.documents || []);
                 
                 if (currentData === newData) {
                     console.log('[SyncManager] File join data matches local data exactly, skipping update');
@@ -225,9 +225,9 @@ export class SyncManager {
                 
                 // Apply remote data
                 console.log('[SyncManager] Applying file join data (remote is newer or equal)');
-                appState.pages = message.data.pages || [];
-                appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
-                appState.binStates = message.data.binStates || {};
+                appState.documents = message.data.documents || [];
+                appState.currentDocumentId = message.data.currentDocumentId || (appState.documents.length > 0 ? appState.documents[0].id : 'document-1');
+                appState.groupStates = message.data.groupStates || {};
                 appState.subtaskStates = message.data.subtaskStates || {};
                 appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
                 if (message.data.settings) {
@@ -263,8 +263,8 @@ export class SyncManager {
             }
             
             // Only update if data is different to avoid unnecessary renders
-            const currentData = JSON.stringify(appState.pages);
-            const newData = JSON.stringify(message.data.pages || []);
+            const currentData = JSON.stringify(appState.documents);
+            const newData = JSON.stringify(message.data.documents || []);
             if (currentData !== newData) {
                 // Update local timestamp to match remote
                 if (dataManager) {
@@ -275,9 +275,9 @@ export class SyncManager {
                 const wasConnected = this.isConnected;
                 this.isConnected = false;
                 
-                appState.pages = message.data.pages || [];
-                appState.currentPageId = message.data.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : 'page-1');
-                appState.binStates = message.data.binStates || {};
+                appState.documents = message.data.documents || [];
+                appState.currentDocumentId = message.data.currentDocumentId || (appState.documents.length > 0 ? appState.documents[0].id : 'document-1');
+                appState.groupStates = message.data.groupStates || {};
                 appState.subtaskStates = message.data.subtaskStates || {};
                 appState.allSubtasksExpanded = message.data.allSubtasksExpanded !== undefined ? message.data.allSubtasksExpanded : true;
                 if (message.data.settings) {

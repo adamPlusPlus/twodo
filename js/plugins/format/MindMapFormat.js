@@ -16,7 +16,7 @@ export default class MindMapFormat extends BaseFormatRenderer {
             supportsPages: true,
             supportsBins: false,
             version: '1.0.0',
-            description: 'Visual mind map representation of page elements and their relationships'
+            description: 'Visual mind map representation of document items and their relationships'
         });
     }
     

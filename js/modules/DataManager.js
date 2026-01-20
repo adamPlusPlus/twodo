@@ -54,27 +54,27 @@ export class DataManager {
         
         if (lastReset !== today) {
             // Reset all repeating tasks
-            const storedData = this.loadFromStorage();
-            if (storedData && storedData.pages) {
+            const storedData = this._normalizeDataModel(this.loadFromStorage());
+            if (storedData && storedData.documents) {
                 // Delete completed one-time tasks first
-                storedData.pages.forEach(page => {
-                    if (page.bins) {
-                        page.bins.forEach(bin => {
-                            if (bin.elements) {
-                                bin.elements = bin.elements.filter(element => {
+                storedData.documents.forEach(document => {
+                    if (document.groups) {
+                        document.groups.forEach(group => {
+                            if (group.items) {
+                                group.items = group.items.filter(item => {
                                     // Delete one-time tasks that are completed
-                                    if (element.repeats === false && element.completed) {
+                                    if (item.repeats === false && item.completed) {
                                         return false;
                                     }
                                     return true;
                                 });
                             }
                         });
-                    } else if (page.elements) {
+                    } else if (document.items) {
                         // Legacy support: migrate old structure
-                        page.elements = page.elements.filter(element => {
+                        document.items = document.items.filter(item => {
                             // Delete one-time tasks that are completed
-                            if (element.repeats === false && element.completed) {
+                            if (item.repeats === false && item.completed) {
                                 return false;
                             }
                             return true;
@@ -83,13 +83,13 @@ export class DataManager {
                 });
                 
                 // Reset all repeating tasks
-                const resetElement = (element, pageId, elementIndex) => {
-                    if (element.repeats !== false) {
-                        element.completed = false;
+                const resetItem = (item, documentId, itemIndex) => {
+                    if (item.repeats !== false) {
+                        item.completed = false;
                         
                         // Reset children (one level for current implementation)
-                        if (element.children && Array.isArray(element.children)) {
-                            element.children.forEach(child => {
+                        if (item.children && Array.isArray(item.children)) {
+                            item.children.forEach(child => {
                                 if (child.repeats !== false) {
                                     child.completed = false;
                                 }
@@ -97,42 +97,42 @@ export class DataManager {
                         }
                         
                         // Handle audio elements - archive and clear
-                        if (element.type === 'audio' && element.repeats !== false) {
-                            if (element.audioFile && element.date) {
-                                this.archiveAudioRecording(pageId, elementIndex, element.audioFile, element.date);
+                        if (item.type === 'audio' && item.repeats !== false) {
+                            if (item.audioFile && item.date) {
+                                this.archiveAudioRecording(documentId, itemIndex, item.audioFile, item.date);
                             }
-                            element.audioFile = null;
-                            element.date = null;
+                            item.audioFile = null;
+                            item.date = null;
                         }
                         
-                        if (element.items) {
-                            element.items.forEach(item => {
-                                if (item.repeats !== false) {
-                                    item.completed = false;
+                        if (item.items) {
+                            item.items.forEach(subItem => {
+                                if (subItem.repeats !== false) {
+                                    subItem.completed = false;
                                 }
                             });
                         }
                     }
                 };
                 
-                storedData.pages.forEach(page => {
-                    if (page.bins) {
-                        page.bins.forEach(bin => {
-                            if (bin.elements) {
-                                bin.elements.forEach((element, elementIndex) => {
-                                    resetElement(element, page.id, elementIndex);
+                storedData.documents.forEach(document => {
+                    if (document.groups) {
+                        document.groups.forEach(group => {
+                            if (group.items) {
+                                group.items.forEach((item, itemIndex) => {
+                                    resetItem(item, document.id, itemIndex);
                                 });
                             }
                         });
-                    } else if (page.elements) {
+                    } else if (document.items) {
                         // Legacy support
-                        page.elements.forEach((element, elementIndex) => {
-                            resetElement(element, page.id, elementIndex);
+                        document.items.forEach((item, itemIndex) => {
+                            resetItem(item, document.id, itemIndex);
                         });
                     }
                 });
                 const appState = this._getAppState();
-                appState.pages = storedData.pages;
+                appState.documents = storedData.documents;
                 this.saveData();
             }
             localStorage.setItem(this.lastResetKey, today);
@@ -150,10 +150,23 @@ export class DataManager {
         }
         return null;
     }
+
+    _normalizeDataModel(rawData) {
+        if (!rawData || typeof rawData !== 'object') {
+            return { documents: [] };
+        }
+
+        const normalized = { ...rawData };
+        normalized.documents = normalized.documents || [];
+        normalized.documentStates = normalized.documentStates || {};
+        normalized.groupStates = normalized.groupStates || {};
+
+        return normalized;
+    }
     
     migrateSubtasksToChildren(data) {
-        // Recursively migrate subtasks to children for all elements
-        if (!data || !data.pages) {
+        // Recursively migrate subtasks to children for all items
+        if (!data) {
             return data;
         }
         
@@ -194,121 +207,99 @@ export class DataManager {
             return element;
         };
         
-        // Migrate all pages and their elements
-        data.pages.forEach(page => {
-            if (page.elements && Array.isArray(page.elements)) {
-                page.elements.forEach(element => {
+        const documents = data.documents || [];
+        documents.forEach(document => {
+            const groups = document.groups || [];
+            groups.forEach(group => {
+                const items = group.items || [];
+                items.forEach(element => {
                     migrateElement(element);
                 });
-            }
+            });
         });
         
         return data;
     }
     
     loadData() {
-        const stored = this.loadFromStorage();
-        if (stored && stored.pages) {
-            // Migrate subtasks to children before processing
-            const migratedData = this.migrateSubtasksToChildren(stored);
-            
-            // Migrate old page structure to new page->bins structure
-            if (migratedData.pages && migratedData.pages.length > 0) {
-                // Check if data is already in new format (has bins property)
-                const isNewFormat = migratedData.pages[0].bins !== undefined;
-                
-                const appState = this._getAppState();
-                if (isNewFormat) {
-                    // Already in new format
-                    const pages = migratedData.pages;
-                    appState.pages = pages;
-                } else {
-                    // Old format: migrate pages to bins under Page 1
-                    const pages = [{
-                        id: 'page-1',
-                        bins: migratedData.pages.map((oldPage, index) => ({
-                            id: `bin-${index}`,
-                            title: oldPage.title || `Bin ${index + 1}`,
-                            elements: oldPage.elements || []
-                        }))
-                    }];
-                    appState.pages = pages;
-                }
-            } else {
-                // No pages, create default
-                const pages = [{
-                    id: 'page-1',
-                    bins: [{
-                        id: 'bin-0',
-                        title: 'Bin 1',
-                        elements: []
+        const normalized = this._normalizeDataModel(this.loadFromStorage());
+        const migratedData = this.migrateSubtasksToChildren(normalized);
+        const appState = this._getAppState();
+        
+        const documents = (migratedData.documents || []).map((document) => {
+            const groups = document.groups || [];
+            const normalizedGroups = groups.map((group) => {
+                const items = group.items || [];
+                return {
+                    ...group,
+                    items
+                };
+            });
+            if (normalizedGroups.length === 0) {
+                return {
+                    ...document,
+                    groups: [{
+                        id: 'group-0',
+                        title: 'Group 1',
+                        items: []
                     }]
-                }];
-                const appState = this._getAppState();
-                appState.pages = pages;
+                };
             }
-            
-            // Set current page to first page
-            const appState = this._getAppState();
-            if (appState.pages.length > 0) {
-                const firstPageId = appState.pages[0].id;
-                appState.currentPageId = firstPageId;
-            }
-            
-            // Restore collapse states if they exist (migrate pageStates to binStates)
-            if (migratedData.pageStates) {
-                // Migrate old pageStates keys (pageId) to new binStates keys (binId)
-                const binStates = {};
-                Object.keys(migratedData.pageStates).forEach(oldKey => {
-                    // Old key format: "page-0", new format: "bin-0"
-                    const newKey = oldKey.replace(/^page-/, 'bin-');
-                    binStates[newKey] = migratedData.pageStates[oldKey];
-                });
-                // Store in AppState if it has binStates property
-                if (appState.setBinState) {
-                    Object.keys(binStates).forEach(binId => {
-                        appState.setBinState(binId, binStates[binId]);
-                    });
-                } else {
-                    appState.binStates = binStates;
-                }
-            }
-            if (migratedData.subtaskStates) {
-                if (appState.setSubtaskState) {
-                    Object.keys(migratedData.subtaskStates).forEach(key => {
-                        appState.setSubtaskState(key, migratedData.subtaskStates[key]);
-                    });
-                } else {
-                    appState.subtaskStates = migratedData.subtaskStates;
-                }
-            }
-            if (migratedData.allSubtasksExpanded !== undefined) {
-                appState.allSubtasksExpanded = migratedData.allSubtasksExpanded;
-            }
-            
-            // Restore settings if they exist
-            if (migratedData.settings) {
-                const settingsManager = this._getSettingsManager();
-                if (settingsManager) {
-                    settingsManager.saveSettings(migratedData.settings);
-                }
-            }
-            
-            // Save migrated data back to storage
-            this.saveData();
+            return {
+                ...document,
+                groups: normalizedGroups
+            };
+        });
+        
+        if (documents.length > 0) {
+            appState.documents = documents;
         } else {
-            // Default: one page with one bin
-            const appState = this._getAppState();
-            appState.pages = [{
-                id: 'page-1',
-                bins: [{
-                    id: 'bin-0',
-                    title: 'Bin 1',
-                    elements: []
+            appState.documents = [{
+                id: 'document-1',
+                groups: [{
+                    id: 'group-0',
+                    title: 'Group 1',
+                    items: []
                 }]
             }];
-            appState.currentPageId = 'page-1';
         }
+        
+        const storedCurrentId = migratedData.currentDocumentId;
+        if (storedCurrentId) {
+            appState.currentDocumentId = storedCurrentId;
+        } else if (appState.documents.length > 0) {
+            appState.currentDocumentId = appState.documents[0].id;
+        }
+        
+        if (migratedData.documentStates) {
+            appState.documentStates = migratedData.documentStates;
+        }
+        
+        if (migratedData.groupStates) {
+            appState.groupStates = migratedData.groupStates;
+        }
+        
+        if (migratedData.subtaskStates) {
+            if (appState.setSubtaskState) {
+                Object.keys(migratedData.subtaskStates).forEach(key => {
+                    appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                });
+            } else {
+                appState.subtaskStates = migratedData.subtaskStates;
+            }
+        }
+        if (migratedData.allSubtasksExpanded !== undefined) {
+            appState.allSubtasksExpanded = migratedData.allSubtasksExpanded;
+        }
+        
+        if (migratedData.settings) {
+            const settingsManager = this._getSettingsManager();
+            if (settingsManager) {
+                settingsManager.saveSettings(migratedData.settings);
+            }
+        }
+        
+        this.saveData();
     }
     
     saveData(skipSync = false) {
@@ -343,11 +334,12 @@ export class DataManager {
         
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
+        const documents = appState.documents;
         const localData = {
-            pages: appState.pages,
-            currentPageId: appState.currentPageId,
+            documents,
+            currentDocumentId: appState.currentDocumentId,
             lastModified: new Date().toISOString(),
-            binStates: appState.binStates || {},
+            groupStates: appState.groupStates || {},
             subtaskStates: appState.subtaskStates || {},
             allSubtasksExpanded: appState.allSubtasksExpanded,
             settings: settingsManager ? settingsManager.loadSettings() : {}
@@ -376,10 +368,11 @@ export class DataManager {
         // Send full data state for sync
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
+        const documents = appState.documents;
         const syncPayload = {
-            pages: appState.pages,
-            currentPageId: appState.currentPageId,
-            binStates: appState.binStates || {},
+            documents,
+            currentDocumentId: appState.currentDocumentId,
+            groupStates: appState.groupStates || {},
             subtaskStates: appState.subtaskStates || {},
             allSubtasksExpanded: appState.allSubtasksExpanded,
             settings: settingsManager ? settingsManager.loadSettings() : {},
@@ -416,7 +409,7 @@ export class DataManager {
         try {
             const appState = this._getAppState();
             const autosaveData = {
-                pages: appState.pages
+                documents: appState.documents
             };
             
             // Use FileManager's saveFile method to save to server (silent mode for autosave)
@@ -456,27 +449,25 @@ export class DataManager {
                 cache: 'no-store'
             });
             const defaultData = await response.json();
+            const normalizedDefault = this._normalizeDataModel(defaultData);
             
-            if (!defaultData.pages || !Array.isArray(defaultData.pages)) {
-                alert('Invalid default.json format. Expected a JSON file with a "pages" array.');
+            if (!normalizedDefault.documents || !Array.isArray(normalizedDefault.documents)) {
+                alert('Invalid default.json format. Expected a JSON file with a "documents" array.');
                 return;
             }
             
-            if (confirm(`Load ${defaultData.pages.length} page(s) from default.json? This will replace your current data.`)) {
+            if (confirm(`Load ${normalizedDefault.documents.length} document(s) from default.json? This will replace your current data.`)) {
                 // Migrate subtasks to children before loading
-                const migratedData = this.migrateSubtasksToChildren(defaultData);
+                const migratedData = this.migrateSubtasksToChildren(normalizedDefault);
                 const appState = this._getAppState();
-                appState.pages = migratedData.pages;
+                appState.documents = migratedData.documents;
                 
                 // Restore collapse states if they exist, otherwise reset to closed state
-                if (defaultData.pageStates) {
-                    // Migrate pageStates to binStates
-                    Object.keys(defaultData.pageStates).forEach(pageId => {
-                        const binId = pageId.replace(/^page-/, 'bin-');
-                        if (appState.setBinState) {
-                            appState.setBinState(binId, defaultData.pageStates[pageId]);
-                        }
-                    });
+                if (normalizedDefault.documentStates) {
+                    appState.documentStates = normalizedDefault.documentStates;
+                }
+                if (normalizedDefault.groupStates) {
+                    appState.groupStates = normalizedDefault.groupStates;
                 }
                 
                 if (migratedData.subtaskStates) {
@@ -487,17 +478,17 @@ export class DataManager {
                     });
                 }
                 
-                if (defaultData.allSubtasksExpanded !== undefined) {
-                    appState.allSubtasksExpanded = defaultData.allSubtasksExpanded;
+                if (normalizedDefault.allSubtasksExpanded !== undefined) {
+                    appState.allSubtasksExpanded = normalizedDefault.allSubtasksExpanded;
                 } else {
                     appState.allSubtasksExpanded = false;
                 }
                 
                 // Restore settings if they exist
-                if (defaultData.settings) {
+                if (normalizedDefault.settings) {
                     const settingsManager = this._getSettingsManager();
                     if (settingsManager) {
-                        settingsManager.saveSettings(defaultData.settings);
+                        settingsManager.saveSettings(normalizedDefault.settings);
                     }
                 }
                 
@@ -515,10 +506,10 @@ export class DataManager {
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
         const exportData = {
-            pages: appState.pages,
+            documents: appState.documents,
             lastModified: new Date().toISOString(),
             version: '1.0',
-            pageStates: {}, // Legacy - binStates are now in AppState
+            documentStates: {}, // Legacy - documentStates now in AppState
             subtaskStates: appState.subtaskStates || {},
             allSubtasksExpanded: appState.allSubtasksExpanded,
             settings: settingsManager ? settingsManager.loadSettings() : {}
@@ -546,10 +537,10 @@ export class DataManager {
         const appState = this._getAppState();
         const settingsManager = this._getSettingsManager();
         const defaultPayload = {
-            pages: appState.pages,
+            documents: appState.documents,
             lastModified: new Date().toISOString(),
             version: '1.0',
-            pageStates: {}, // Legacy - binStates are now in AppState
+            documentStates: {}, // Legacy - documentStates now in AppState
             subtaskStates: appState.subtaskStates || {},
             allSubtasksExpanded: appState.allSubtasksExpanded,
             settings: settingsManager ? settingsManager.loadSettings() : {}
@@ -593,28 +584,26 @@ export class DataManager {
         reader.onload = (e) => {
             try {
                 const importedData = JSON.parse(e.target.result);
+                const normalizedImport = this._normalizeDataModel(importedData);
                 
-                if (!importedData.pages || !Array.isArray(importedData.pages)) {
-                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                if (!normalizedImport.documents || !Array.isArray(normalizedImport.documents)) {
+                    alert('Invalid file format. Expected a JSON file with a "documents" array.');
                     return;
                 }
                 
                 // Ask for confirmation
-                if (confirm(`Load ${importedData.pages.length} page(s) from file? This will replace your current data.`)) {
+                if (confirm(`Load ${normalizedImport.documents.length} document(s) from file? This will replace your current data.`)) {
                     // Migrate subtasks to children before loading
-                    const migratedData = this.migrateSubtasksToChildren(importedData);
+                    const migratedData = this.migrateSubtasksToChildren(normalizedImport);
                     const appState = this._getAppState();
-                    appState.pages = migratedData.pages;
+                    appState.documents = migratedData.documents;
                     
                     // Restore collapse states if they exist, otherwise reset to closed state
-                    if (importedData.pageStates) {
-                        // Migrate pageStates to binStates
-                        Object.keys(importedData.pageStates).forEach(pageId => {
-                            const binId = pageId.replace(/^page-/, 'bin-');
-                            if (appState.setBinState) {
-                                appState.setBinState(binId, importedData.pageStates[pageId]);
-                            }
-                        });
+                    if (normalizedImport.documentStates) {
+                        appState.documentStates = normalizedImport.documentStates;
+                    }
+                    if (normalizedImport.groupStates) {
+                        appState.groupStates = normalizedImport.groupStates;
                     }
                     
                     if (migratedData.subtaskStates) {
@@ -625,17 +614,17 @@ export class DataManager {
                         });
                     }
                     
-                    if (importedData.allSubtasksExpanded !== undefined) {
-                        appState.allSubtasksExpanded = importedData.allSubtasksExpanded;
+                    if (normalizedImport.allSubtasksExpanded !== undefined) {
+                        appState.allSubtasksExpanded = normalizedImport.allSubtasksExpanded;
                     } else {
                         appState.allSubtasksExpanded = false;
                     }
                     
                     // Restore settings if they exist
-                    if (importedData.settings) {
+                    if (normalizedImport.settings) {
                         const settingsManager = this._getSettingsManager();
                         if (settingsManager) {
-                            settingsManager.saveSettings(importedData.settings);
+                            settingsManager.saveSettings(normalizedImport.settings);
                         }
                     }
                     

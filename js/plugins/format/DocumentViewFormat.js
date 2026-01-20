@@ -28,6 +28,20 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         eventBus.emit('format:registered', { pluginId: this.id });
         console.log('[DocumentViewFormat] format:registered event emitted');
     }
+
+    _getPages(app) {
+        return app?.appState?.documents || [];
+    }
+
+    _getGroups(page) {
+        return page?.groups || [];
+    }
+
+    _getItems(bin) {
+        const items = bin.items || [];
+        bin.items = items;
+        return items;
+    }
     
     /**
      * Convert element to markdown representation
@@ -249,7 +263,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         });
         
         // Preserve HTML for inline formatting (we'll render it as HTML later)
-        // But convert block elements to markdown
+        // But convert block items to markdown
         
         // Blockquotes
         md = md.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gis, (match, content) => {
@@ -642,7 +656,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             const textContent = tempDiv.textContent || tempDiv.innerText || '';
-            const context = { pageId: this.currentPageId };
+            const context = { pageId: this.currentDocumentId };
             const linkFragment = this.app.parseLinks(textContent, context);
             
             // Replace links in HTML
@@ -708,7 +722,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
      */
     renderPage(container, page, options = {}) {
         this.app = options.app;
-        this.currentPageId = page.id;
+        this.currentDocumentId = page.id;
         const app = options.app;
         if (!app) return;
         
@@ -821,8 +835,8 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         const setViewMode = (mode) => {
             currentViewMode = mode;
             // Persist view mode to page metadata
-            if (app && app.appState && app.appState.pages) {
-                const pages = app.appState.pages;
+            if (app && app.appState) {
+                const pages = this._getPages(app);
                 const pageIndex = pages.findIndex(p => p.id === page.id);
                 if (pageIndex !== -1) {
                     pages[pageIndex]._documentViewMode = mode;
@@ -859,10 +873,11 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         viewControls.appendChild(splitBtn);
         docWrapper.appendChild(viewControls);
         
-        if (!page.bins || page.bins.length === 0) {
+        const groups = this._getGroups(page);
+        if (!groups.length) {
             if (!app._preservingFormat) {
                 const emptyMsg = document.createElement('p');
-                emptyMsg.textContent = 'No content yet. Add bins and elements to see them here.';
+                emptyMsg.textContent = 'No content yet. Add groups and items to see them here.';
                 emptyMsg.style.cssText = 'color: #888; font-style: italic;';
                 docWrapper.appendChild(emptyMsg);
                 container.appendChild(docWrapper);
@@ -879,21 +894,22 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         // Special element types that should be rendered interactively
         const interactiveElementTypes = ['timer', 'counter', 'tracker', 'rating', 'audio', 'image', 'time-log', 'calendar'];
         
-        // Convert bins and elements to markdown, then to HTML
+        // Convert groups and items to markdown, then to HTML
         let markdown = '';
         
-        page.bins.forEach((bin, binIndex) => {
-            // Bin as section header
+        groups.forEach((bin, binIndex) => {
+            // Group as section header
             if (bin.title) {
                 markdown += `## ${this.escapeMarkdown(bin.title)}\n\n`;
             } else {
-                markdown += `## Bin ${binIndex + 1}\n\n`;
+                markdown += `## Group ${binIndex + 1}\n\n`;
             }
             
-            // Elements in bin
-            if (bin.elements && Array.isArray(bin.elements) && bin.elements.length > 0) {
-                bin.elements.forEach((element, elIndex) => {
-                    // For interactive elements, use placeholder instead of markdown
+            // Items in group
+            const items = this._getItems(bin);
+            if (items.length > 0) {
+                items.forEach((element, elIndex) => {
+                    // For interactive items, use placeholder instead of markdown
                     if (interactiveElementTypes.includes(element.type)) {
                         const placeholderId = `__ELEMENT_${elementPlaceholderIndex}__`;
                         elementMap.set(placeholderId, {
@@ -908,13 +924,13 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                         const elementMarkdown = this.elementToMarkdown(element, 0);
                         markdown += elementMarkdown;
                         // Only add extra newline if not last element and element doesn't already end with newlines
-                        if (elIndex < bin.elements.length - 1 && !elementMarkdown.endsWith('\n\n')) {
+                        if (elIndex < items.length - 1 && !elementMarkdown.endsWith('\n\n')) {
                             markdown += '\n';
                         }
                     }
                 });
             } else {
-                markdown += '*No elements*\n\n';
+                markdown += '*No items*\n\n';
             }
         });
         
@@ -1068,7 +1084,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         splitContainer.appendChild(splitEdit);
         splitContainer.appendChild(splitPreview);
         
-        // Function to render interactive elements
+        // Function to render interactive items
         const renderInteractiveElement = (elementData) => {
             const { element, pageId, binId, elementIndex } = elementData;
             const elementDiv = document.createElement('div');
@@ -1090,7 +1106,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                     // Apply visual settings
                     if (app.visualSettingsManager) {
                         const elementId = `${pageId}-${binId}-${elementIndex}`;
-                        const page = app.appState?.pages?.find(p => p.id === pageId);
+                        const page = app.appState?.documents?.find(p => p.id === pageId);
                         const viewFormat = page?.format || 'default';
                         app.visualSettingsManager.applyVisualSettings(tempDiv, 'element', elementId, pageId, viewFormat);
                     }
@@ -1211,43 +1227,43 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                             updatePreview(newMarkdown, splitPreviewContent, true);
                             
                             // Find and update the actual element in page data
-                            if (app && app.appState && app.appState.pages) {
-                                const pages = app.appState.pages;
+                            if (app && app.appState) {
+                                const pages = this._getPages(app);
                                 const currentPage = pages.find(p => p.id === page.id);
-                                if (currentPage && currentPage.bins) {
-                                    for (const bin of currentPage.bins) {
-                                        if (bin.elements) {
-                                            const elementIndex = bin.elements.findIndex(el => {
-                                                // Try to match element by text
-                                                const elText = el.text || '';
-                                                return elText.trim() === taskText.trim();
-                                            });
-                                            if (elementIndex !== -1) {
-                                                const element = bin.elements[elementIndex];
-                                                // Convert to note type (text-only, no checkbox)
-                                                element.type = 'note';
-                                                element.text = taskText.trim();
-                                                delete element.completed; // Remove checkbox property
-                                                // Save changes
-                                                if (app.dataManager) {
-                                                    await app.dataManager.saveData();
-                                                }
-                                                // Re-render to show changes
-                                                // Preserve format AND view mode
-                                                app._preservingFormat = true;
-                                                // Store current view mode before render
-                                                const savedViewMode = currentViewMode;
-                                                app.render();
-                                                // Restore view mode after render (will be handled by setViewMode on next render)
-                                                if (app.appState && app.appState.pages) {
-                                                    const pages = app.appState.pages;
-                                                    const pageIndex = pages.findIndex(p => p.id === page.id);
-                                                    if (pageIndex !== -1) {
-                                                        pages[pageIndex]._documentViewMode = savedViewMode;
-                                                    }
-                                                }
-                                                break;
+                                const groups = currentPage ? this._getGroups(currentPage) : [];
+                                if (groups.length) {
+                                    for (const bin of groups) {
+                                        const items = this._getItems(bin);
+                                        const elementIndex = items.findIndex(el => {
+                                            // Try to match element by text
+                                            const elText = el.text || '';
+                                            return elText.trim() === taskText.trim();
+                                        });
+                                        if (elementIndex !== -1) {
+                                            const element = items[elementIndex];
+                                            // Convert to note type (text-only, no checkbox)
+                                            element.type = 'note';
+                                            element.text = taskText.trim();
+                                            delete element.completed; // Remove checkbox property
+                                            // Save changes
+                                            if (app.dataManager) {
+                                                await app.dataManager.saveData();
                                             }
+                                            // Re-render to show changes
+                                            // Preserve format AND view mode
+                                            app._preservingFormat = true;
+                                            // Store current view mode before render
+                                            const savedViewMode = currentViewMode;
+                                            app.render();
+                                            // Restore view mode after render (will be handled by setViewMode on next render)
+                                            if (app.appState) {
+                                                const pages = this._getPages(app);
+                                                const pageIndex = pages.findIndex(p => p.id === page.id);
+                                                if (pageIndex !== -1) {
+                                                    pages[pageIndex]._documentViewMode = savedViewMode;
+                                                }
+                                            }
+                                            break;
                                         }
                                     }
                                 }
@@ -1280,49 +1296,49 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                             taskItem.dataset.originalLine = newLine;
                             
                             // Find and update the actual element in page data
-                            if (app && app.appState && app.appState.pages) {
-                                const pages = app.appState.pages;
+                            if (app && app.appState) {
+                                const pages = this._getPages(app);
                                 const currentPage = pages.find(p => p.id === page.id);
-                                if (currentPage && currentPage.bins) {
+                                const groups = currentPage ? this._getGroups(currentPage) : [];
+                                if (groups.length) {
                                     // Extract task text to find the element
                                     const taskTextMatch = originalLine.match(/^[\s-]*\[[x ]\]\s*(.*)$/);
                                     const taskText = taskTextMatch ? taskTextMatch[1] : originalLine.replace(/^[\s-]*\[[x ]\]\s*/, '');
                                     
-                                    for (const bin of currentPage.bins) {
-                                        if (bin.elements) {
-                                            const elementIndex = bin.elements.findIndex(el => {
+                                    for (const bin of groups) {
+                                        const items = this._getItems(bin);
+                                        const elementIndex = items.findIndex(el => {
                                                 // Try to match element by text
                                                 const elText = el.text || '';
                                                 return elText.trim() === taskText.trim();
-                                            });
-                                            if (elementIndex !== -1) {
-                                                const element = bin.elements[elementIndex];
-                                                // Update completed status
-                                                element.completed = isChecked;
-                                                // Ensure it's a task type (not note)
-                                                if (element.type === 'note') {
-                                                    element.type = 'task';
-                                                }
-                                                // Save changes
-                                                if (app.dataManager) {
-                                                    await app.dataManager.saveData();
-                                                }
-                                                // Re-render to show changes in other views
-                                                // Preserve format AND view mode
-                                                app._preservingFormat = true;
-                                                // Store current view mode before render
-                                                const savedViewMode = currentViewMode;
-                                                app.render();
-                                                // Restore view mode after render (will be handled by setViewMode on next render)
-                                                if (app.appState && app.appState.pages) {
-                                                    const pages = app.appState.pages;
-                                                    const pageIndex = pages.findIndex(p => p.id === page.id);
-                                                    if (pageIndex !== -1) {
-                                                        pages[pageIndex]._documentViewMode = savedViewMode;
-                                                    }
-                                                }
-                                                break;
+                                        });
+                                        if (elementIndex !== -1) {
+                                            const element = items[elementIndex];
+                                            // Update completed status
+                                            element.completed = isChecked;
+                                            // Ensure it's a task type (not note)
+                                            if (element.type === 'note') {
+                                                element.type = 'task';
                                             }
+                                            // Save changes
+                                            if (app.dataManager) {
+                                                await app.dataManager.saveData();
+                                            }
+                                            // Re-render to show changes in other views
+                                            // Preserve format AND view mode
+                                            app._preservingFormat = true;
+                                            // Store current view mode before render
+                                            const savedViewMode = currentViewMode;
+                                            app.render();
+                                            // Restore view mode after render (will be handled by setViewMode on next render)
+                                            if (app.appState) {
+                                                const pages = this._getPages(app);
+                                                const pageIndex = pages.findIndex(p => p.id === page.id);
+                                                if (pageIndex !== -1) {
+                                                    pages[pageIndex]._documentViewMode = savedViewMode;
+                                                }
+                                            }
+                                            break;
                                         }
                                     }
                                 }
@@ -1341,7 +1357,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             // Parse markdown back to page structure
             // This is complex - for now, we'll store the raw markdown in page metadata
             if (app.appState) {
-                const pages = app.appState.pages || [];
+                const pages = this._getPages(app);
                 const pageIndex = pages.findIndex(p => p.id === page.id);
                 if (pageIndex !== -1) {
                     if (!pages[pageIndex]._documentMarkdown) {
@@ -1349,7 +1365,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                     }
                     pages[pageIndex]._documentMarkdown.raw = markdownText;
                     pages[pageIndex]._documentMarkdown.lastModified = Date.now();
-                    app.appState.pages = pages;
+                    app.appState.documents = pages;
                     // Trigger save
                     if (app.dataManager) {
                         await app.dataManager.saveData();

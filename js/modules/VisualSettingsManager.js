@@ -268,19 +268,23 @@ export class VisualSettingsManager {
                 const binId = parts[1];
                 const elementIndex = parseInt(parts[2]);
                 const appState = this._getAppState();
-                const page = appState.pages?.find(p => p.id === elementPageId);
-                const bin = page?.bins?.find(b => b.id === binId);
-                const element = bin?.elements?.[elementIndex];
+                const page = appState.documents?.find(p => p.id === elementPageId);
+                const bin = page?.groups?.find(b => b.id === binId);
+                const items = bin?.items || [];
+                if (bin) {
+                    bin.items = items;
+                }
+                const element = items?.[elementIndex];
                 return element?.tags || [];
             }
         } else if (type === 'bin' && pageId) {
             const appState = this._getAppState();
-            const page = appState.pages?.find(p => p.id === pageId);
-            const bin = page?.bins?.find(b => b.id === id);
+            const page = appState.documents?.find(p => p.id === pageId);
+            const bin = page?.groups?.find(b => b.id === id);
             // Bins may have tags property, if not, return empty array
             return bin?.tags || [];
         } else if (type === 'page') {
-            const page = appState.pages?.find(p => p.id === id);
+            const page = appState.documents?.find(p => p.id === id);
             // Pages may have tags property, if not, return empty array
             return page?.tags || [];
         } else if (type === 'pane') {

@@ -27,10 +27,13 @@ export class DailyResetManager {
         const todayDateString = today.toDateString();
         
         const appState = this._getAppState();
-        if (!appState || !appState.pages) return;
-        appState.pages.forEach(page => {
-            // Filter out completed one-time tasks first (but not persistent elements)
-            page.elements = page.elements.filter(element => {
+        if (!appState || !appState.documents) return;
+        appState.documents.forEach(page => {
+            page.groups?.forEach(bin => {
+                const items = bin.items || [];
+                bin.items = items;
+                // Filter out completed one-time tasks first (but not persistent elements)
+                bin.items = bin.items.filter(element => {
                 // Skip persistent elements entirely
                 if (element.persistent || element.type === 'image' || element.type === 'calendar') {
                     return true;
@@ -40,10 +43,10 @@ export class DailyResetManager {
                     return false;
                 }
                 return true;
-            });
-            
-            // Reset repeating tasks
-            page.elements.forEach(element => {
+                });
+                
+                // Reset repeating tasks
+                bin.items.forEach(element => {
                 // Skip persistent elements - they never reset
                 if (element.persistent || element.type === 'image' || element.type === 'calendar') {
                     return;
@@ -115,6 +118,7 @@ export class DailyResetManager {
                         });
                     }
                 }
+                });
             });
         });
         

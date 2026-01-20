@@ -426,7 +426,7 @@ export class EventHandler {
                 // Track active page when clicking on pages
                 const pageElement = e.target.closest('.page');
                 if (pageElement) {
-                    appState.currentPageId = pageElement.dataset.pageId;
+                    appState.currentDocumentId = pageElement.dataset.pageId;
                 }
                 return;
             }
@@ -442,7 +442,7 @@ export class EventHandler {
             // Track active page when clicking on pages
             const pageElement = e.target.closest('.page');
             if (pageElement) {
-                appState.currentPageId = pageElement.dataset.pageId;
+                appState.currentDocumentId = pageElement.dataset.pageId;
             }
         }, true); // Use capture phase to ensure this runs before other handlers
         
@@ -474,8 +474,8 @@ export class EventHandler {
                     e.preventDefault();
                     // Use active page or first page
                     const appState = this._getAppState();
-                    const targetPageId = appState.currentPageId || (appState.pages.length > 0 ? appState.pages[0].id : null);
-                    const targetBinId = appState.activeBinId || (appState.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
+                    const targetPageId = appState.currentDocumentId || (appState.documents.length > 0 ? appState.documents[0].id : null);
+                    const targetBinId = appState.activeGroupId || (appState.documents.find(p => p.id === targetPageId)?.groups?.[0]?.id || null);
                     if (targetPageId && targetBinId) {
                         const elementManager = this._getElementManager();
                         if (elementManager) {
@@ -489,8 +489,8 @@ export class EventHandler {
             if (e.ctrlKey && e.key === 'n') {
                 e.preventDefault();
                 const appState = this._getAppState();
-                const targetPageId = this.app?.activePageId || (appState.pages.length > 0 ? appState.pages[0].id : null);
-                const targetBinId = this.app?.activeBinId || (appState.pages.find(p => p.id === targetPageId)?.bins?.[0]?.id || null);
+                const targetPageId = this.app?.activePageId || (appState.documents.length > 0 ? appState.documents[0].id : null);
+                const targetBinId = this.app?.activeGroupId || (appState.documents.find(p => p.id === targetPageId)?.groups?.[0]?.id || null);
                 if (targetPageId && targetBinId) {
                     const modalHandler = this._getModalHandler();
                     if (modalHandler) {
@@ -644,13 +644,13 @@ export class EventHandler {
                     }
                 } else {
                     // Dropped on empty space, move to end of current page
-                    const page = appState.pages.find(p => p.id === dragData.pageId);
+                    const page = appState.documents.find(p => p.id === dragData.pageId);
                     if (page) {
-                        const bin = page.bins?.find(b => b.id === dragData.binId);
+                        const bin = page.groups?.find(b => b.id === dragData.binId);
                         if (bin) {
-                            const sourceIndex = page.bins.indexOf(bin);
-                            page.bins.splice(sourceIndex, 1);
-                            page.bins.push(bin);
+                            const sourceIndex = page.groups.indexOf(bin);
+                            page.groups.splice(sourceIndex, 1);
+                            page.groups.push(bin);
                             const dataManager = this._getDataManager();
                             if (dataManager) {
                                 dataManager.saveData();
@@ -693,7 +693,7 @@ export class EventHandler {
             if (elementElement) {
                 // Element context menu
                 const appState = this._getAppState();
-                const pageId = elementElement.dataset.pageId || appState.currentPageId;
+                const pageId = elementElement.dataset.pageId || appState.currentDocumentId;
                 const binId = elementElement.dataset.binId;
                 const elementIndexStr = elementElement.dataset.elementIndex;
                 const elementIndex = elementIndexStr !== undefined && elementIndexStr !== '' ? parseInt(elementIndexStr, 10) : null;
@@ -706,7 +706,7 @@ export class EventHandler {
             
             if (binElement && !elementElement) {
                 // Bin context menu
-                const pageId = binElement.dataset.pageId || appState.currentPageId;
+                const pageId = binElement.dataset.pageId || appState.currentDocumentId;
                 const binId = binElement.dataset.binId;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {

@@ -8,7 +8,7 @@ export default class PageThemes extends BasePlugin {
         super({
             id: 'page-themes',
             name: 'Page Themes',
-            description: 'Apply custom color schemes and themes to pages.',
+            description: 'Apply custom color schemes and themes to documents.',
             type: 'page',
             defaultConfig: {
                 enabled: true,

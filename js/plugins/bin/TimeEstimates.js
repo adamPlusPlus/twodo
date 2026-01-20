@@ -8,7 +8,7 @@ export default class TimeEstimates extends BasePlugin {
         super({
             id: 'time-estimates',
             name: 'Time Estimates',
-            description: 'Track and display time estimates for bin elements.',
+            description: 'Track and display time estimates for group items.',
             type: 'bin',
             defaultConfig: {
                 enabled: true
@@ -35,8 +35,9 @@ export default class TimeEstimates extends BasePlugin {
             return;
         }
 
-        const elements = binData.elements || [];
-        const totalTime = this.calculateTotalTime(elements);
+        const items = binData.items || [];
+        binData.items = items;
+        const totalTime = this.calculateTotalTime(items);
 
         // Add time summary to bin header
         const binHeader = binElement.querySelector('.bin-header');
@@ -53,9 +54,9 @@ export default class TimeEstimates extends BasePlugin {
             binHeader.appendChild(timeDiv);
         }
 
-        // Add time display to each element
+        // Add time display to each item
         binElement.querySelectorAll('.element').forEach((elementElement, index) => {
-            const element = elements[index];
+            const element = items[index];
             if (element && element.timeAllocated) {
                 const existingTime = elementElement.querySelector('.element-time-estimate');
                 if (existingTime) existingTime.remove();

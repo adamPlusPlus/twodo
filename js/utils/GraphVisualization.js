@@ -15,10 +15,12 @@ export class GraphVisualization {
         const nodeMap = new Map();
         
         // Create nodes from elements
-        if (page.bins && page.bins.length > 0) {
-            page.bins.forEach((bin, binIndex) => {
-                if (bin.elements && bin.elements.length > 0) {
-                    bin.elements.forEach((element, elIndex) => {
+        if (page.groups && page.groups.length > 0) {
+            page.groups.forEach((bin, binIndex) => {
+                const items = bin.items || [];
+                bin.items = items;
+                if (items.length > 0) {
+                    items.forEach((element, elIndex) => {
                         const nodeId = `${page.id}:${bin.id}:${elIndex}`;
                         const node = {
                             id: nodeId,

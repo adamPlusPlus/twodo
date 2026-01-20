@@ -8,7 +8,7 @@ export default class GanttChartView extends BasePlugin {
         super({
             id: 'gantt-chart-view',
             name: 'Gantt Chart View',
-            description: 'Display bin elements as a Gantt chart with timeline and dependencies.',
+            description: 'Display group items as a Gantt chart with timeline and dependencies.',
             type: 'bin',
             defaultConfig: {
                 enabled: true
@@ -45,10 +45,12 @@ export default class GanttChartView extends BasePlugin {
         });
 
         // Calculate timeline
-        const timeline = this.calculateTimeline(binData.elements || []);
+        const items = binData.items || [];
+        binData.items = items;
+        const timeline = this.calculateTimeline(items);
         
         // Render Gantt chart
-        this.renderGanttChart(ganttDiv, binData.elements || [], timeline, pageId, binData.id);
+        this.renderGanttChart(ganttDiv, items, timeline, pageId, binData.id);
         
         binElement.appendChild(ganttDiv);
     }

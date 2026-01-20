@@ -157,7 +157,7 @@ export class AppRenderer {
             
             // If no panes, create one with current page
             if (allPanes.length === 0) {
-                this.paneManager.openPane(appState.currentPageId);
+                this.paneManager.openPane(appState.currentDocumentId);
             }
             
             return;
@@ -168,7 +168,7 @@ export class AppRenderer {
         if (!container) return;
         
         // Get active page (reuse appState from line 63)
-        const activePage = appState.pages.find(page => page.id === appState.currentPageId);
+        const activePage = appState.documents.find(page => page.id === appState.currentDocumentId);
         
         // Store old positions before re-rendering (only if container has content)
         const hasContent = container.children.length > 0;
@@ -181,7 +181,7 @@ export class AppRenderer {
         
         // Check if page has a format renderer BEFORE clearing
         const formatRendererManager = getService(SERVICES.FORMAT_RENDERER_MANAGER);
-        const pageFormat = formatRendererManager?.getPageFormat(appState.currentPageId);
+        const pageFormat = formatRendererManager?.getPageFormat(appState.currentDocumentId);
         const format = pageFormat ? formatRendererManager?.getFormat(pageFormat) : null;
         const shouldUseFormat = format && format.renderPage && activePage;
         
@@ -253,9 +253,9 @@ export class AppRenderer {
         // Clear any format-specific CSS that was applied
         container.style.cssText = '';
         
-        if (activePage && activePage.bins && activePage.bins.length > 0) {
+        if (activePage && activePage.groups && activePage.groups.length > 0) {
             console.log('[SCROLL DEBUG] Default render - before appending bins', { scrollBeforeAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
-            activePage.bins.forEach((bin, binIndex) => {
+            activePage.groups.forEach((bin, binIndex) => {
                 const binElement = this.binRenderer.renderBin(activePage.id, bin);
                 container.appendChild(binElement);
             });
@@ -293,7 +293,7 @@ export class AppRenderer {
         }
         
         // If no bins, show empty state
-        if (!activePage || !activePage.bins || activePage.bins.length === 0) {
+        if (!activePage || !activePage.groups || activePage.groups.length === 0) {
             container.innerHTML = '<p>No bins yet. Add a bin to get started!</p>';
             return;
         }
@@ -309,10 +309,10 @@ export class AppRenderer {
         tabsContainer.innerHTML = '';
         
         const appState = getService(SERVICES.APP_STATE);
-        appState.pages.forEach((page, index) => {
+        appState.documents.forEach((page, index) => {
             const tab = document.createElement('div');
             tab.className = 'page-tab';
-            if (page.id === appState.currentPageId) {
+            if (page.id === appState.currentDocumentId) {
                 tab.classList.add('active');
             }
             tab.dataset.pageId = page.id;
@@ -322,7 +322,7 @@ export class AppRenderer {
             // Click to switch page
             tab.addEventListener('click', (e) => {
                 e.stopPropagation();
-                appState.currentPageId = page.id;
+                appState.currentDocumentId = page.id;
                 eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             });
@@ -340,23 +340,23 @@ export class AppRenderer {
      */
     getCurrentPositions() {
         const positions = {
-            bins: {},
-            elements: {}
+            groups: {},
+            items: {}
         };
         
-        // Get bin positions
+        // Get group positions
         document.querySelectorAll('.bin').forEach(binElement => {
             const binId = binElement.dataset.binId;
             if (binId) {
                 const rect = binElement.getBoundingClientRect();
-                positions.bins[binId] = {
+                positions.groups[binId] = {
                     top: rect.top,
                     left: rect.left
                 };
             }
         });
         
-        // Get element positions - use ElementFinder for consistency
+        // Get item positions - use ElementFinder for consistency
         document.querySelectorAll('.element').forEach(elementElement => {
             const elementData = ElementFinder.getElementData(elementElement);
             if (elementData.pageId && elementData.binId && elementData.elementIndex !== null) {
@@ -372,7 +372,7 @@ export class AppRenderer {
                 }
                 
                 const rect = elementElement.getBoundingClientRect();
-                positions.elements[elementKey] = {
+                positions.items[elementKey] = {
                     top: rect.top,
                     left: rect.left,
                     pageId: elementData.pageId,

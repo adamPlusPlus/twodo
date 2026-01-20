@@ -29,15 +29,15 @@ export class UndoRedoManager {
     }
     
     /**
-     * Get pages array from AppState
+     * Get documents array from AppState
      */
-    _getPages() {
+    _getDocuments() {
         const appState = this._getAppState();
-        return appState.pages || [];
+        return appState.documents || [];
     }
     
     /**
-     * Get DataManager service
+     * Get DataManager service 
      */
     _getDataManager() {
         return getService(SERVICES.DATA_MANAGER);
@@ -99,27 +99,25 @@ export class UndoRedoManager {
      * Get element counts for logging
      */
     _getElementCounts() {
-        const pages = this._getPages();
-        if (!pages || pages.length === 0) {
-            return { pages: 0, bins: 0, elements: 0 };
+        const documents = this._getDocuments();
+        if (!documents || documents.length === 0) {
+            return { documents: 0, groups: 0, items: 0 };
         }
         
-        let pagesLength = pages.length;
-        let bins = 0;
-        let elements = 0;
+        let documentCount = documents.length;
+        let groupCount = 0;
+        let itemCount = 0;
         
-        pages.forEach(page => {
-            if (page.bins && Array.isArray(page.bins)) {
-                bins += page.bins.length;
-                page.bins.forEach(bin => {
-                    if (bin.elements && Array.isArray(bin.elements)) {
-                        elements += bin.elements.length;
-                    }
-                });
-            }
+        documents.forEach(document => {
+            const groups = document.groups || [];
+            groupCount += groups.length;
+            groups.forEach(group => {
+                const items = group.items || [];
+                itemCount += items.length;
+            });
         });
         
-        return { pages, bins, elements };
+        return { documents: documentCount, groups: groupCount, items: itemCount };
     }
     
     /**
@@ -140,15 +138,15 @@ export class UndoRedoManager {
             // Log element counts before operation
             const beforeCounts = this._getElementCounts();
             console.log(`[UNDO/REDO] Applying change: ${type} at path:`, path);
-            console.log(`[UNDO/REDO] Before counts - Pages: ${beforeCounts.pages}, Bins: ${beforeCounts.bins}, Elements: ${beforeCounts.elements}`);
+            console.log(`[UNDO/REDO] Before counts - Documents: ${beforeCounts.documents}, Groups: ${beforeCounts.groups}, Items: ${beforeCounts.items}`);
             console.log(`[UNDO/REDO] Change value:`, value);
             
             // Log array state if applicable
             if (path.length > 0) {
                 try {
-                    const pages = this._getPages();
-                    let target = pages;
-                    let pathStartIndex = path[0] === 'pages' ? 1 : 0;
+                    const documents = this._getDocuments();
+                    let target = documents;
+                    let pathStartIndex = path[0] === 'documents' ? 1 : 0;
                     const navigationEnd = (type === 'insert' || type === 'add') ? path.length : path.length - 1;
                     
                     for (let i = pathStartIndex; i < navigationEnd && i < path.length; i++) {
@@ -173,31 +171,31 @@ export class UndoRedoManager {
                 }
             }
             
-            // Get pages from app state service
+            // Get documents from app state service
             let pages;
             try {
                 const appState = this.serviceLocator.get(SERVICES.APP_STATE);
-                pages = appState.getPages();
+                pages = appState.documents;
             } catch (e) {
-                const pages = this._getPages();
-                if (pages && pages.length > 0) {
+                const documents = this._getDocuments();
+                if (documents && documents.length > 0) {
                 } else {
-                    console.error('[UNDO] Cannot access pages');
+                    console.error('[UNDO] Cannot access documents');
                     return false;
                 }
             }
-            // Start from pages (skip 'pages' in path since we're already there)
+            // Start from documents (skip 'documents' in path since we're already there)
             let target = pages;
             let pathStartIndex = 0;
             
-            // If path starts with 'pages', skip it since we're already at pages
-            if (path[0] === 'pages') {
+            // If path starts with 'documents', skip it since we're already at documents
+            if (path[0] === 'documents') {
                 pathStartIndex = 1;
             }
             
             // For 'insert' and 'add' operations, the path points to the array itself
             // So we need to navigate to the parent of the array, not the array
-            // The last element in the path is the array name (e.g., 'elements'), so we stop before it
+            // The last element in the path is the array name (e.g., 'items'), so we stop before it
             const isArrayOperation = type === 'insert' || type === 'add';
             const navigationEnd = isArrayOperation ? path.length - 1 : path.length - 1;
             
@@ -241,7 +239,7 @@ export class UndoRedoManager {
             let arrayTarget = null;
             
             if (isArrayOperation) {
-                // For insert/add, the last element in path is the array name (e.g., 'elements')
+                // For insert/add, the last element in path is the array name (e.g., 'items')
                 // We need to get the array from the parent object
                 lastKey = path[path.length - 1];
                 if (typeof target === 'object' && target !== null) {
@@ -376,10 +374,10 @@ export class UndoRedoManager {
                     }
                     
                     // First, find and delete from source
-                    let pages = this._getPages();
+                    let pages = this._getDocuments();
                     let sourceTarget = pages;
                     const sourcePath = change.sourcePath;
-                    let sourcePathStart = sourcePath[0] === 'pages' ? 1 : 0;
+                    let sourcePathStart = sourcePath[0] === 'documents' ? 1 : 0;
                     
                     // Navigate to source element
                     for (let i = sourcePathStart; i < sourcePath.length - 1; i++) {
@@ -446,15 +444,15 @@ export class UndoRedoManager {
                     // Now insert at target
                     // Reuse pages variable already declared above
                     // Get fresh pages reference for target navigation
-                    pages = this._getPages();
+                    pages = this._getDocuments();
                     if (!pages || pages.length === 0) {
-                        console.error('[UNDO] Cannot access pages');
+                        console.error('[UNDO] Cannot access documents');
                         this.isApplyingChange = false;
                         return false;
                     }
                     let targetArray = pages;
                     const targetArrayPath = change.targetPath;
-                    let targetPathStart = targetArrayPath[0] === 'pages' ? 1 : 0;
+                    let targetPathStart = targetArrayPath[0] === 'documents' ? 1 : 0;
                     
                     // Navigate to target array
                     for (let i = targetPathStart; i < targetArrayPath.length; i++) {
@@ -488,20 +486,20 @@ export class UndoRedoManager {
                     const targetIndex = change.targetIndex !== undefined ? change.targetIndex : targetArray.length;
                     const validTargetIndex = Math.max(0, Math.min(targetIndex, targetArray.length));
                     targetArray.splice(validTargetIndex, 0, movedElement);
-                    console.log('Moved element from index', sourceIndex, 'to index', validTargetIndex);
+                    console.log('Moved item from index', sourceIndex, 'to index', validTargetIndex);
                     break;
             }
             
             // Log element counts after operation
             const afterCounts = this._getElementCounts();
-            console.log(`[UNDO/REDO] After counts - Pages: ${afterCounts.pages}, Bins: ${afterCounts.bins}, Elements: ${afterCounts.elements}`);
+            console.log(`[UNDO/REDO] After counts - Documents: ${afterCounts.documents}, Groups: ${afterCounts.groups}, Items: ${afterCounts.items}`);
             
-            // Validate that elements didn't disappear unexpectedly
-            // Note: Element count only counts bin.elements, not child elements, so inserts into children arrays won't increase count
-            if (type === 'delete' && afterCounts.elements > beforeCounts.elements) {
-                console.warn(`[UNDO/REDO] WARNING: Delete operation increased element count. Before: ${beforeCounts.elements}, After: ${afterCounts.elements}`);
-            } else if (type === 'insert' && afterCounts.elements < beforeCounts.elements) {
-                console.warn(`[UNDO/REDO] WARNING: Insert operation decreased element count. Before: ${beforeCounts.elements}, After: ${afterCounts.elements}`);
+            // Validate that items didn't disappear unexpectedly
+            // Note: Item count only tracks group items, not child items
+            if (type === 'delete' && afterCounts.items > beforeCounts.items) {
+                console.warn(`[UNDO/REDO] WARNING: Delete operation increased item count. Before: ${beforeCounts.items}, After: ${afterCounts.items}`);
+            } else if (type === 'insert' && afterCounts.items < beforeCounts.items) {
+                console.warn(`[UNDO/REDO] WARNING: Insert operation decreased item count. Before: ${beforeCounts.items}, After: ${afterCounts.items}`);
             }
             
             // Validate state after change
@@ -559,7 +557,7 @@ export class UndoRedoManager {
         
         const beforeCounts = this._getElementCounts();
         console.log(`[UNDO] Starting undo operation. Stack size: ${this.undoStack.length}`);
-        console.log(`[UNDO] Before counts - Pages: ${beforeCounts.pages}, Bins: ${beforeCounts.bins}, Elements: ${beforeCounts.elements}`);
+        console.log(`[UNDO] Before counts - Documents: ${beforeCounts.documents}, Groups: ${beforeCounts.groups}, Items: ${beforeCounts.items}`);
         
         const change = this.undoStack.pop();
         console.log(`[UNDO] Popped change: ${change.type} at path:`, change.path);
@@ -612,7 +610,7 @@ export class UndoRedoManager {
                 
                 // Professional approach: Use ID-based lookup only
                 if (!elementToFind.id) {
-                    console.error('[UNDO] Cannot undo move - element has no ID. All elements should have IDs.');
+                    console.error('[UNDO] Cannot undo move - item has no ID. All items should have IDs.');
                     this.undoStack.push(pairedChange);
                     this.undoStack.push(change);
                     return false;
@@ -627,7 +625,7 @@ export class UndoRedoManager {
                 }
                 
                 // Found by ID - construct path directly and delete
-                const pages = this._getPages();
+                const pages = this._getDocuments();
                 const pageIndex = pages.findIndex(p => p.id === found.pageId);
                 if (pageIndex === -1) {
                     console.error(`[UNDO] Page ${found.pageId} not found`);
@@ -637,7 +635,7 @@ export class UndoRedoManager {
                 }
                 
                 const page = pages[pageIndex];
-                const binIndex = page.bins.findIndex(b => b.id === found.binId);
+                const binIndex = page.groups.findIndex(b => b.id === found.binId);
                 if (binIndex === -1) {
                     console.error(`[UNDO] Bin ${found.binId} not found`);
                     this.undoStack.push(pairedChange);
@@ -647,9 +645,9 @@ export class UndoRedoManager {
                 
                 let deletePath;
                 if (found.isChild) {
-                    deletePath = ['pages', pageIndex, 'bins', binIndex, 'elements', found.elementIndex, 'children', found.childIndex];
+                    deletePath = ['documents', pageIndex, 'groups', binIndex, 'items', found.elementIndex, 'children', found.childIndex];
                 } else {
-                    deletePath = ['pages', pageIndex, 'bins', binIndex, 'elements', found.elementIndex];
+                    deletePath = ['documents', pageIndex, 'groups', binIndex, 'items', found.elementIndex];
                 }
                 
                 console.log(`[UNDO] Found element by ID, deleting from path:`, deletePath);
@@ -716,7 +714,7 @@ export class UndoRedoManager {
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 
                 const afterCounts = this._getElementCounts();
-                console.log(`[UNDO] After counts - Pages: ${afterCounts.pages}, Bins: ${afterCounts.bins}, Elements: ${afterCounts.elements}`);
+                console.log(`[UNDO] After counts - Documents: ${afterCounts.documents}, Groups: ${afterCounts.groups}, Items: ${afterCounts.items}`);
                 console.log(`[UNDO] Move operation undone successfully as atomic operation`);
                 return true;
             } else {
@@ -733,8 +731,8 @@ export class UndoRedoManager {
         if (change.type === 'delete') {
             // If we deleted, we need to insert it back
             inverseType = 'insert';
-            // For delete, the path points to the element (e.g., ['pages', 0, 'bins', 0, 'elements', 3])
-            // For insert, we need path to the array (e.g., ['pages', 0, 'bins', 0, 'elements'])
+            // For delete, the path points to the element (e.g., ['documents', 0, 'groups', 0, 'items', 3])
+            // For insert, we need path to the array (e.g., ['documents', 0, 'groups', 0, 'items'])
             // and the index should be in insertIndex
             if (inversePath.length > 0 && typeof inversePath[inversePath.length - 1] === 'number') {
                 // Last element is the index, extract it and remove from path
@@ -751,13 +749,13 @@ export class UndoRedoManager {
         } else if (change.type === 'insert') {
             // If we inserted, we need to delete it
             inverseType = 'delete';
-            // For insert, the path points to the array (e.g., ['pages', 0, 'bins', 0, 'elements'])
-            // For delete, we need path to the element (e.g., ['pages', 0, 'bins', 0, 'elements', 3])
+            // For insert, the path points to the array (e.g., ['documents', 0, 'groups', 0, 'items'])
+            // For delete, we need path to the element (e.g., ['documents', 0, 'groups', 0, 'items', 3])
             // Always find the element by comparing properties, not by index, since the array may have changed
             const arrayPath = [...inversePath];
-            const pages = this._getPages();
+            const pages = this._getDocuments();
             let arrayTarget = pages;
-            if (arrayPath[0] === 'pages') {
+            if (arrayPath[0] === 'documents') {
                 for (let i = 1; i < arrayPath.length; i++) {
                     const key = arrayPath[i];
                     if (Array.isArray(arrayTarget)) {
@@ -864,7 +862,7 @@ export class UndoRedoManager {
                             }
                         } else {
                             // No match found - log detailed comparison
-                            console.warn('[UNDO] No exact text/type match found. Available elements:');
+                            console.warn('[UNDO] No exact text/type match found. Available items:');
                             arrayTarget.forEach((el, idx) => {
                                 const elText = el?.text ? el.text.trim() : '';
                                 const matchesText = elText === searchText;
@@ -880,12 +878,12 @@ export class UndoRedoManager {
                         inversePath.push(elementIndex);
                         console.log(`[UNDO] Found element to delete at index ${elementIndex}`);
                     } else {
-                        // CRITICAL: Do not delete elements if we can't find the exact match
+                        // CRITICAL: Do not delete items if we can't find the exact match
                         // Try to use snapshot to restore if available
-                        console.error('[UNDO] Cannot find element to delete in array.');
-                        console.error('[UNDO] Element being searched:', change.value);
+                        console.error('[UNDO] Cannot find item to delete in array.');
+                        console.error('[UNDO] Item being searched:', change.value);
                         console.error('[UNDO] Array length:', arrayTarget.length);
-                        console.error('[UNDO] Available elements:', arrayTarget.map((el, idx) => ({ 
+                        console.error('[UNDO] Available items:', arrayTarget.map((el, idx) => ({ 
                             index: idx, 
                             text: el?.text, 
                             type: el?.type,
@@ -899,15 +897,15 @@ export class UndoRedoManager {
                             console.log(`[UNDO] Recovery successful from change index ${recoveryResult.recoveredFrom}`);
                             // After recovery, try to find the element again
                             // Re-navigate to array after recovery
-                            // Get pages from app state service
+                            // Get documents from app state service
                             let pages;
                             try {
                                 const appState = this.serviceLocator.get(SERVICES.APP_STATE);
-                                pages = appState.getPages();
+                                pages = appState.documents;
                             } catch (e) {
-                                pages = this._getPages();
+                                pages = this._getDocuments();
                                 if (!pages || pages.length === 0) {
-                                    console.error('[UNDO] Cannot access pages');
+                                    console.error('[UNDO] Cannot access documents');
                                     this.undoStack.push(change);
                                     return false;
                                 }
@@ -974,9 +972,9 @@ export class UndoRedoManager {
             // For add, path points to array, for delete we need the element index
             // Find the element in the array
             const arrayPath = [...inversePath];
-            const pages = this._getPages();
+            const pages = this._getDocuments();
             let arrayTarget = pages;
-            if (arrayPath[0] === 'pages') {
+            if (arrayPath[0] === 'documents') {
                 for (let i = 1; i < arrayPath.length; i++) {
                     const key = arrayPath[i];
                     if (Array.isArray(arrayTarget)) {
@@ -1036,9 +1034,9 @@ export class UndoRedoManager {
         // Validate element exists before deleting (for delete operations)
         if (inverseType === 'delete' && inversePath.length > 0) {
             try {
-                const pages = this._getPages();
+                const pages = this._getDocuments();
                 let target = pages;
-                let pathStartIndex = inversePath[0] === 'pages' ? 1 : 0;
+                let pathStartIndex = inversePath[0] === 'documents' ? 1 : 0;
                 
                 // Navigate to the element
                 for (let i = pathStartIndex; i < inversePath.length - 1; i++) {
@@ -1120,7 +1118,7 @@ export class UndoRedoManager {
         }
         
         const afterCounts = this._getElementCounts();
-        console.log(`[UNDO] After counts - Pages: ${afterCounts.pages}, Bins: ${afterCounts.bins}, Elements: ${afterCounts.elements}`);
+        console.log(`[UNDO] After counts - Documents: ${afterCounts.documents}, Groups: ${afterCounts.groups}, Items: ${afterCounts.items}`);
         
         // Move to redo stack
         this.redoStack.push(change);
@@ -1343,9 +1341,9 @@ export class UndoRedoManager {
             // Check if path still exists in current data structure
             if (change.path && Array.isArray(change.path) && change.path.length > 0) {
                 try {
-                    const pages = this._getPages();
+                    const pages = this._getDocuments();
                     let target = pages;
-                    let pathStartIndex = change.path[0] === 'pages' ? 1 : 0;
+                    let pathStartIndex = change.path[0] === 'documents' ? 1 : 0;
                     const navigationEnd = (change.type === 'insert' || change.type === 'add') 
                         ? change.path.length 
                         : change.path.length - 1;
@@ -1443,22 +1441,22 @@ export class UndoRedoManager {
     }
     
     /**
-     * Find an element by its ID across all pages, bins, and children
-     * This is the professional way to locate elements for undo/redo
+     * Find an item by its ID across all documents, groups, and children
+     * This is the professional way to locate items for undo/redo
      */
     findElementById(elementId) {
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         if (!elementId || !pages || pages.length === 0) return null;
         
         for (const page of pages) {
-            if (!page || !page.bins) continue;
+            if (!page || !page.groups) continue;
             
-            for (const bin of page.bins) {
-                if (!bin || !bin.elements) continue;
+            for (const bin of page.groups) {
+                if (!bin || !bin.items) continue;
                 
-                // Search main elements
-                for (let i = 0; i < bin.elements.length; i++) {
-                    const element = bin.elements[i];
+                // Search main items
+                for (let i = 0; i < bin.items.length; i++) {
+                    const element = bin.items[i];
                     if (element && element.id === elementId) {
                         return {
                             element,
@@ -1470,7 +1468,7 @@ export class UndoRedoManager {
                         };
                     }
                     
-                    // Search child elements
+                    // Search child items
                     if (element && element.children && Array.isArray(element.children)) {
                         for (let j = 0; j < element.children.length; j++) {
                             const child = element.children[j];
@@ -1500,9 +1498,9 @@ export class UndoRedoManager {
         const errors = [];
         const warnings = [];
         
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         if (!pages || pages.length === 0) {
-            errors.push('app.pages is not available');
+            errors.push('documents are not available');
             return {
                 valid: false,
                 errors,
@@ -1511,7 +1509,7 @@ export class UndoRedoManager {
         }
         
         if (!Array.isArray(pages)) {
-            errors.push('app.pages is not an array');
+            errors.push('documents is not an array');
             return {
                 valid: false,
                 errors,
@@ -1526,41 +1524,41 @@ export class UndoRedoManager {
                 return;
             }
             
-            if (!page.bins) {
-                warnings.push(`Page ${page.id || pageIndex} does not have a bins array`);
+            if (!page.groups) {
+                warnings.push(`Document ${page.id || pageIndex} does not have a groups array`);
                 return;
             }
             
-            if (!Array.isArray(page.bins)) {
-                errors.push(`Page ${page.id || pageIndex} bins is not an array`);
+            if (!Array.isArray(page.groups)) {
+                errors.push(`Document ${page.id || pageIndex} groups is not an array`);
                 return;
             }
             
-            // Check each bin
-            page.bins.forEach((bin, binIndex) => {
+            // Check each group
+            page.groups.forEach((bin, binIndex) => {
                 if (!bin) {
-                    errors.push(`Bin at pages[${pageIndex}].bins[${binIndex}] is null or undefined`);
+                    errors.push(`Group at documents[${pageIndex}].groups[${binIndex}] is null or undefined`);
                     return;
                 }
                 
-                if (!bin.elements) {
-                    warnings.push(`Bin ${bin.id || binIndex} in page ${page.id || pageIndex} does not have an elements array`);
+                if (!bin.items) {
+                    warnings.push(`Group ${bin.id || binIndex} in document ${page.id || pageIndex} does not have an items array`);
                     return;
                 }
                 
-                if (!Array.isArray(bin.elements)) {
-                    errors.push(`Bin ${bin.id || binIndex} in page ${page.id || pageIndex} elements is not an array`);
+                if (!Array.isArray(bin.items)) {
+                    errors.push(`Group ${bin.id || binIndex} in document ${page.id || pageIndex} items is not an array`);
                     return;
                 }
                 
-                // Check each element
-                bin.elements.forEach((element, elementIndex) => {
+                // Check each item
+                bin.items.forEach((element, elementIndex) => {
                     if (element === null || element === undefined) {
-                        errors.push(`Element at pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}] is null or undefined`);
+                        errors.push(`Item at documents[${pageIndex}].groups[${binIndex}].items[${elementIndex}] is null or undefined`);
                     } else {
                         // Check for missing critical properties
                         if (element.type === undefined || element.type === null) {
-                            warnings.push(`Element at pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}] is missing type property`);
+                            warnings.push(`Element at documents[${pageIndex}].groups[${binIndex}].items[${elementIndex}] is missing type property`);
                         }
                     }
                 });
@@ -1578,22 +1576,22 @@ export class UndoRedoManager {
      * Get path to an element in the data structure
      */
     getElementPath(pageId, binId, elementIndex, childIndex = null) {
-        const path = ['pages'];
-        // Get pages from appState if available, otherwise fall back to app.pages
+        const path = ['documents'];
+        // Get documents from appState
         const appState = this._getAppState();
-        const pages = appState.pages || [];
+        const pages = appState.documents || [];
         const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return null;
         
         path.push(pageIndex);
-        path.push('bins');
+        path.push('groups');
         
         const page = pages[pageIndex];
-        const binIndex = page.bins ? page.bins.findIndex(b => b.id === binId) : -1;
+        const binIndex = page.groups ? page.groups.findIndex(b => b.id === binId) : -1;
         if (binIndex === -1) return null;
         
         path.push(binIndex);
-        path.push('elements');
+        path.push('items');
         
         if (childIndex !== null) {
             path.push(elementIndex);
@@ -1734,11 +1732,11 @@ export class UndoRedoManager {
      * Helper: Record bin addition
      */
     recordBinAdd(pageId, binIndex, bin) {
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
-        const path = ['pages', pageIndex, 'bins'];
+        const path = ['documents', pageIndex, 'groups'];
         const change = this.createChange('insert', path, bin, null);
         change.changeId = `${Date.now()}-${Math.random()}`;
         change.insertIndex = binIndex;
@@ -1749,15 +1747,15 @@ export class UndoRedoManager {
      * Helper: Record bin deletion
      */
     recordBinDelete(pageId, binId, bin) {
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
         const page = pages[pageIndex];
-        const binIndex = page.bins ? page.bins.findIndex(b => b.id === binId) : -1;
+        const binIndex = page.groups ? page.groups.findIndex(b => b.id === binId) : -1;
         if (binIndex === -1) return;
         
-        const path = ['pages', pageIndex, 'bins', binIndex];
+        const path = ['documents', pageIndex, 'groups', binIndex];
         const change = this.createChange('delete', path, null, bin);
         change.changeId = `${Date.now()}-${Math.random()}`;
         this.recordChange(change);
@@ -1767,7 +1765,7 @@ export class UndoRedoManager {
      * Helper: Record page addition
      */
     recordPageAdd(pageIndex, page) {
-        const path = ['pages'];
+        const path = ['documents'];
         const change = this.createChange('insert', path, page, null);
         change.changeId = `${Date.now()}-${Math.random()}`;
         change.insertIndex = pageIndex;
@@ -1778,11 +1776,11 @@ export class UndoRedoManager {
      * Helper: Record page deletion
      */
     recordPageDelete(pageId, page) {
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         const pageIndex = pages.findIndex(p => p.id === pageId);
         if (pageIndex === -1) return;
         
-        const path = ['pages', pageIndex];
+        const path = ['documents', pageIndex];
         const change = this.createChange('delete', path, null, page);
         change.changeId = `${Date.now()}-${Math.random()}`;
         this.recordChange(change);
@@ -1802,9 +1800,9 @@ export class UndoRedoManager {
      * Create a snapshot of current state
      */
     createSnapshot() {
-        const pages = this._getPages();
+        const pages = this._getDocuments();
         if (!pages || pages.length === 0) {
-            console.warn('[BUFFER] Cannot create snapshot - app.pages not available');
+            console.warn('[BUFFER] Cannot create snapshot - documents not available');
             return null;
         }
         
@@ -1988,7 +1986,7 @@ export class UndoRedoManager {
         
         // Restore full state from snapshot
         const appState = this._getAppState();
-        appState.pages = JSON.parse(JSON.stringify(bestSnapshot.data));
+        appState.documents = JSON.parse(JSON.stringify(bestSnapshot.data));
         
         // Replay changes from snapshot to current point (excluding problematic change)
         let replayedCount = 0;

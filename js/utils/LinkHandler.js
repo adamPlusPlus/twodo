@@ -220,7 +220,7 @@ export class LinkHandler {
     navigateToReference(ref, context = {}) {
         if (!this.app) return;
         
-        const pages = this.app.appState?.pages || this.app.pages || [];
+        const pages = this.app.appState?.documents || this.app.documents || [];
         
         // Try to find by page title/ID
         let targetPage = pages.find(p => 
@@ -231,7 +231,7 @@ export class LinkHandler {
         
         if (targetPage) {
             // Navigate to page
-            this.app.appState.currentPageId = targetPage.id;
+            this.app.appState.currentDocumentId = targetPage.id;
             eventBus.emit(EVENTS.PAGE.SWITCHED, { pageId: targetPage.id });
             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             
@@ -247,13 +247,14 @@ export class LinkHandler {
         
         // Try to find by element ID or text
         for (const page of pages) {
-            if (!page.bins) continue;
+            if (!page.groups) continue;
             
-            for (const bin of page.bins) {
-                if (!bin.elements) continue;
+            for (const bin of page.groups) {
+                const items = bin.items || [];
+                bin.items = items;
                 
-                for (let i = 0; i < bin.elements.length; i++) {
-                    const element = bin.elements[i];
+                for (let i = 0; i < items.length; i++) {
+                    const element = items[i];
                     
                     // Check element ID (if it exists)
                     if (element.id === ref) {
@@ -270,7 +271,7 @@ export class LinkHandler {
                 
                 // Check bin title
                 if (bin.title && bin.title.toLowerCase() === ref.toLowerCase()) {
-                    this.app.appState.currentPageId = page.id;
+                    this.app.appState.currentDocumentId = page.id;
                     eventBus.emit(EVENTS.PAGE.SWITCHED, { pageId: page.id });
                     eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                     

@@ -31,36 +31,40 @@ export class PageManager {
     
     async addPage() {
         const appState = this._getAppState();
-        const pageNum = appState.pages.length + 1;
-        const newPage = {
-            id: `page-${pageNum}`,
-            bins: [{
-                id: 'bin-0',
-                title: 'Bin 1',
-                elements: []
-            }],
+        const documentNum = appState.documents.length + 1;
+        const documentId = `page-${documentNum}`;
+        const seededGroups = [{
+            id: 'group-0',
+            title: 'Group 1',
+            items: [],
+            elements: []
+        }];
+        const newDocument = {
+            id: documentId,
+            groups: seededGroups,
+            bins: seededGroups,
             plugins: [],
             format: null,
             config: {}
         };
-        const pageIndex = appState.pages.length;
-        appState.pages.push(newPage);
-        appState.currentPageId = `page-${pageNum}`;
+        const pageIndex = appState.documents.length;
+        appState.documents.push(newDocument);
+        appState.currentDocumentId = documentId;
         
         // Record undo/redo change
         const undoRedoManager = this._getUndoRedoManager();
         if (undoRedoManager) {
-            undoRedoManager.recordPageAdd(pageIndex, newPage);
+            undoRedoManager.recordPageAdd(pageIndex, newDocument);
         }
         
         // Initialize plugins for new page
         const pagePluginManager = this._getPagePluginManager();
         if (pagePluginManager) {
-            await pagePluginManager.initializePagePlugins(newPage.id);
+            await pagePluginManager.initializePagePlugins(newDocument.id);
         }
         
         // Emit event
-        eventBus.emit(EVENTS.PAGE.CREATED, { pageId: newPage.id, page: newPage });
+        eventBus.emit(EVENTS.PAGE.CREATED, { pageId: newDocument.id, documentId: newDocument.id, page: newDocument });
         
         const dataManager = this._getDataManager();
         if (dataManager) {
@@ -75,25 +79,28 @@ export class PageManager {
      */
     ensureDefaultPage() {
         const appState = this._getAppState();
-        const currentPage = appState.pages.find(p => p.id === appState.currentPageId);
+        const currentPage = appState.documents.find(p => p.id === appState.currentDocumentId);
         if (!currentPage) {
             // If current page doesn't exist, use first page or create default
-            if (appState.pages.length > 0) {
-                appState.currentPageId = appState.pages[0].id;
-                return appState.pages[0];
+            if (appState.documents.length > 0) {
+                appState.currentDocumentId = appState.documents[0].id;
+                return appState.documents[0];
             } else {
                 // Create default page with one bin
-                const defaultPage = {
+                const seededGroups = [{
+                    id: 'group-0',
+                    title: 'Group 1',
+                    items: [],
+                    elements: []
+                }];
+                const defaultDocument = {
                     id: 'page-1',
-                    bins: [{
-                        id: 'bin-0',
-                        title: 'Bin 1',
-                        elements: []
-                    }]
+                    groups: seededGroups,
+                    bins: seededGroups
                 };
-                appState.pages = [defaultPage];
-                appState.currentPageId = 'page-1';
-                return defaultPage;
+                appState.documents = [defaultDocument];
+                appState.currentDocumentId = 'page-1';
+                return defaultDocument;
             }
         }
         return currentPage;
@@ -102,11 +109,11 @@ export class PageManager {
     async deletePage(pageId) {
         const appState = this._getAppState();
         // Don't allow deleting the last page
-        if (appState.pages.length <= 1) {
+        if (appState.documents.length <= 1) {
             return;
         }
         
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
         // Record undo/redo change before deletion
@@ -124,11 +131,11 @@ export class PageManager {
         // Emit event before deletion
         eventBus.emit(EVENTS.PAGE.DELETED, { pageId });
         
-        appState.pages = appState.pages.filter(p => p.id !== pageId);
+        appState.documents = appState.documents.filter(p => p.id !== pageId);
         
         // If current page was deleted, switch to first page
-        if (appState.currentPageId === pageId) {
-            appState.currentPageId = appState.pages[0]?.id || null;
+        if (appState.currentDocumentId === pageId) {
+            appState.currentDocumentId = appState.documents[0]?.id || null;
         }
         
         const dataManager = this._getDataManager();
@@ -142,20 +149,20 @@ export class PageManager {
         if (sourcePageId === targetPageId) return;
         
         const appState = this._getAppState();
-        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
-        const targetPage = appState.pages.find(p => p.id === targetPageId);
+        const sourcePage = appState.documents.find(p => p.id === sourcePageId);
+        const targetPage = appState.documents.find(p => p.id === targetPageId);
         
         if (!sourcePage || !targetPage) return;
         
-        const sourceIndex = appState.pages.indexOf(sourcePage);
-        const targetIndex = appState.pages.indexOf(targetPage);
+        const sourceIndex = appState.documents.indexOf(sourcePage);
+        const targetIndex = appState.documents.indexOf(targetPage);
         
         // Remove from source position
-        appState.pages.splice(sourceIndex, 1);
+        appState.documents.splice(sourceIndex, 1);
         
         // Insert at target position (adjust if source was before target)
         const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-        appState.pages.splice(insertIndex, 0, sourcePage);
+        appState.documents.splice(insertIndex, 0, sourcePage);
         
         const dataManager = this._getDataManager();
         if (dataManager) {
@@ -168,7 +175,7 @@ export class PageManager {
     
     renamePage(pageId, newTitle) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (page) {
             // Pages don't have titles in the new structure, but we can store it for future use
             // For now, pages are just numbered

@@ -8,7 +8,7 @@ export default class CustomSorting extends BasePlugin {
         super({
             id: 'custom-sorting',
             name: 'Custom Sorting',
-            description: 'Sort bin elements by various criteria.',
+            description: 'Sort group items by various criteria.',
             type: 'bin',
             defaultConfig: {
                 enabled: true,
@@ -90,9 +90,11 @@ export default class CustomSorting extends BasePlugin {
     }
 
     applySort(pageId, binId, sortBy, sortOrder) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
 
         if (!bin.pluginConfigs) bin.pluginConfigs = {};
         if (!bin.pluginConfigs[this.id]) bin.pluginConfigs[this.id] = {};
@@ -106,9 +108,11 @@ export default class CustomSorting extends BasePlugin {
     }
 
     sortElements(pageId, bin, sortBy, sortOrder) {
-        if (!bin.elements || bin.elements.length === 0) return;
+        const items = bin.items || [];
+        bin.items = items;
+        if (!items.length) return;
 
-        const sorted = [...bin.elements].sort((a, b) => {
+        const sorted = [...items].sort((a, b) => {
             let comparison = 0;
 
             switch (sortBy) {
@@ -133,11 +137,11 @@ export default class CustomSorting extends BasePlugin {
                 case 'custom':
                     // Custom order uses a stored order array
                     if (!bin.pluginConfigs?.[this.id]?.customOrder) {
-                        bin.pluginConfigs[this.id].customOrder = bin.elements.map((_, i) => i);
+                        bin.pluginConfigs[this.id].customOrder = items.map((_, i) => i);
                     }
                     const customOrder = bin.pluginConfigs[this.id].customOrder;
-                    const indexA = customOrder.indexOf(bin.elements.indexOf(a));
-                    const indexB = customOrder.indexOf(bin.elements.indexOf(b));
+                    const indexA = customOrder.indexOf(items.indexOf(a));
+                    const indexB = customOrder.indexOf(items.indexOf(b));
                     comparison = indexA - indexB;
                     break;
                 default:
@@ -147,8 +151,8 @@ export default class CustomSorting extends BasePlugin {
             return sortOrder === 'asc' ? comparison : -comparison;
         });
 
-        // Update bin elements
-        bin.elements = sorted;
+        // Update bin items
+        bin.items = sorted;
     }
 }
 

@@ -897,14 +897,17 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
             latex += `\\title{${this.escapeLaTeX(page.title)}}\n\\maketitle\n\n`;
         }
         
-        if (page.bins && page.bins.length > 0) {
-            page.bins.forEach((bin, binIndex) => {
+        const groups = page.groups || [];
+        if (groups.length > 0) {
+            groups.forEach((bin, binIndex) => {
                 if (bin.title) {
                     latex += `\\section{${this.escapeLaTeX(bin.title)}}\n\n`;
                 }
                 
-                if (bin.elements && bin.elements.length > 0) {
-                    bin.elements.forEach((element, elIndex) => {
+                const items = bin.items || [];
+                bin.items = items;
+                if (items.length > 0) {
+                    items.forEach((element, elIndex) => {
                         if (element.type === 'task') {
                             const checkmark = element.completed ? '$\\checkmark$' : '$\\square$';
                             latex += `${checkmark} ${this.escapeLaTeX(element.text || '')}\n\n`;

@@ -34,19 +34,20 @@ export default class ExampleFormatRenderer extends BaseFormatRenderer {
         const title = DOMUtils.createElement('h2', {}, `Page: ${page.id}`);
         formatDiv.appendChild(title);
         
+        const groups = page.groups || [];
         if (this.config.showMetadata) {
             const metadata = DOMUtils.createElement('p', {}, 
-                `Format: ${this.formatName}, Bins: ${page.bins?.length || 0}`
+                `Format: ${this.formatName}, Groups: ${groups.length}`
             );
             formatDiv.appendChild(metadata);
         }
         
-        if (page.bins) {
-            page.bins.forEach(bin => {
+        if (groups.length) {
+            groups.forEach(bin => {
                 const binDiv = DOMUtils.createElement('div', {
                     class: 'format-bin'
                 });
-                binDiv.textContent = `Bin: ${bin.title || bin.id}`;
+                binDiv.textContent = `Group: ${bin.title || bin.id}`;
                 formatDiv.appendChild(binDiv);
             });
         }
@@ -64,19 +65,21 @@ export default class ExampleFormatRenderer extends BaseFormatRenderer {
         const title = DOMUtils.createElement('h3', {}, `Bin: ${bin.title || bin.id}`);
         formatDiv.appendChild(title);
         
-        if (this.config.showMetadata && bin.elements) {
+        const items = bin.items || [];
+        bin.items = items;
+        if (this.config.showMetadata) {
             const metadata = DOMUtils.createElement('p', {}, 
-                `Elements: ${bin.elements.length}`
+                `Items: ${items.length}`
             );
             formatDiv.appendChild(metadata);
         }
         
-        if (bin.elements && !this.config.compact) {
+        if (items.length && !this.config.compact) {
             const elementsList = DOMUtils.createElement('ul', {
                 class: 'format-elements'
             });
             
-            bin.elements.forEach(element => {
+            items.forEach(element => {
                 const li = DOMUtils.createElement('li', {}, element.text || 'Untitled');
                 elementsList.appendChild(li);
             });

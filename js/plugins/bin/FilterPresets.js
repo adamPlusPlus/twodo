@@ -103,8 +103,8 @@ export default class FilterPresets extends BasePlugin {
 
         // Apply filters (this would integrate with a filter system)
         // For now, we'll store the active filter in bin config
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
 
         if (!bin.pluginConfigs) bin.pluginConfigs = {};

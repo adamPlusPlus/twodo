@@ -63,7 +63,7 @@ export class SpecialElementRenderer {
         // Apply visual settings if requested
         if (applyVisualSettings && app.visualSettingsManager) {
             const elementId = `${pageId}-${binId}-${elementIndex}`;
-            const page = app.appState?.pages?.find(p => p.id === pageId);
+            const page = app.appState?.documents?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
             app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
         }
@@ -106,7 +106,7 @@ export class SpecialElementRenderer {
         }
         
         const elementId = `${pageId}-${binId}-${elementIndex}`;
-        const page = app.appState?.pages?.find(p => p.id === pageId);
+        const page = app.appState?.documents?.find(p => p.id === pageId);
         const viewFormat = page?.format || 'default';
         app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
     }

@@ -13,8 +13,8 @@ export class ImportService {
             const importedPage = JSON.parse(jsonString);
             
             // Validate structure
-            if (!importedPage.id || !importedPage.bins) {
-                throw new Error('Invalid page structure');
+            if (!importedPage.id || !importedPage.groups) {
+                throw new Error('Invalid document structure');
             }
             
             // Generate new ID if needed
@@ -24,13 +24,17 @@ export class ImportService {
                 importedPage.id = `page-${Date.now()}`;
             }
             
-            // Re-index bins and elements
-            importedPage.bins.forEach((bin, binIndex) => {
+            // Re-index groups and items
+            const groups = importedPage.groups || [];
+            groups.forEach((bin, binIndex) => {
                 bin.id = bin.id || `bin-${binIndex}`;
-                bin.elements?.forEach((element, elIndex) => {
+                const items = bin.items || [];
+                bin.items = items;
+                items.forEach((element, elIndex) => {
                     element.id = element.id || `element-${importedPage.id}-${bin.id}-${elIndex}`;
                 });
             });
+            importedPage.groups = groups;
             
             return importedPage;
         } catch (error) {
@@ -54,10 +58,10 @@ export class ImportService {
         const page = {
             id: pageId,
             title: options.pageTitle || 'Imported Page',
-            bins: [{
+            groups: [{
                 id: binId,
                 title: options.binTitle || 'Imported Bin',
-                elements: []
+                items: []
             }]
         };
         
@@ -107,7 +111,7 @@ export class ImportService {
                 }
             }
             
-            page.bins[0].elements.push(element);
+            page.groups[0].items.push(element);
         }
         
         return page;
@@ -154,27 +158,27 @@ export class ImportService {
         const page = {
             id: pageId,
             title: options.pageTitle || this.extractTitleFromMarkdown(markdownString) || 'Imported Page',
-            bins: [{
+            groups: [{
                 id: binId,
                 title: options.binTitle || 'Imported Bin',
-                elements: []
+                items: []
             }]
         };
         
         let currentElement = null;
-        let currentBin = page.bins[0];
+        let currentBin = page.groups[0];
         
         lines.forEach(line => {
             // Check for bin header (##)
             if (line.startsWith('## ')) {
                 const binTitle = line.substring(3).trim();
-                const newBinId = `bin-${page.bins.length}`;
+                const newBinId = `bin-${page.groups.length}`;
                 currentBin = {
                     id: newBinId,
                     title: binTitle,
-                    elements: []
+                    items: []
                 };
-                page.bins.push(currentBin);
+                page.groups.push(currentBin);
                 return;
             }
             
@@ -182,7 +186,7 @@ export class ImportService {
             const taskMatch = line.match(/^[\s-]*\[([ x])\]\s*(.+)$/);
             if (taskMatch) {
                 if (currentElement) {
-                    currentBin.elements.push(currentElement);
+                    currentBin.items.push(currentElement);
                 }
                 
                 currentElement = {
@@ -223,7 +227,7 @@ export class ImportService {
         });
         
         if (currentElement) {
-            currentBin.elements.push(currentElement);
+                currentBin.items.push(currentElement);
         }
         
         return page;
@@ -263,7 +267,7 @@ export class ImportService {
             const page = {
                 id: pageId,
                 title: trelloData.name || 'Imported from Trello',
-                bins: []
+                groups: []
             };
             
             // Trello boards have lists (columns) which become bins
@@ -272,7 +276,7 @@ export class ImportService {
                     const bin = {
                         id: `bin-${listIndex}`,
                         title: list.name || `List ${listIndex + 1}`,
-                        elements: []
+                        items: []
                     };
                     
                     // Find cards in this list
@@ -320,11 +324,11 @@ export class ImportService {
                                         });
                                 }
                                 
-                                bin.elements.push(element);
+                                bin.items.push(element);
                             });
                     }
                     
-                    page.bins.push(bin);
+                    page.groups.push(bin);
                 });
             }
             

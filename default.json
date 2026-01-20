@@ -1,12 +1,12 @@
 {
-  "pages": [
+  "documents": [
     {
       "id": "page-1",
-      "bins": [
+      "groups": [
         {
           "id": "bin-0",
           "title": "Thoughts",
-          "elements": [
+          "items": [
             {
               "type": "task",
               "text": "Talk to child, to present, to Emperor Adama",
@@ -156,7 +156,7 @@
         {
           "id": "bin-1",
           "title": "Chores",
-          "elements": [
+          "items": [
             {
               "type": "header",
               "text": "PREP",
@@ -717,12 +717,12 @@
         {
           "id": "bin-2",
           "title": "Work",
-          "elements": []
+          "items": []
         },
         {
           "id": "bin-3",
           "title": "Hobbies",
-          "elements": [
+          "items": [
             {
               "type": "header",
               "text": "New Header",

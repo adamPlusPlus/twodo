@@ -32,7 +32,7 @@ export class ThemeManager {
                 return {
                     global: themes.global || this.getDefaultTheme(),
                     views: themes.views || {},
-                    pages: themes.pages || {}
+                    documents: themes.documents || {}
                 };
             } catch (e) {
                 console.error('Failed to parse themes:', e);
@@ -41,7 +41,7 @@ export class ThemeManager {
         return {
             global: this.getDefaultTheme(),
             views: {},
-            pages: {}
+            documents: {}
         };
     }
     
@@ -120,8 +120,8 @@ export class ThemeManager {
         }
         
         // Apply page-specific theme if exists
-        if (this.themes.pages[pageId]) {
-            theme = this.mergeThemes(theme, this.themes.pages[pageId]);
+        if (this.themes.documents[pageId]) {
+            theme = this.mergeThemes(theme, this.themes.documents[pageId]);
         }
         
         return theme;
@@ -157,9 +157,9 @@ export class ThemeManager {
     setPageTheme(pageId, theme) {
         if (theme === null) {
             // Remove page theme (inherit from view/global)
-            delete this.themes.pages[pageId];
+            delete this.themes.documents[pageId];
         } else {
-            this.themes.pages[pageId] = this.mergeThemes(this.getDefaultTheme(), theme);
+            this.themes.documents[pageId] = this.mergeThemes(this.getDefaultTheme(), theme);
         }
         this.saveThemes();
         eventBus.emit('theme:updated', { type: 'page', pageId, theme });
@@ -176,7 +176,7 @@ export class ThemeManager {
      * Get page-specific theme (or null if inheriting)
      */
     getPageTheme(pageId) {
-        return this.themes.pages[pageId] || null;
+        return this.themes.documents[pageId] || null;
     }
     
     /**
@@ -300,8 +300,8 @@ export class ThemeManager {
             if (imported.views) {
                 this.themes.views = { ...this.themes.views, ...imported.views };
             }
-            if (imported.pages) {
-                this.themes.pages = { ...this.themes.pages, ...imported.pages };
+            if (imported.documents) {
+                this.themes.documents = { ...this.themes.documents, ...imported.documents };
             }
             this.saveThemes();
             eventBus.emit('theme:imported', { themes: this.themes });

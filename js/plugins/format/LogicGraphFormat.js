@@ -16,7 +16,7 @@ export default class LogicGraphFormat extends BaseFormatRenderer {
             supportsPages: true,
             supportsBins: false,
             version: '1.0.0',
-            description: 'Graph visualization of logical relationships between elements'
+            description: 'Graph visualization of logical relationships between items'
         });
     }
     

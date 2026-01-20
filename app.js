@@ -304,14 +304,15 @@ class TodoApp {
                 fileData = await Promise.race([loadPromise, timeoutPromise]);
             }
             
-            if (!fileData.pages || !Array.isArray(fileData.pages)) {
+            const documents = fileData.documents || [];
+            if (!documents || !Array.isArray(documents)) {
                 console.warn('Last opened file has invalid format, using default data');
                 localStorage.removeItem('twodo-last-opened-file');
                 return;
             }
             
             // Update app with loaded file data
-            this.appState.pages = fileData.pages;
+            this.appState.documents = documents;
             // Set timestamp to prevent stale sync data from overwriting freshly loaded data
             if (this.dataManager) {
                 this.dataManager._lastSyncTimestamp = Date.now();
@@ -353,8 +354,9 @@ class TodoApp {
             try {
                 // Load the file specified in URL
                 const fileData = await this.fileManager.loadFile(fileParam);
-                if (fileData.pages && Array.isArray(fileData.pages)) {
-                    this.appState.pages = fileData.pages;
+                const documents = fileData.documents || [];
+                if (documents && Array.isArray(documents)) {
+                    this.appState.documents = documents;
                     // Store as last opened file
                     localStorage.setItem('twodo-last-opened-file', fileParam);
                     console.log(`Loaded file from URL: ${fileParam}`);
@@ -531,18 +533,17 @@ class TodoApp {
         
         // Initialize plugins for existing pages and bins in parallel
         const initPromises = [];
-        for (const page of this.appState.pages) {
+        for (const page of this.appState.documents) {
             initPromises.push(
                 this.pagePluginManager.initializePagePlugins(page.id)
                     .catch(err => console.warn(`Failed to initialize page plugins for ${page.id}:`, err))
             );
-            if (page.bins) {
-                for (const bin of page.bins) {
+            const groups = page.groups || page.bins || [];
+            for (const bin of groups) {
                     initPromises.push(
                         this.binPluginManager.initializeBinPlugins(page.id, bin.id)
                             .catch(err => console.warn(`Failed to initialize bin plugins for ${page.id}/${bin.id}:`, err))
                     );
-                }
             }
         }
         // Wait for all plugin initializations in parallel
@@ -694,6 +695,20 @@ class TodoApp {
         }
         return { bins: {}, elements: {} };
     }
+
+    _getDocument(pageId) {
+        return this.appState.documents?.find(page => page.id === pageId) || null;
+    }
+
+    _getGroup(pageId, binId) {
+        const document = this._getDocument(pageId);
+        const group = document?.groups?.find(bin => bin.id === binId) || null;
+        if (!group) return null;
+        const items = group.items || group.elements || [];
+        group.items = items;
+        group.elements = items;
+        return group;
+    }
     
     // Animation method moved to AnimationRenderer.js
     animateMovements(oldPositions) {
@@ -765,11 +780,12 @@ class TodoApp {
     showContextMenu(e, pageId, binId, elementIndex, subtaskIndex = null) {
         // If binId not provided, try to find it
         if (!binId) {
-            binId = this.appState.activeBinId;
+            binId = this.appState.activeGroupId;
             if (!binId) {
-                const page = this.appState.pages.find(p => p.id === pageId);
-                if (page && page.bins && page.bins.length > 0) {
-                    binId = page.bins[0].id;
+                const page = this._getDocument(pageId);
+                const groups = page?.groups || page?.bins || [];
+                if (groups.length > 0) {
+                    binId = groups[0].id;
                 }
             }
         }
@@ -805,7 +821,7 @@ class TodoApp {
     }
     
     handleContextEdit() {
-        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex } = this.appState.contextMenuState;
         console.log('[handleContextEdit] Called with:', { pageId, binId, elementIndex, contextMenuState: this.appState.contextMenuState });
         
         if (pageId === null) {
@@ -813,7 +829,7 @@ class TodoApp {
             return;
         }
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) {
             console.warn('[handleContextEdit] Page not found:', pageId);
             return;
@@ -832,27 +848,31 @@ class TodoApp {
         
         if (isValidElementIndex) {
             // Edit element - find binId from contextMenuState or use active bin
-            let targetBinId = binId || this.appState.activeBinId;
+            let targetBinId = binId || this.appState.activeGroupId;
             if (!targetBinId) {
                 // Try to find bin containing this element
-                for (const bin of page.bins || []) {
-                    if (bin.elements && bin.elements[elementIndex]) {
+                const groups = page.groups || page.bins || [];
+                for (const bin of groups) {
+                    const items = bin.items || bin.elements || [];
+                    bin.items = items;
+                    bin.elements = items;
+                    if (items[elementIndex]) {
                         targetBinId = bin.id;
                         break;
                     }
                 }
-                if (!targetBinId && page.bins && page.bins.length > 0) {
-                    targetBinId = page.bins[0].id;
+                if (!targetBinId && groups.length > 0) {
+                    targetBinId = groups[0].id;
                 }
             }
-            const bin = page.bins?.find(b => b.id === targetBinId);
+            const bin = this._getGroup(pageId, targetBinId);
             if (!bin) {
                 console.warn('[handleContextEdit] Bin not found:', { pageId, targetBinId, elementIndex });
                 return;
             }
-            const element = bin.elements[elementIndex];
+            const element = bin.items[elementIndex];
             if (!element) {
-                console.warn('[handleContextEdit] Element not found:', { pageId, targetBinId, elementIndex, elementsLength: bin.elements?.length });
+                console.warn('[handleContextEdit] Element not found:', { pageId, targetBinId, elementIndex, elementsLength: bin.items?.length });
                 return;
             }
             this.showEditModal(pageId, targetBinId, elementIndex, element);
@@ -866,7 +886,7 @@ class TodoApp {
     }
     
     handleContextCustomizeVisuals() {
-        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex } = this.appState.contextMenuState;
         this.hideContextMenu();
         
         // Determine what we're customizing:
@@ -877,13 +897,17 @@ class TodoApp {
         
         if (this._isValidElementIndex(elementIndex) && pageId) {
             // Customize element visuals
-            const page = this.appState.pages.find(p => p.id === pageId);
+            const page = this._getDocument(pageId);
             if (!page) return;
             
-            let targetBinId = binId || this.appState.activeBinId;
+            let targetBinId = binId || this.appState.activeGroupId;
             if (!targetBinId) {
-                for (const bin of page.bins || []) {
-                    if (bin.elements && bin.elements[elementIndex]) {
+                const groups = page.groups || page.bins || [];
+                for (const bin of groups) {
+                    const items = bin.items || bin.elements || [];
+                    bin.items = items;
+                    bin.elements = items;
+                    if (items[elementIndex]) {
                         targetBinId = bin.id;
                         break;
                     }
@@ -901,14 +925,14 @@ class TodoApp {
             }
         } else if (binId !== null && binId !== undefined && pageId) {
             // Customize bin visuals
-            const pageFormat = this.appState.pages.find(p => p.id === pageId)?.format || 'default';
+            const pageFormat = this._getDocument(pageId)?.format || 'default';
             this.modalHandler.showVisualCustomizationModal('bin', binId, {
                 pageId: pageId,
                 viewFormat: pageFormat
             });
         } else if (pageId) {
             // Customize page visuals
-            const page = this.appState.pages.find(p => p.id === pageId);
+            const page = this._getDocument(pageId);
             const pageFormat = page?.format || 'default';
             this.modalHandler.showVisualCustomizationModal('page', pageId, {
                 viewFormat: pageFormat
@@ -921,9 +945,9 @@ class TodoApp {
     }
     
     async saveBinEdit(pageId, binId) {
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = this._getGroup(pageId, binId);
         if (!bin) return;
         
         const titleInput = document.getElementById('edit-bin-title');
@@ -952,7 +976,7 @@ class TodoApp {
     }
     
     async savePageEdit(pageId) {
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
         
         const titleInput = document.getElementById('edit-page-title');
@@ -993,7 +1017,7 @@ class TodoApp {
     }
     
     handleContextAddBin() {
-        const { pageId, binId } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId } = this.appState.contextMenuState;
         if (pageId === null) return;
         
         this.hideContextMenu();
@@ -1002,12 +1026,12 @@ class TodoApp {
     }
     
     handleContextDeleteBin() {
-        const { pageId, binId } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId } = this.appState.contextMenuState;
         if (pageId === null || binId === null) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = this._getGroup(pageId, binId);
         if (!bin) return;
         
         if (!confirm(`Delete bin "${bin.title || binId}"?`)) return;
@@ -1018,15 +1042,20 @@ class TodoApp {
     }
     
     handleContextAddSubtasks() {
-        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex } = this.appState.contextMenuState;
         if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        const groups = page.groups || page.bins || [];
+        const targetBinId = binId || this.appState.activeGroupId || (groups[0]?.id);
+        const bin = this._getGroup(pageId, targetBinId);
         if (!bin) return;
+        const items = bin.items || bin.elements || [];
+        bin.items = items;
+        bin.elements = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element) return;
         
         // Only tasks and header-checkbox can have subtasks
@@ -1041,15 +1070,19 @@ class TodoApp {
     }
     
     handleContextViewData() {
-        const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
         if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        const targetBinId = binId || this.appState.activeGroupId;
+        const bin = this._getGroup(pageId, targetBinId);
         if (!bin) return;
+        const items = bin.items || bin.elements || [];
+        bin.items = items;
+        bin.elements = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element) return;
         
         // If it's a subtask, show subtask data
@@ -1065,15 +1098,18 @@ class TodoApp {
     }
     
     handleContextDeleteElement() {
-        const { pageId, binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex, subtaskIndex } = this.appState.contextMenuState;
         if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const targetBinId = binId || this.appState.activeBinId;
+        const targetBinId = binId || this.appState.activeGroupId;
         if (!targetBinId) return;
-        const bin = page.bins?.find(b => b.id === targetBinId);
+        const bin = this._getGroup(pageId, targetBinId);
         if (!bin) return;
+        const items = bin.items || bin.elements || [];
+        bin.items = items;
+        bin.elements = items;
         
         this.hideContextMenu();
         
@@ -1093,7 +1129,7 @@ class TodoApp {
         
         // If it's a child or subtask, delete from parent's children/subtasks
         if (isChild && childIndex !== null) {
-            const parentElement = bin.elements[actualElementIndex];
+            const parentElement = items[actualElementIndex];
             if (parentElement && parentElement.children && parentElement.children[childIndex]) {
                 parentElement.children.splice(childIndex, 1);
                 // If no children remain, set children to empty array
@@ -1107,7 +1143,7 @@ class TodoApp {
             }
         } else if (subtaskIndex !== null) {
             // Legacy subtask support
-            const element = bin.elements[actualElementIndex];
+            const element = items[actualElementIndex];
             if (element && element.subtasks && element.subtasks[subtaskIndex]) {
                 element.subtasks.splice(subtaskIndex, 1);
                 if (element.subtasks.length === 0) {
@@ -1128,8 +1164,8 @@ class TodoApp {
             }
         } else {
             // Delete main element
-            if (bin.elements && bin.elements[actualElementIndex]) {
-                bin.elements.splice(actualElementIndex, 1);
+            if (items[actualElementIndex]) {
+                items.splice(actualElementIndex, 1);
                 this.dataManager.saveData();
                 this.render();
             }
@@ -1137,12 +1173,13 @@ class TodoApp {
     }
     
     handleContextAddElement() {
-        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex } = this.appState.contextMenuState;
         if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const targetBinId = binId || this.appState.activeBinId || (page.bins?.[0]?.id);
+        const groups = page.groups || page.bins || [];
+        const targetBinId = binId || this.appState.activeGroupId || (groups[0]?.id);
         if (!targetBinId) return;
         
         this.hideContextMenu();
@@ -1151,15 +1188,19 @@ class TodoApp {
     }
     
     handleContextAddChildElement() {
-        const { pageId, binId, elementIndex } = this.appState.contextMenuState;
+        const { documentId: pageId, groupId: binId, elementIndex } = this.appState.contextMenuState;
         if (pageId === null || !this._isValidElementIndex(elementIndex)) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        const targetBinId = binId || this.appState.activeGroupId;
+        const bin = this._getGroup(pageId, targetBinId);
         if (!bin) return;
+        const items = bin.items || bin.elements || [];
+        bin.items = items;
+        bin.elements = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element) return;
         
         // Check if element's children have their own children (one-level limit)
@@ -1175,7 +1216,6 @@ class TodoApp {
         this.hideContextMenu();
         // Show modal to select child element type, then add to element's children
         // Use binId from contextMenuState or find it
-        const targetBinId = binId || this.appState.activeBinId || (page.bins?.[0]?.id);
         if (targetBinId) {
             this.showAddChildElementModal(pageId, targetBinId, elementIndex);
         }
@@ -1186,17 +1226,20 @@ class TodoApp {
     }
     
     addElementAfter(pageId, binId, elementIndex, elementType) {
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
         
-        const bin = page.bins?.find(b => b.id === (binId || this.appState.activeBinId));
+        const targetBinId = binId || this.appState.activeGroupId;
+        const bin = this._getGroup(pageId, targetBinId);
         if (!bin) return;
-        if (!bin.elements) bin.elements = [];
+        const items = bin.items || bin.elements || [];
+        bin.items = items;
+        bin.elements = items;
         
         const newElement = this.elementManager.createElementTemplate(elementType);
         // Insert after the clicked element (at elementIndex + 1)
         const insertIndex = elementIndex + 1;
-        bin.elements.splice(insertIndex, 0, newElement);
+        items.splice(insertIndex, 0, newElement);
         this.dataManager.saveData();
         this.render();
     }
@@ -1207,9 +1250,9 @@ class TodoApp {
     }
     
     handleContextAddElementPage() {
-        const { pageId, binId } = this.appState.contextMenuState;
-        const targetPageId = pageId || this.activePageId;
-        const targetBinId = binId || this.appState.activeBinId;
+        const { documentId: pageId, groupId: binId } = this.appState.contextMenuState;
+        const targetPageId = pageId || this.appState.currentDocumentId;
+        const targetBinId = binId || this.appState.activeGroupId;
         
         if (!targetPageId || !targetBinId) {
             this.hideContextMenu();
@@ -1221,15 +1264,15 @@ class TodoApp {
     }
     
     handleContextDeletePage() {
-        const { pageId } = this.appState.contextMenuState;
-        const targetPageId = pageId || this.activePageId;
+        const { documentId: pageId } = this.appState.contextMenuState;
+        const targetPageId = pageId || this.appState.currentDocumentId;
         
         if (!targetPageId) {
             this.hideContextMenu();
             return;
         }
         
-        const page = this.appState.pages.find(p => p.id === targetPageId);
+        const page = this._getDocument(targetPageId);
         if (!page) {
             this.hideContextMenu();
             return;
@@ -1253,9 +1296,9 @@ class TodoApp {
         this.hideContextMenu();
         
         // Collapse all pages
-        this.appState.pages.forEach(page => {
+        this.appState.documents.forEach(page => {
             // Set page state to collapsed
-            this.pageStates[page.id] = false;
+            this.appState.documentStates[page.id] = false;
         });
         
         // Update UI for all pages using querySelector to ensure we get all
@@ -1272,19 +1315,19 @@ class TodoApp {
     }
     
     handleContextCollapsePage() {
-        const { pageId } = this.appState.contextMenuState;
+        const { documentId: pageId } = this.appState.contextMenuState;
         if (pageId === null) return;
         
-        const page = this.appState.pages.find(p => p.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
         
         // Toggle page collapse state
-        const pageStates = this.appState.pageStates || {};
+        const pageStates = this.appState.documentStates || {};
         if (!(pageId in pageStates)) {
-            this.appState.setPageState(pageId, true);
+            this.appState.setDocumentState(pageId, true);
         } else {
-            const currentState = this.appState.getPageState(pageId);
-            this.appState.setPageState(pageId, !currentState);
+            const currentState = this.appState.getDocumentState(pageId);
+            this.appState.setDocumentState(pageId, !currentState);
         }
         
         this.hideContextMenu();
@@ -1297,7 +1340,7 @@ class TodoApp {
         const content = document.getElementById(pageContentId);
         
         if (arrow && content) {
-            const isExpanded = this.pageStates[pageId];
+            const isExpanded = this.appState.documentStates?.[pageId];
             arrow.textContent = isExpanded ? '▼' : '▶';
             content.style.display = isExpanded ? 'block' : 'none';
         }
@@ -1306,11 +1349,12 @@ class TodoApp {
     showEditModal(pageId, binId, elementIndex, element) {
         // If binId not provided, try to find it from active bin or element location
         if (!binId) {
-            binId = this.appState.activeBinId;
+            binId = this.appState.activeGroupId;
             if (!binId) {
-                const page = this.appState.pages.find(p => p.id === pageId);
-                if (page && page.bins && page.bins.length > 0) {
-                    binId = page.bins[0].id;
+                const page = this._getDocument(pageId);
+                const groups = page?.groups || page?.bins || [];
+                if (groups.length > 0) {
+                    binId = groups[0].id;
                 }
             }
         }

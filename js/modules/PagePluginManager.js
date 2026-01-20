@@ -37,7 +37,7 @@ export class PagePluginManager {
      */
     async initializePagePlugins(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
         const enabledPlugins = page.plugins || [];
@@ -76,7 +76,7 @@ export class PagePluginManager {
      */
     async enablePlugin(pageId, pluginId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
         const plugin = pluginRegistry.get(pluginId);
@@ -130,7 +130,7 @@ export class PagePluginManager {
      */
     async disablePlugin(pageId, pluginId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
         const success = await pluginRegistry.disable(pluginId);
@@ -186,7 +186,7 @@ export class PagePluginManager {
      */
     renderPluginUI(container, pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
         const availablePlugins = this.getAvailablePlugins();
@@ -258,7 +258,7 @@ export class PagePluginManager {
                     class: `plugin-content plugin-${plugin.id}`
                 });
                 const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
                 plugin.render(pluginContainer, page);
                 container.appendChild(pluginContainer);
             }

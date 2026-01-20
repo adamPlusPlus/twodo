@@ -13,6 +13,20 @@ export class DragDropHandler {
     _getAppState() {
         return getService(SERVICES.APP_STATE);
     }
+
+    _getDocument(pageId) {
+        const appState = this._getAppState();
+        return appState.documents?.find(page => page.id === pageId) || null;
+    }
+
+    _getGroup(pageId, binId) {
+        const document = this._getDocument(pageId);
+        const group = document?.groups?.find(bin => bin.id === binId) || null;
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return group;
+    }
     
     _getUndoRedoManager() {
         return getService(SERVICES.UNDO_REDO_MANAGER);
@@ -32,23 +46,25 @@ export class DragDropHandler {
     
     moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
         const appState = this._getAppState();
-        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
+        const sourcePage = appState.documents.find(p => p.id === sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
         }
         
-        const sourceBin = sourcePage.bins?.find(b => b.id === sourceBinId);
+        const sourceBin = sourcePage.groups?.find(b => b.id === sourceBinId);
         if (!sourceBin) {
             console.error('Source bin not found:', sourceBinId);
             return;
         }
+        const sourceItems = sourceBin.items || [];
+        sourceBin.items = sourceItems;
         
         let element;
         
         // Handle children being moved
         if (isChild && parentElementIndex !== null && childIndex !== null) {
-            const parentElement = sourceBin.elements[parentElementIndex];
+            const parentElement = sourceItems[parentElementIndex];
             if (!parentElement || !parentElement.children || !parentElement.children[childIndex]) {
                 console.error('Source child element not found:', childIndex, 'in parent', parentElementIndex);
                 return;
@@ -62,63 +78,65 @@ export class DragDropHandler {
             }
         } else {
             // Regular element move
-            if (!sourceBin.elements[sourceElementIndex]) {
+            if (!sourceItems[sourceElementIndex]) {
                 console.error('Source element not found:', sourceElementIndex, 'in bin', sourceBinId);
                 return;
             }
-            element = sourceBin.elements[sourceElementIndex];
+            element = sourceItems[sourceElementIndex];
             // Remove from source
-            sourceBin.elements.splice(sourceElementIndex, 1);
+            sourceItems.splice(sourceElementIndex, 1);
         }
         
         // Add to target
-        const targetPage = appState.pages.find(p => p.id === targetPageId);
+        const targetPage = appState.documents.find(p => p.id === targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceBin.elements[parentElementIndex];
+                const parentElement = sourceItems[parentElementIndex];
                 if (parentElement) {
                     if (!parentElement.children) parentElement.children = [];
                     parentElement.children.splice(childIndex, 0, element);
                 }
             } else {
-                sourceBin.elements.splice(sourceElementIndex, 0, element);
+                sourceItems.splice(sourceElementIndex, 0, element);
             }
             return;
         }
         
-        const targetBin = targetPage.bins?.find(b => b.id === targetBinId);
+        const targetBin = targetPage.groups?.find(b => b.id === targetBinId);
         if (!targetBin) {
             console.error('Target bin not found:', targetBinId);
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceBin.elements[parentElementIndex];
+                const parentElement = sourceItems[parentElementIndex];
                 if (parentElement) {
                     if (!parentElement.children) parentElement.children = [];
                     parentElement.children.splice(childIndex, 0, element);
                 }
             } else {
-                sourceBin.elements.splice(sourceElementIndex, 0, element);
+                sourceItems.splice(sourceElementIndex, 0, element);
             }
             return;
         }
+        const targetItems = targetBin.items || [];
+        targetBin.items = targetItems;
         
         // Adjust target index if moving within same bin
-        // User wants elements to be placed ABOVE the target element
+        // User wants items to be placed ABOVE the target item
         let adjustedTargetIndex = targetElementIndex;
         if (isChild && parentElementIndex !== null) {
             // When un-nesting a child element:
-            // - The element is removed from parent's children array (doesn't affect elements array)
-            // - We need to adjust if the parent's position in elements array is before the target
+            // - The item is removed from parent's children array (doesn't affect items array)
+            // - We need to adjust if the parent's position in items array is before the target
             // - If parent is at index X and target is at index Y where X < Y, we don't need to adjust
-            //   because removing from children doesn't change the elements array indices
+            //   because removing from children doesn't change the items array indices
             // - However, if we're moving to a position after the parent, we need to account for it
-            // Actually, since we're removing from children (not elements), we only need to adjust
-            // if the parent element itself was removed, which doesn't happen here.
+            // Actually, since we're removing from children (not items), we only need to adjust
+            // if the parent item itself was removed, which doesn't happen here.
             // So no adjustment needed for un-nesting children.
-            // IMPORTANT: When un-nesting, we're inserting into the elements array, so we can insert
-            // at any valid index (0 to elements.length). No adjustment needed.
+            // IMPORTANT: When un-nesting, we're inserting into the items array, so we can insert
+            // at any valid index (0 to items.length). No adjustment needed.
         } else if (!isChild && sourcePageId === targetPageId && sourceBinId === targetBinId) {
             // Normal move within same bin: place ABOVE target element
             // splice inserts BEFORE the specified index, so to place above target:
@@ -140,18 +158,18 @@ export class DragDropHandler {
         // Ensure index is valid
         // For splice, we can insert at any index from 0 to array.length (inclusive)
         // array.length is valid and will append to the end
-        const maxValidIndex = targetBin.elements.length; // Can insert at this index (appends to end)
+        const maxValidIndex = targetItems.length; // Can insert at this index (appends to end)
         const beforeClamp = adjustedTargetIndex;
         adjustedTargetIndex = Math.max(0, Math.min(adjustedTargetIndex, maxValidIndex));
         
         // Special case: when un-nesting a child, if we calculated targetIndex as parentIndex + 1
-        // but it got clamped, we need to allow insertion at elements.length (which is valid for splice)
+        // but it got clamped, we need to allow insertion at items.length (which is valid for splice)
         // This happens when the parent is the last element in the array
         if (isChild && parentElementIndex !== null && targetElementIndex === parentElementIndex + 1) {
             // We want to place after the parent (parentIndex + 1)
-            // If it was clamped, use elements.length to append after the parent
+            // If it was clamped, use items.length to append after the parent
             if (adjustedTargetIndex !== targetElementIndex && adjustedTargetIndex === parentElementIndex) {
-                adjustedTargetIndex = targetBin.elements.length;
+                adjustedTargetIndex = targetItems.length;
             }
         }
         
@@ -168,7 +186,7 @@ export class DragDropHandler {
                 }
             }
         } else {
-            // For regular elements, find by source index
+            // For regular items, find by source index
             const sourceElement = document.querySelector(`[data-page-id="${sourcePageId}"][data-bin-id="${sourceBinId}"][data-element-index="${sourceElementIndex}"]:not([data-is-child="true"])`);
             if (sourceElement) {
                 const rect = sourceElement.getBoundingClientRect();
@@ -176,7 +194,8 @@ export class DragDropHandler {
             }
         }
         
-        targetBin.elements.splice(adjustedTargetIndex, 0, element);
+        targetItems.splice(adjustedTargetIndex, 0, element);
+        targetBin.items = targetItems;
         
         // Record undo/redo change
         const undoRedoManager = this._getUndoRedoManager();
@@ -218,18 +237,15 @@ export class DragDropHandler {
             oldPosition: oldPosition // Store the captured old position
         };
         // Log resulting structure
-        const resultPage = appState.pages.find(p => p.id === targetPageId);
-        const resultBin = resultPage?.bins?.find(b => b.id === targetBinId);
-        const resultElement = resultBin?.elements[adjustedTargetIndex];
+        const resultBin = this._getGroup(targetPageId, targetBinId);
+        const resultElement = resultBin?.items?.[adjustedTargetIndex];
         const resultText = resultElement?.text || 'N/A';
         
         // If we un-nested a child, check if parent still has children
         let parentChildrenInfo = 'N/A';
         if (isChild && parentElementIndex !== null) {
-            const appState = this._getAppState();
-        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
-            const sourceBin = sourcePage?.bins?.find(b => b.id === sourceBinId);
-            const parentElement = sourceBin?.elements[parentElementIndex];
+            const sourceBin = this._getGroup(sourcePageId, sourceBinId);
+            const parentElement = sourceBin?.items?.[parentElementIndex];
             if (parentElement) {
                 const childrenCount = parentElement.children?.length || 0;
                 parentChildrenInfo = `${childrenCount} child${childrenCount !== 1 ? 'ren' : ''} (${parentElement.children ? 'array exists' : 'no array'})`;
@@ -257,20 +273,19 @@ export class DragDropHandler {
     }
 
     reorderChildElement(pageId, binId, parentElementIndex, sourceChildIndex, targetChildIndex) {
-        const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-        if (!page) {
+        const document = this._getDocument(pageId);
+        if (!document) {
             console.error('Page not found:', pageId);
             return;
         }
 
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = this._getGroup(pageId, binId);
         if (!bin) {
             console.error('Bin not found:', binId);
             return;
         }
 
-        const parentElement = bin.elements[parentElementIndex];
+        const parentElement = bin.items[parentElementIndex];
         if (!parentElement || !parentElement.children || !parentElement.children[sourceChildIndex]) {
             console.error('Parent element or child not found:', parentElementIndex, sourceChildIndex);
             return;
@@ -323,34 +338,37 @@ export class DragDropHandler {
 
     nestElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null, elementToNest = null) {
         
-        const appState = this._getAppState();
-        const sourcePage = appState.pages.find(p => p.id === sourcePageId);
+        const sourcePage = this._getDocument(sourcePageId);
         if (!sourcePage) {
             console.error('Source page not found:', sourcePageId);
             return;
         }
         
-        const sourceBin = sourcePage.bins?.find(b => b.id === sourceBinId);
+        const sourceBin = this._getGroup(sourcePageId, sourceBinId);
         if (!sourceBin) {
             console.error('Source bin not found:', sourceBinId);
             return;
         }
+        const sourceItems = sourceBin.items || [];
+        sourceBin.items = sourceItems;
         
         // Reuse appState from line 316
-        const targetPage = appState.pages.find(p => p.id === targetPageId);
+        const targetPage = this._getDocument(targetPageId);
         if (!targetPage) {
             console.error('Target page not found:', targetPageId);
             return;
         }
         
-        const targetBin = targetPage.bins?.find(b => b.id === targetBinId);
+        const targetBin = this._getGroup(targetPageId, targetBinId);
         if (!targetBin) {
             console.error('Target bin not found:', targetBinId);
             return;
         }
+        const targetItems = targetBin.items || [];
+        targetBin.items = targetItems;
         
-        if (!targetBin.elements[targetElementIndex]) {
-            console.error('Target element not found:', targetElementIndex, 'in bin', targetBinId);
+        if (!targetItems[targetElementIndex]) {
+            console.error('Target item not found:', targetElementIndex, 'in bin', targetBinId);
             return;
         }
         
@@ -364,10 +382,10 @@ export class DragDropHandler {
             sourceChildText = element.text || 'N/A';
         } else if (isChild && parentElementIndex !== null && childIndex !== null) {
             // Handle children being nested
-            const parentElement = sourceBin.elements[parentElementIndex];
+            const parentElement = sourceItems[parentElementIndex];
             if (!parentElement) {
                 console.error('Source parent element not found at index:', parentElementIndex, 'in bin', sourceBinId);
-                console.error('Available elements:', sourceBin.elements.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
+                console.error('Available items:', sourceItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
                 return;
             }
             sourceParentText = parentElement.text || 'N/A';
@@ -391,38 +409,38 @@ export class DragDropHandler {
             }
         } else {
             // Regular element nesting
-            if (!sourceBin.elements[sourceElementIndex]) {
+            if (!sourceItems[sourceElementIndex]) {
                 console.error('Source element not found:', sourceElementIndex, 'in bin', sourceBinId);
-                console.error('Available elements:', sourceBin.elements.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
+                console.error('Available items:', sourceItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
                 return;
             }
-            element = sourceBin.elements[sourceElementIndex];
+            element = sourceItems[sourceElementIndex];
             sourceChildText = element.text || 'N/A';
             // Remove from source
-            sourceBin.elements.splice(sourceElementIndex, 1);
+            sourceItems.splice(sourceElementIndex, 1);
         }
         
-        // Adjust target index if source element was removed from elements array and was before target
-        // (This only applies to regular elements, not children, since children are removed from children array)
+        // Adjust target index if source item was removed from items array and was before target
+        // (This only applies to regular items, not children, since children are removed from children array)
         let adjustedTargetElementIndex = targetElementIndex;
         if (!isChild && sourcePageId === targetPageId && sourceBinId === targetBinId && sourceElementIndex < targetElementIndex) {
-            // Source was removed from elements array, so target index shifts down by 1
+            // Source was removed from items array, so target index shifts down by 1
             adjustedTargetElementIndex = targetElementIndex - 1;
         }
         
-        const targetElement = targetBin.elements[adjustedTargetElementIndex];
+        const targetElement = targetItems[adjustedTargetElementIndex];
         if (!targetElement) {
             console.error('Target element not found at index:', targetElementIndex, 'in bin', targetBinId);
-            console.error('Available elements:', targetBin.elements.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
+            console.error('Available items:', targetItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceBin.elements[parentElementIndex];
+                const parentElement = sourceItems[parentElementIndex];
                 if (parentElement) {
                     if (!parentElement.children) parentElement.children = [];
                     parentElement.children.splice(childIndex, 0, element);
                 }
             } else {
-                sourceBin.elements.splice(sourceElementIndex, 0, element);
+                sourceItems.splice(sourceElementIndex, 0, element);
             }
             return;
         }
@@ -431,15 +449,15 @@ export class DragDropHandler {
         // Skip this check if elementToNest is provided (element already removed from array)
         // Compare actual element objects, not just indices (indices can be stale after moves)
         if (!elementToNest && !isChild && sourcePageId === targetPageId && sourceBinId === targetBinId) {
-            const targetElementForCheck = targetBin.elements[adjustedTargetElementIndex];
+            const targetElementForCheck = targetItems[adjustedTargetElementIndex];
             
             // Only prevent if the actual element objects are the same
             // Compare the element we're nesting with the target element
             if (element && targetElementForCheck && element === targetElementForCheck) {
                 console.error('Cannot nest: cannot nest element into itself');
                 // Re-add element to source (though it's already there, this is defensive)
-                if (!sourceBin.elements[sourceElementIndex]) { // Check if it's actually missing
-                    sourceBin.elements.splice(sourceElementIndex, 0, element);
+                if (!sourceItems[sourceElementIndex]) { // Check if it's actually missing
+                    sourceItems.splice(sourceElementIndex, 0, element);
                 }
                 return;
             }
@@ -452,7 +470,7 @@ export class DragDropHandler {
             if (actualParentIndex === adjustedTargetElementIndex) {
                 console.error('Cannot nest: cannot nest a child into its own parent');
                 // Re-add element to source
-                const parentElement = sourceBin.elements[actualParentIndex];
+                const parentElement = sourceItems[actualParentIndex];
                 if (parentElement) {
                     if (!parentElement.children) parentElement.children = [];
                     parentElement.children.splice(childIndex, 0, element);
@@ -481,13 +499,13 @@ export class DragDropHandler {
             console.error('Cannot nest: target is a descendant of source (circular nesting prevented)');
             // Re-add element to source
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceBin.elements[parentElementIndex];
+                const parentElement = sourceItems[parentElementIndex];
                 if (parentElement) {
                     if (!parentElement.children) parentElement.children = [];
                     parentElement.children.splice(childIndex, 0, element);
                 }
             } else {
-                sourceBin.elements.splice(sourceElementIndex, 0, element);
+                sourceItems.splice(sourceElementIndex, 0, element);
             }
             return;
         }
@@ -501,13 +519,13 @@ export class DragDropHandler {
                 console.error('Cannot nest: target has children with their own children (one-level limit enforced)');
                 // Re-add element to source
                 if (isChild && parentElementIndex !== null) {
-                    const parentElement = sourceBin.elements[parentElementIndex];
+                    const parentElement = sourceItems[parentElementIndex];
                     if (parentElement) {
                         if (!parentElement.children) parentElement.children = [];
                         parentElement.children.splice(childIndex, 0, element);
                     }
                 } else {
-                    sourceBin.elements.splice(sourceElementIndex, 0, element);
+                    sourceItems.splice(sourceElementIndex, 0, element);
                 }
                 return;
             }
@@ -522,7 +540,7 @@ export class DragDropHandler {
         targetElement.children.push(element);
         
         // Log resulting structure
-        const resultElement = targetBin.elements[adjustedTargetElementIndex];
+        const resultElement = targetItems[adjustedTargetElementIndex];
         const resultText = resultElement?.text || 'N/A';
         const dataManager = this._getDataManager();
         if (dataManager) {
@@ -590,12 +608,13 @@ export class DragDropHandler {
             
             if (dragData.type === 'element') {
                 // Delete element
-                const page = appState.pages.find(p => p.id === dragData.pageId);
-                const bin = page?.bins?.find(b => b.id === dragData.binId);
+                const bin = this._getGroup(dragData.pageId, dragData.binId);
                 if (bin) {
+                    const items = bin.items || [];
+                    bin.items = items;
                     if (dragData.isChild && dragData.parentElementIndex !== null && dragData.childIndex !== null) {
                         // Delete child element
-                        const parentElement = bin.elements[dragData.parentElementIndex];
+                        const parentElement = items[dragData.parentElementIndex];
                         if (parentElement && parentElement.children) {
                             const deletedChild = parentElement.children[dragData.childIndex];
                             // Record undo/redo change
@@ -615,13 +634,14 @@ export class DragDropHandler {
                         }
                     } else {
                         // Delete regular element
-                        const deletedElement = bin.elements[dragData.elementIndex];
+                        const deletedElement = items[dragData.elementIndex];
                         // Record undo/redo change
                         const undoRedoManager = this._getUndoRedoManager();
                         if (undoRedoManager && deletedElement) {
                             undoRedoManager.recordElementDelete(dragData.pageId, dragData.binId, dragData.elementIndex, deletedElement);
                         }
-                        bin.elements.splice(dragData.elementIndex, 1);
+                        items.splice(dragData.elementIndex, 1);
+                        bin.items = items;
                     }
                     const dataManager = this._getDataManager();
         if (dataManager) {
@@ -637,7 +657,7 @@ export class DragDropHandler {
                 }
             } else if (dragData.type === 'page') {
                 // Delete page (only if more than one page exists)
-                if (appState.pages.length > 1) {
+                if (appState.documents.length > 1) {
                     const pageManager = getService(SERVICES.PAGE_MANAGER);
                     if (pageManager) {
                         pageManager.deletePage(dragData.pageId);

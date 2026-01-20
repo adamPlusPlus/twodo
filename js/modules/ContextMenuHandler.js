@@ -72,11 +72,11 @@ export class ContextMenuHandler {
         
         // If binId not provided, try to find it
         if (!binId) {
-            binId = appState.activeBinId;
+            binId = appState.activeGroupId;
             if (!binId) {
-                const page = appState.pages.find(p => p.id === pageId);
-                if (page && page.bins && page.bins.length > 0) {
-                    binId = page.bins[0].id;
+                const page = appState.documents.find(p => p.id === pageId);
+                if (page && page.groups && page.groups.length > 0) {
+                    binId = page.groups[0].id;
                 }
             }
         }
@@ -86,8 +86,8 @@ export class ContextMenuHandler {
         if (appState.setContextMenuState) {
             appState.setContextMenuState({
                 visible: true,
-                pageId: pageId,
-                binId: binId,
+                documentId: pageId,
+                groupId: binId,
                 elementIndex: elementIndex,
                 subtaskIndex: subtaskIndex,
                 x: e.clientX,
@@ -132,9 +132,13 @@ export class ContextMenuHandler {
         
         // Check if element already has children (one-level limit)
         // Reuse appState from line 57
-        const page = appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const element = bin && bin.elements && bin.elements[elementIndex] ? bin.elements[elementIndex] : null;
+        const page = appState.documents.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        const items = bin?.items || [];
+        if (bin) {
+            bin.items = items;
+        }
+        const element = bin && items && items[elementIndex] ? items[elementIndex] : null;
         const hasChildren = element && element.children && element.children.length > 0;
         
         if (subtaskIndex !== null || (typeof elementIndex === 'string' && elementIndex.includes('-'))) {
@@ -156,9 +160,9 @@ export class ContextMenuHandler {
         // Update "Collapse Page" / "Expand Page" text based on current state
         if (collapsePageMenuItem && pageId && subtaskIndex === null) {
             // Check bin states for page collapse state (pages are collapsed if all bins are collapsed)
-            const page = appState.pages.find(p => p.id === pageId);
-            const isExpanded = page && page.bins && page.bins.some(bin => {
-                const binState = appState.getBinState(bin.id);
+            const page = appState.documents.find(p => p.id === pageId);
+            const isExpanded = page && page.groups && page.groups.some(bin => {
+                const binState = appState.getGroupState ? appState.getGroupState(bin.id) : appState.groupStates?.[bin.id];
                 return binState !== 'collapsed';
             });
             collapsePageMenuItem.textContent = isExpanded ? 'Collapse Page' : 'Expand Page';
@@ -310,7 +314,7 @@ export class ContextMenuHandler {
             }
         }
         if (!pageIdToUse) {
-            pageIdToUse = appState.currentPageId;
+            pageIdToUse = appState.currentDocumentId;
         }
         
         // Update "Toggle All Subtasks" text based on current state

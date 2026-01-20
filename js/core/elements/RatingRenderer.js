@@ -23,6 +23,14 @@ export class RatingRenderer {
      * @returns {void}
      */
     render(div, pageId, binId, element, elementIndex, depth, renderChildren) {
+        const getRatingElement = () => {
+        const document = this.app.appState.documents?.find(page => page.id === pageId);
+        const group = document?.groups?.find(bin => bin.id === binId);
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return items[elementIndex];
+        };
         // Initialize rating state if needed
         if (element.rating === undefined) element.rating = 0;
         if (element.review === undefined) element.review = '';
@@ -60,9 +68,7 @@ export class RatingRenderer {
         star.style.color = i <= (element.rating || 0) ? '#ffd700' : '#888';
         star.onclick = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const ratingElement = bin?.elements[elementIndex];
+        const ratingElement = getRatingElement();
         if (ratingElement) {
         ratingElement.rating = i;
         // Update all stars

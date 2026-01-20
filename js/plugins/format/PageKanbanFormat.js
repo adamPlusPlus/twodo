@@ -1,4 +1,4 @@
-// PageKanbanFormat - Format renderer for page-level Kanban view (bins as columns, elements as cards)
+// PageKanbanFormat - Format renderer for page-level Kanban view (groups as columns, items as cards)
 import { BaseFormatRenderer } from '../../core/BaseFormatRenderer.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
@@ -11,7 +11,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             name: 'Page Kanban Board',
             formatName: 'page-kanban-format',
             version: '1.0.0',
-            description: 'Kanban board view with bins as columns and elements as cards',
+            description: 'Kanban board view with groups as columns and items as cards',
             supportsPages: true,
             defaultConfig: {
                 enabled: false,
@@ -33,6 +33,16 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         
         // Emit event for registration - FormatRendererManager listens to this
         eventBus.emit('format:registered', { pluginId: this.id });
+    }
+
+    _getGroups(page) {
+        return page?.groups || [];
+    }
+
+    _getItems(bin) {
+        const items = bin.items || [];
+        bin.items = items;
+        return items;
     }
     
     /**
@@ -63,9 +73,10 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             color: var(--page-color);
         `;
         
-        if (!page.bins || page.bins.length === 0) {
+        const groups = this._getGroups(page);
+        if (!groups.length) {
             if (!app._preservingFormat) {
-                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No bins available. Add bins to see them as Kanban columns.</p>`;
+                container.innerHTML = `<p style="color: var(--header-color, #888); padding: 20px; font-family: var(--page-font-family);">No groups available. Add groups to see them as Kanban columns.</p>`;
             }
             return;
         }
@@ -73,29 +84,30 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         // If preserving format, update existing columns instead of clearing
         if (app._preservingFormat && container.children.length > 0) {
             // Update existing columns - find and update each column
-            page.bins.forEach((bin, index) => {
+            groups.forEach((bin, index) => {
                 const existingColumn = container.querySelector(`[data-bin-id="${bin.id}"]`);
                 if (existingColumn) {
                     // Update existing column content
                     const content = existingColumn.querySelector('.kanban-column-content');
                     if (content) {
                         content.innerHTML = '';
-                        if (bin.elements && bin.elements.length > 0) {
-                            bin.elements.forEach((element, elementIndex) => {
+                        const items = this._getItems(bin);
+                        if (items.length > 0) {
+                            items.forEach((element, elementIndex) => {
                                 const card = this.renderCard(element, page.id, bin.id, elementIndex, app);
                                 content.appendChild(card);
                             });
                         } else {
                             const emptyState = DOMUtils.createElement('div', {
                                 style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px); font-family: var(--element-font-family);`
-                            }, 'No elements');
+                            }, 'No items');
                             content.appendChild(emptyState);
                         }
                         
                         // Update count
                         const countElement = existingColumn.querySelector('.kanban-column-count');
                         if (countElement) {
-                            countElement.textContent = (bin.elements?.length || 0).toString();
+                            countElement.textContent = items.length.toString();
                         }
                     }
                 } else {
@@ -105,18 +117,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                 }
             });
             
-            // Remove columns for bins that no longer exist
+            // Remove columns for groups that no longer exist
             const existingColumns = container.querySelectorAll('.kanban-column');
             existingColumns.forEach(col => {
                 const binId = col.dataset.binId;
-                if (!page.bins.find(b => b.id === binId)) {
+                if (!groups.find(b => b.id === binId)) {
                     col.remove();
                 }
             });
         } else {
             // Full render - clear and rebuild
             container.innerHTML = '';
-            page.bins.forEach(bin => {
+            groups.forEach(bin => {
                 const column = this.renderColumn(bin, page.id, app);
                 container.appendChild(column);
             });
@@ -176,7 +188,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         const count = DOMUtils.createElement('span', {
             class: 'kanban-column-count',
             style: `background: var(--bg-color, #1a1a1a); padding: 4px 10px; border-radius: 12px; font-size: 12px; color: var(--header-color, #888);`
-        }, (bin.elements?.length || 0).toString());
+        }, this._getItems(bin).length.toString());
         
         header.appendChild(title);
         header.appendChild(count);
@@ -197,9 +209,10 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             max-height: calc(100vh - 250px);
         `;
         
-        // Render elements as cards
-        if (bin.elements && bin.elements.length > 0) {
-            bin.elements.forEach((element, elementIndex) => {
+        // Render items as cards
+        const items = this._getItems(bin);
+        if (items.length > 0) {
+            items.forEach((element, elementIndex) => {
                 const card = this.renderCard(element, pageId, bin.id, elementIndex, app);
                 content.appendChild(card);
             });
@@ -207,7 +220,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             // Empty state
             const emptyState = DOMUtils.createElement('div', {
                 style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px);`
-            }, 'No elements');
+            }, 'No items');
             content.appendChild(emptyState);
         }
         
@@ -317,10 +330,12 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             
             checkbox.addEventListener('change', (e) => {
                 e.stopPropagation();
-                const page = app.pages.find(p => p.id === pageId);
-                const bin = page?.bins?.find(b => b.id === binId);
-                if (bin && bin.elements[elementIndex]) {
-                    bin.elements[elementIndex].completed = e.target.checked;
+                const page = app.documents?.find(p => p.id === pageId) ||
+                    app.appState?.documents?.find(p => p.id === pageId);
+                const bin = page?.groups?.find(b => b.id === binId);
+                const items = bin ? this._getItems(bin) : [];
+                if (items[elementIndex]) {
+                    items[elementIndex].completed = e.target.checked;
                     app.dataManager.saveData();
                     // Preserve format during re-render
                     app._preservingFormat = true;
@@ -351,7 +366,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             // Apply visual settings
             if (app.visualSettingsManager) {
                 const elementId = `${pageId}-${binId}-${elementIndex}`;
-                const page = app.appState?.pages?.find(p => p.id === pageId);
+                const page = app.appState?.documents?.find(p => p.id === pageId);
                 const viewFormat = page?.format || 'default';
                 app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
             }
@@ -454,7 +469,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             cardContent.appendChild(deadlineDiv);
         }
         
-        // Child elements (subelements)
+        // Child items (subitems)
         if (element.children && Array.isArray(element.children) && element.children.length > 0) {
             const childrenContainer = DOMUtils.createElement('div', {
                 style: 'margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a2a;'
@@ -591,14 +606,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             try {
                 const dragPayload = JSON.parse(e.dataTransfer.getData('text/plain'));
                 
+                const sourcePage = app.documents?.find(p => p.id === dragPayload.pageId) ||
+                    app.appState?.documents?.find(p => p.id === dragPayload.pageId);
+                const targetPage = app.documents?.find(p => p.id === pageId) ||
+                    app.appState?.documents?.find(p => p.id === pageId);
+                const sourceBin = sourcePage?.groups?.find(b => b.id === dragPayload.binId);
+                const targetBin = targetPage?.groups?.find(b => b.id === binId);
+                const sourceItems = sourceBin ? this._getItems(sourceBin) : [];
+                const targetItems = targetBin ? this._getItems(targetBin) : [];
+
                 if (dragPayload.type === 'kanban-card') {
                     // Use DragDropHandler for proper element movement (handles children, relationships, etc.)
-                    const sourcePage = app.pages.find(p => p.id === dragPayload.pageId);
-                    const sourceBin = sourcePage?.bins?.find(b => b.id === dragPayload.binId);
-                    const targetPage = app.pages.find(p => p.id === pageId);
-                    const targetBin = targetPage?.bins?.find(b => b.id === binId);
-                    
-                    if (sourceBin && targetBin && sourceBin.elements[dragPayload.elementIndex]) {
+                    if (sourceBin && targetBin && sourceItems[dragPayload.elementIndex]) {
                         // Check if element is a child
                         const elementIndexStr = String(dragPayload.elementIndex);
                         const isChild = elementIndexStr.includes('-');
@@ -614,7 +633,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                         // Use DragDropHandler to move element (preserves format, handles all cases)
                         if (app.dragDropHandler) {
                             // Move to end of target bin
-                            const targetIndex = targetBin.elements.length;
+                            const targetIndex = targetItems.length;
                             app.dragDropHandler.moveElement(
                                 dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
                                 pageId, binId, targetIndex,
@@ -622,9 +641,9 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                             );
                         } else {
                             // Fallback if DragDropHandler not available
-                            const element = sourceBin.elements[dragPayload.elementIndex];
-                            sourceBin.elements.splice(dragPayload.elementIndex, 1);
-                            targetBin.elements.push(element);
+                            const element = sourceItems[dragPayload.elementIndex];
+                            sourceItems.splice(dragPayload.elementIndex, 1);
+                            targetItems.push(element);
                             app.dataManager.saveData();
                             
                             // Preserve format during re-render
@@ -635,7 +654,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                 } else if (dragPayload.type === 'element') {
                     // Handle drag from bin view or other sources
                     if (app.dragDropHandler) {
-                        const targetIndex = targetBin.elements.length;
+                        const targetIndex = targetItems.length;
                         app.dragDropHandler.moveElement(
                             dragPayload.pageId || dragPayload.sourcePageId, 
                             dragPayload.binId || dragPayload.sourceBinId, 

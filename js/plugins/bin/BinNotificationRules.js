@@ -43,8 +43,8 @@ export default class BinNotificationRules extends BasePlugin {
 
     checkRules(eventData, eventType) {
         const { pageId, binId } = eventData;
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (!bin) return;
 
         const rules = bin.pluginConfigs?.[this.id]?.rules || [];

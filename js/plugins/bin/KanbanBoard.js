@@ -11,7 +11,7 @@ export default class KanbanBoard extends BasePlugin {
             name: 'Kanban Board',
             type: 'bin',
             version: '1.0.0',
-            description: 'Trello-style Kanban board view for bins',
+            description: 'Trello-style Kanban board view for groups',
             defaultConfig: {
                 enabled: false,
                 useStatusColumns: false, // Option to use To Do/In Progress/Done columns
@@ -26,6 +26,20 @@ export default class KanbanBoard extends BasePlugin {
             eventBus.on('bin:render', this.handleBinRender.bind(this));
         }
     }
+
+    _getPages(appInstance) {
+        return appInstance?.documents || appInstance?.appState?.documents || [];
+    }
+
+    _getGroups(page) {
+        return page?.groups || [];
+    }
+
+    _getItems(bin) {
+        const items = bin.items || [];
+        bin.items = items;
+        return items;
+    }
     
     handleBinRender({ binElement, pageId, binData }) {
         if (!this.app) {
@@ -39,8 +53,8 @@ export default class KanbanBoard extends BasePlugin {
             return;
         }
         
-        const page = this.app.pages?.find(p => p.id === pageIdFromElement);
-        const bin = page?.bins?.find(b => b.id === binId) || binData;
+        const page = this._getPages(this.app).find(p => p.id === pageIdFromElement);
+        const bin = page ? page.groups?.find(b => b.id === binId) : binData;
         if (!bin) {
             return;
         }
@@ -96,7 +110,7 @@ export default class KanbanBoard extends BasePlugin {
         });
         
         // Show add column button if no headers (user needs to add headers to create columns)
-        const hasHeaders = bin.elements?.some(el => el.type === 'header-checkbox');
+        const hasHeaders = this._getItems(bin).some(el => el.type === 'header-checkbox');
         const useStatusColumns = this.config.useStatusColumns || bin.pluginConfigs?.[this.id]?.useStatusColumns;
         
         if (!hasHeaders && !useStatusColumns) {
@@ -150,8 +164,9 @@ export default class KanbanBoard extends BasePlugin {
         
         // Find all header elements
         const headers = [];
-        if (bin.elements && bin.elements.length > 0) {
-            bin.elements.forEach((element, index) => {
+        const items = this._getItems(bin);
+        if (items.length > 0) {
+            items.forEach((element, index) => {
                 if (element.type === 'header-checkbox') {
                     headers.push({
                         index: index,
@@ -169,10 +184,10 @@ export default class KanbanBoard extends BasePlugin {
             headers.forEach((header, headerIndex) => {
                 const nextHeaderIndex = headerIndex < headers.length - 1 
                     ? headers[headerIndex + 1].index 
-                    : bin.elements.length;
+                    : items.length;
                 
                 // Count elements in this section (between this header and next)
-                const elementCount = bin.elements.slice(header.index + 1, nextHeaderIndex)
+                const elementCount = items.slice(header.index + 1, nextHeaderIndex)
                     .filter(el => el.type !== 'header-checkbox').length;
                 
                 columns.push({
@@ -193,14 +208,14 @@ export default class KanbanBoard extends BasePlugin {
         }
         
         // No headers and no custom columns - create a default column with all elements
-        const nonHeaderElements = bin.elements?.filter(el => el.type !== 'header-checkbox') || [];
+        const nonHeaderElements = items.filter(el => el.type !== 'header-checkbox');
         if (nonHeaderElements.length > 0) {
             return [{
                 id: 'all-items',
                 title: 'All Items',
                 color: '#4a9eff',
                 startIndex: 0,
-                endIndex: bin.elements.length,
+                endIndex: items.length,
                 elementCount: nonHeaderElements.length
             }];
         }
@@ -272,11 +287,12 @@ export default class KanbanBoard extends BasePlugin {
         const useStatusColumns = this.config.useStatusColumns || bin.pluginConfigs?.[this.id]?.useStatusColumns;
         const customColumns = bin.pluginConfigs?.[this.id]?.columns || this.config.columns;
         const isCustomColumn = customColumns && customColumns.length > 0 && customColumns.some(col => col.id === column.id);
+        const items = this._getItems(bin);
         
         if (column.startIndex !== undefined && column.endIndex !== undefined) {
             // Column based on header or default "All Items" - get elements between indices
             for (let i = column.startIndex; i < column.endIndex; i++) {
-                const element = bin.elements[i];
+                const element = items[i];
                 if (element && element.type !== 'header-checkbox') {
                     columnElements.push(element);
                     elementIndices.push(i);
@@ -289,7 +305,7 @@ export default class KanbanBoard extends BasePlugin {
             const customColumns = bin.pluginConfigs?.[this.id]?.columns || this.config.columns;
             const isFirstColumn = customColumns && customColumns.length > 0 && customColumns[0].id === column.id;
             
-            columnElements = (bin.elements || []).filter((el, idx) => {
+            columnElements = items.filter((el, idx) => {
                 if (el.type === 'header-checkbox') return false;
                 // If element has kanbanColumn set, it must match this column
                 if (el.kanbanColumn !== undefined) {
@@ -298,42 +314,42 @@ export default class KanbanBoard extends BasePlugin {
                 // If no kanbanColumn set and this is the first column, include it
                 return isFirstColumn;
             });
-            elementIndices = bin.elements
+            elementIndices = items
                 .map((el, idx) => ({ el, idx }))
                 .filter(({ el }) => columnElements.includes(el))
                 .map(({ idx }) => idx);
         } else if (useStatusColumns) {
             // Status-based columns - filter by kanbanColumn property or completion status
             if (column.id === 'todo') {
-                columnElements = (bin.elements || []).filter((el, idx) => {
+                columnElements = items.filter((el, idx) => {
                     // Default completed to false if undefined
                     const isCompleted = el.completed === true;
                     return el.type !== 'header-checkbox' && 
                            !isCompleted && 
                            (!el.kanbanColumn || el.kanbanColumn === column.id);
                 });
-                elementIndices = bin.elements
+                elementIndices = items
                     .map((el, idx) => ({ el, idx }))
                     .filter(({ el }) => columnElements.includes(el))
                     .map(({ idx }) => idx);
             } else if (column.id === 'in-progress') {
-                columnElements = (bin.elements || []).filter((el, idx) => {
+                columnElements = items.filter((el, idx) => {
                     return el.type !== 'header-checkbox' && 
                            el.kanbanColumn === column.id;
                 });
-                elementIndices = bin.elements
+                elementIndices = items
                     .map((el, idx) => ({ el, idx }))
                     .filter(({ el }) => columnElements.includes(el))
                     .map(({ idx }) => idx);
             } else if (column.id === 'done') {
-                columnElements = (bin.elements || []).filter((el, idx) => {
+                columnElements = items.filter((el, idx) => {
                     // Explicitly check for completed === true
                     const isCompleted = el.completed === true;
                     return el.type !== 'header-checkbox' && 
                            isCompleted && 
                            (!el.kanbanColumn || el.kanbanColumn === column.id);
                 });
-                elementIndices = bin.elements
+                elementIndices = items
                     .map((el, idx) => ({ el, idx }))
                     .filter(({ el }) => columnElements.includes(el))
                     .map(({ idx }) => idx);
@@ -403,7 +419,7 @@ export default class KanbanBoard extends BasePlugin {
             endDropZone.style.background = '';
             endDropZone.style.minHeight = '10px';
             // Drop at end of column - use the last element index + 1
-            const lastIndex = elementIndices.length > 0 ? elementIndices[elementIndices.length - 1] + 1 : bin.elements.length;
+            const lastIndex = elementIndices.length > 0 ? elementIndices[elementIndices.length - 1] + 1 : items.length;
             this.handleCardDrop(e, pageId, binId, lastIndex, column.id, columnIndex);
         });
         content.appendChild(endDropZone);
@@ -521,7 +537,7 @@ export default class KanbanBoard extends BasePlugin {
             // Apply visual settings
             if (this.app.visualSettingsManager) {
                 const elementId = `${pageId}-${binId}-${elementIndex}`;
-                const page = this.app.appState?.pages?.find(p => p.id === pageId);
+                const page = this.app.appState?.documents?.find(p => p.id === pageId);
                 const viewFormat = page?.format || 'default';
                 this.app.visualSettingsManager.applyVisualSettings(elementDiv, 'element', elementId, pageId, viewFormat);
             }
@@ -667,11 +683,12 @@ export default class KanbanBoard extends BasePlugin {
             if (!dragPayload || dragPayload.type !== 'element') return;
             
             const appInstance = window.app || this.app;
-            const page = appInstance.pages?.find(p => p.id === pageId);
-            const bin = page?.bins?.find(b => b.id === binId);
-            if (!bin || !bin.elements || !bin.elements[dragPayload.elementIndex]) return;
+            const page = this._getPages(appInstance).find(p => p.id === pageId);
+            const bin = page ? page.groups?.find(b => b.id === binId) : null;
+            const items = bin ? this._getItems(bin) : [];
+            if (!bin || !items[dragPayload.elementIndex]) return;
             
-            const element = bin.elements[dragPayload.elementIndex];
+            const element = items[dragPayload.elementIndex];
             if (element.type === 'header-checkbox') return;
             
             if (appInstance.dragDropHandler) {
@@ -684,7 +701,7 @@ export default class KanbanBoard extends BasePlugin {
                 const isCustomColumn = customColumns && customColumns.length > 0 && customColumns.some(col => col.id === columnId);
                 
                 // Check if using header-based columns
-                const headers = bin.elements
+                const headers = items
                     .map((el, idx) => ({ el, idx }))
                     .filter(({ el }) => el.type === 'header-checkbox');
                 const isHeaderBased = headers.length > 0 && !useStatusColumns && !isCustomColumn;
@@ -778,11 +795,12 @@ export default class KanbanBoard extends BasePlugin {
                 
                 // Move element within the same bin to a different column
                 const appInstance = window.app || this.app;
-                const page = appInstance.pages?.find(p => p.id === pageId);
-                const bin = page?.bins?.find(b => b.id === binId);
-                if (!bin || !bin.elements || !bin.elements[dragPayload.elementIndex]) return;
+                const page = this._getPages(appInstance).find(p => p.id === pageId);
+                const bin = page ? page.groups?.find(b => b.id === binId) : null;
+                const items = bin ? this._getItems(bin) : [];
+                if (!bin || !items[dragPayload.elementIndex]) return;
                 
-                const element = bin.elements[dragPayload.elementIndex];
+                const element = items[dragPayload.elementIndex];
                 
                 // Don't move headers themselves
                 if (element.type === 'header-checkbox') {
@@ -792,7 +810,7 @@ export default class KanbanBoard extends BasePlugin {
                 // Use the main drag handler for proper element movement
                 if (appInstance.dragDropHandler) {
                     // Check if using header-based columns
-                    const headers = bin.elements
+                    const headers = items
                         .map((el, idx) => ({ el, idx }))
                         .filter(({ el }) => el.type === 'header-checkbox');
                     
@@ -803,7 +821,7 @@ export default class KanbanBoard extends BasePlugin {
                     
                     if (useStatusColumns || isCustomColumn) {
                         // Status/custom columns: append to end and set kanbanColumn
-                        targetIndex = bin.elements.length;
+                        targetIndex = items.length;
                         element.kanbanColumn = columnId;
                     } else if (headers.length > 0 && columnIndex !== undefined && columnIndex < headers.length) {
                         // Header-based: move element to after the header for this column
@@ -819,7 +837,7 @@ export default class KanbanBoard extends BasePlugin {
                         }
                     } else {
                         // No headers and not status columns - append to end
-                        targetIndex = bin.elements.length;
+                        targetIndex = items.length;
                     }
                     
                     // Use drag handler to move element
@@ -914,24 +932,22 @@ export default class KanbanBoard extends BasePlugin {
                     }
                     
                     let page = null;
-                    if (appInstance.pages && Array.isArray(appInstance.pages)) {
-                        page = appInstance.pages.find(p => p.id === modalPageId);
-                    }
+                    page = this._getPages(appInstance).find(p => p.id === modalPageId);
                     
                     if (!page) {
                         console.error('[KanbanBoard] Page not found', { 
                             modalPageId,
-                            availablePages: appInstance.pages?.map(p => p.id) || 'none'
+                            availablePages: this._getPages(appInstance).map(p => p.id) || 'none'
                         });
                         alert(`Error: Could not find page "${modalPageId}". Please try again.`);
                         return;
                     }
                     
-                    const bin = page.bins?.find(b => b.id === modalBinId);
+                    const bin = page.groups?.find(b => b.id === modalBinId);
                     if (!bin) {
                         console.error('[KanbanBoard] Bin not found', { 
                             modalBinId, 
-                            availableBins: page.bins?.map(b => b.id) || 'none' 
+                            availableBins: this._getGroups(page).map(b => b.id) || 'none' 
                         });
                         alert(`Error: Could not find bin "${modalBinId}". Please try again.`);
                         return;

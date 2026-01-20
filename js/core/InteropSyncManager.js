@@ -17,6 +17,11 @@ export class InteropSyncManager {
         eventBus.on('element:updated', this.handleElementChange.bind(this));
         eventBus.on('element:deleted', this.handleElementChange.bind(this));
     }
+
+    _getDocument(pageId) {
+        const documents = this.app.documents || this.app.appState?.documents || [];
+        return documents.find(page => page.id === pageId) || null;
+    }
     
     handleElementChange({ pageId }) {
         // Queue sync if page has active sync config
@@ -122,7 +127,7 @@ export class InteropSyncManager {
         };
         
         try {
-            const page = this.app.pages.find(page => page.id === pageId);
+            const page = this._getDocument(pageId);
             if (!page) {
                 throw new Error('Page not found');
             }
@@ -164,7 +169,7 @@ export class InteropSyncManager {
      * Export page to external service
      */
     async exportToService(pageId, client, config) {
-        const page = this.app.pages.find(page => page.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
         
         // Transform page data to service format
@@ -178,7 +183,7 @@ export class InteropSyncManager {
      * Import from external service
      */
     async importFromService(pageId, client, config) {
-        const page = this.app.pages.find(page => page.id === pageId);
+        const page = this._getDocument(pageId);
         if (!page) return;
         
         // Fetch from service
@@ -201,8 +206,8 @@ export class InteropSyncManager {
         // Override in service-specific implementations
         return {
             title: page.title,
-            items: page.bins?.flatMap(bin => 
-                bin.elements?.map(element => ({
+            items: page.groups?.flatMap(bin => 
+                bin.items?.map(element => ({
                     content: element.text,
                     completed: element.completed,
                     due_date: element.deadline,
@@ -218,10 +223,10 @@ export class InteropSyncManager {
     transformFromServiceFormat(serviceData, service) {
         // Override in service-specific implementations
         return {
-            bins: [{
+            groups: [{
                 id: 'bin-0',
                 title: 'Imported',
-                elements: (serviceData.items || []).map(item => ({
+                items: (serviceData.items || []).map(item => ({
                     type: 'task',
                     text: item.content || item.name,
                     completed: item.completed || false,
@@ -239,24 +244,24 @@ export class InteropSyncManager {
         // Simple merge - add new elements, update existing if conflict resolution allows
         if (config.conflictResolution === 'last-write-wins') {
             // Replace with imported data
-            if (importedData.bins) {
-                page.bins = importedData.bins;
+            if (importedData.groups) {
+                page.groups = importedData.groups;
             }
         } else if (config.conflictResolution === 'merge') {
-            // Merge bins and elements
-            importedData.bins?.forEach(importedBin => {
-                const existingBin = page.bins?.find(b => b.id === importedBin.id);
-                if (existingBin) {
-                    // Merge elements
-                    importedBin.elements?.forEach(element => {
-                        const existing = existingBin.elements?.find(e => e.text === element.text);
+            // Merge groups and items
+            importedData.groups?.forEach(importedGroup => {
+                const existingGroup = page.groups?.find(b => b.id === importedGroup.id);
+                if (existingGroup) {
+                    // Merge items
+                    importedGroup.items?.forEach(element => {
+                        const existing = existingGroup.items?.find(e => e.text === element.text);
                         if (!existing) {
-                            existingBin.elements.push(element);
+                            existingGroup.items.push(element);
                         }
                     });
                 } else {
-                    if (!page.bins) page.bins = [];
-                    page.bins.push(importedBin);
+                    if (!page.groups) page.groups = [];
+                    page.groups.push(importedGroup);
                 }
             });
         }

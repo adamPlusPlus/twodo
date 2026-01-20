@@ -8,7 +8,7 @@ export default class ProgressTracker extends BasePlugin {
         super({
             id: 'progress-tracker',
             name: 'Progress Tracker',
-            description: 'Track completion progress for bin elements.',
+            description: 'Track completion progress for group items.',
             type: 'bin',
             defaultConfig: {
                 enabled: true
@@ -35,9 +35,10 @@ export default class ProgressTracker extends BasePlugin {
             return;
         }
 
-        const elements = binData.elements || [];
-        const total = elements.length;
-        const completed = elements.filter(el => el.completed).length;
+        const items = binData.items || [];
+        binData.items = items;
+        const total = items.length;
+        const completed = items.filter(el => el.completed).length;
         const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
         // Add progress bar to bin header

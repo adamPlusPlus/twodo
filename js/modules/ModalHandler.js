@@ -17,6 +17,20 @@ export class ModalHandler {
     _getAppState() {
         return getService(SERVICES.APP_STATE);
     }
+
+    _getDocument(pageId) {
+        const appState = this._getAppState();
+        return appState.documents?.find(page => page.id === pageId) || null;
+    }
+
+    _getGroup(pageId, binId) {
+        const document = this._getDocument(pageId);
+        const group = document?.groups?.find(bin => bin.id === binId) || null;
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return group;
+    }
     
     _getElementTypeManager() {
         return getService(SERVICES.ELEMENT_TYPE_MANAGER);
@@ -219,18 +233,19 @@ export class ModalHandler {
             let currentInsertIndex = capturedElementIndex; // Use captured value
             
             // Add multiple elements
-            const page = (app.appState?.pages || app.pages || []).find(p => p.id === pageId);
+            const page = (app.appState?.documents || app.documents || []).find(p => p.id === pageId);
             if (!page) return;
-            const bin = page.bins?.find(b => b.id === binId);
+            const bin = page.groups?.find(b => b.id === binId);
             if (!bin) return;
-            if (!bin.elements) bin.elements = [];
+            const items = bin.items || [];
+            bin.items = items;
             
             if (capturedElementIndex !== null) {
                 // Add after the specified element
                 for (let i = 0; i < count; i++) {
                     const newElement = app.elementManager.createElementTemplate(type);
                     const insertIndex = currentInsertIndex + 1;
-                    bin.elements.splice(insertIndex, 0, newElement);
+                    items.splice(insertIndex, 0, newElement);
                     if (i === 0) {
                         // First element - remember for editing
                         firstElementIndex = insertIndex;
@@ -241,10 +256,10 @@ export class ModalHandler {
                 }
             } else {
                 // Add at the end
-                const startIndex = bin.elements.length;
+                const startIndex = items.length;
                 for (let i = 0; i < count; i++) {
                     const newElement = app.elementManager.createElementTemplate(type);
-                    bin.elements.push(newElement);
+                    items.push(newElement);
                     if (i === 0) {
                         // First element - remember for editing
                         firstElementIndex = startIndex;
@@ -555,11 +570,13 @@ export class ModalHandler {
             app.modalHandler.closeModal = originalCloseModal;
             app.modalHandler.closeModal();
             
-            const page = (app.appState?.pages || app.pages || []).find(p => p.id === pageId);
+            const page = (app.appState?.documents || app.documents || []).find(p => p.id === pageId);
             if (!page) return;
-            const bin = page.bins?.find(b => b.id === binId);
+            const bin = page.groups?.find(b => b.id === binId);
             if (!bin) return;
-            const element = bin.elements[elementIndex];
+            const items = bin.items || [];
+            bin.items = items;
+            const element = items[elementIndex];
             if (!element) return;
             
             // Initialize children if needed
@@ -926,9 +943,9 @@ export class ModalHandler {
         
         // Get bin to ensure it exists
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
         
         let html = ``;
@@ -1098,7 +1115,7 @@ export class ModalHandler {
                                 ${(element.targetPages || []).map(pageId => `
                                     <div style="display: flex; gap: 5px; margin-bottom: 5px;">
                                         <select class="calendar-target-page" style="flex: 1;">
-                                            ${(app.appState?.pages || app.pages || []).map(p => `<option value="${p.id}" ${p.id === pageId ? 'selected' : ''}>${p.title || p.id}</option>`).join('')}
+                                            ${(app.appState?.documents || app.documents || []).map(p => `<option value="${p.id}" ${p.id === pageId ? 'selected' : ''}>${p.title || p.id}</option>`).join('')}
                                         </select>
                                         <button type="button" class="remove-target-page" style="padding: 2px 8px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer;">×</button>
                                     </div>
@@ -1444,7 +1461,7 @@ export class ModalHandler {
                     select.className = 'calendar-target-page';
                     select.style.flex = '1';
                     const appState = this._getAppState();
-                    appState.pages.forEach(p => {
+                    appState.documents.forEach(p => {
                         const option = document.createElement('option');
                         option.value = p.id;
                         option.textContent = p.title || p.id;
@@ -1704,20 +1721,21 @@ export class ModalHandler {
                     clearTimeout(holdTimer);
                     const wasHolding = nextElementIsHolding;
                     const appState = this._getAppState();
-                    const page = appState?.pages?.find(p => p.id === pageId);
+                    const page = appState?.documents?.find(p => p.id === pageId);
                     if (!page) return;
-                    const bin = page.bins?.find(b => b.id === binId);
+                    const bin = page.groups?.find(b => b.id === binId);
                     if (!bin) return;
+                    const items = bin.items || [];
+                    bin.items = items;
                     
                     if (wasHolding) {
                         // Create new element of matching type
-                        const currentElement = bin.elements[elementIndex];
+                        const currentElement = items[elementIndex];
                         if (currentElement) {
                             const elementManager = this._getElementManager();
                             const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
                             const insertIndex = elementIndex + 1;
-                            if (!bin.elements) bin.elements = [];
-                            bin.elements.splice(insertIndex, 0, newElement);
+                            items.splice(insertIndex, 0, newElement);
                             this.saveEdit(pageId, binId, elementIndex, true); // Skip close
                             const dataManager = this._getDataManager();
                             if (dataManager) {
@@ -1732,7 +1750,7 @@ export class ModalHandler {
                     } else {
                         // Save current, open next
                         const nextIndex = elementIndex + 1;
-                        if (nextIndex < bin.elements.length) {
+                        if (nextIndex < items.length) {
                             // Next element exists
                             this.saveEdit(pageId, binId, elementIndex, true); // Skip close
                             const dataManager = this._getDataManager();
@@ -1742,17 +1760,16 @@ export class ModalHandler {
                             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open next element editor without visible transition
                             setTimeout(() => {
-                                const nextElement = bin.elements[nextIndex];
+                                const nextElement = items[nextIndex];
                                 this.showEditModal(pageId, binId, nextIndex, nextElement);
                             }, 10);
                         } else {
                             // No next element, create new one
-                            const currentElement = bin.elements[elementIndex];
+                            const currentElement = items[elementIndex];
                             if (currentElement) {
                                 const elementManager = this._getElementManager();
                                 const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
-                                if (!bin.elements) bin.elements = [];
-                                bin.elements.push(newElement);
+                                items.push(newElement);
                                 this.saveEdit(pageId, binId, elementIndex, true); // Skip close
                                 const dataManager = this._getDataManager();
                                 if (dataManager) {
@@ -1761,7 +1778,7 @@ export class ModalHandler {
                                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                                 // Open new element editor without visible transition
                                 setTimeout(() => {
-                                    this.showEditModal(pageId, binId, bin.elements.length - 1, newElement);
+                                    this.showEditModal(pageId, binId, items.length - 1, newElement);
                                 }, 10);
                             }
                         }
@@ -1798,19 +1815,20 @@ export class ModalHandler {
                     clearTimeout(holdTimer);
                     const wasHolding = prevElementIsHolding;
                     const appState = this._getAppState();
-                    const page = appState?.pages?.find(p => p.id === pageId);
+                    const page = appState?.documents?.find(p => p.id === pageId);
                     if (!page) return;
-                    const bin = page.bins?.find(b => b.id === binId);
+                    const bin = page.groups?.find(b => b.id === binId);
                     if (!bin) return;
+                    const items = bin.items || [];
+                    bin.items = items;
                     
                     if (wasHolding) {
                         // Create new element of matching type before current
-                        const currentElement = bin.elements[elementIndex];
+                        const currentElement = items[elementIndex];
                         if (currentElement) {
                             const elementManager = this._getElementManager();
                             const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
-                            if (!bin.elements) bin.elements = [];
-                            bin.elements.splice(elementIndex, 0, newElement);
+                            items.splice(elementIndex, 0, newElement);
                             this.saveEdit(pageId, binId, elementIndex + 1, true); // Skip close (elementIndex shifted)
                             const dataManager = this._getDataManager();
                         if (dataManager) {
@@ -1835,17 +1853,16 @@ export class ModalHandler {
                             eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                             // Open previous element editor without visible transition
                             setTimeout(() => {
-                                const prevElement = bin.elements[prevIndex];
+                                const prevElement = items[prevIndex];
                                 this.showEditModal(pageId, binId, prevIndex, prevElement);
                             }, 10);
                         } else {
                             // No previous element, create new one at start
-                            const currentElement = bin.elements[elementIndex];
+                            const currentElement = items[elementIndex];
                             if (currentElement) {
                                 const elementManager = this._getElementManager();
                             const newElement = elementManager ? elementManager.createElementTemplate(currentElement.type) : null;
-                                if (!bin.elements) bin.elements = [];
-                                bin.elements.unshift(newElement);
+                                items.unshift(newElement);
                                 this.saveEdit(pageId, binId, elementIndex + 1, true); // Skip close (elementIndex shifted)
                                 const dataManager = this._getDataManager();
                         if (dataManager) {
@@ -1928,10 +1945,14 @@ export class ModalHandler {
                 // Open next element editor
                 setTimeout(() => {
                     const nextAppState = this._getAppState();
-                    const page = nextAppState?.pages?.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    if (bin && bin.elements[nextIndex]) {
-                        this.showEditModal(pageId, binId, nextIndex, bin.elements[nextIndex]);
+                    const page = nextAppState?.documents?.find(p => p.id === pageId);
+                    const bin = page?.groups?.find(b => b.id === binId);
+                    const items = bin?.items || [];
+                    if (bin) {
+                        bin.items = items;
+                    }
+                    if (items[nextIndex]) {
+                        this.showEditModal(pageId, binId, nextIndex, items[nextIndex]);
                         // Focus on the text input
                         setTimeout(() => {
                             const textInput = document.getElementById('edit-text');
@@ -1989,12 +2010,14 @@ export class ModalHandler {
     
     saveEdit(pageId, binId, elementIndex, skipClose = false) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element) return;
         
         // Update basic fields (only if text field exists)
@@ -2321,12 +2344,14 @@ export class ModalHandler {
         
         // Get the element to determine the correct audioElementIndex
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element || !element.audioFile) {
             alert('No existing recording to overwrite.');
             return;
@@ -2354,9 +2379,9 @@ export class ModalHandler {
         const modalBody = document.getElementById('modal-body');
         
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
         
         let html = `
@@ -2431,9 +2456,9 @@ export class ModalHandler {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
         
-        // Use appState.pages (source of truth) with fallback to app.pages for backward compatibility
+        // Use appState.documents (source of truth)
         const appState = this._getAppState();
-        const pages = appState.pages || [];
+        const pages = appState.documents || [];
         const page = pages.find(p => p.id === pageId);
         if (!page) {
             console.error('[ModalHandler] Page not found:', pageId, 'Available pages:', pages.map(p => p.id));
@@ -2863,14 +2888,14 @@ export class ModalHandler {
         if (type === 'pane') {
             objectName = 'Pane';
         } else if (type === 'page') {
-            const page = appState?.pages?.find(p => p.id === id);
-            objectName = page ? `Page: ${page.title || id}` : 'Page';
+            const page = appState?.documents?.find(p => p.id === id);
+            objectName = page ? `Document: ${page.title || id}` : 'Document';
         } else if (type === 'bin') {
-            const page = appState?.pages?.find(p => p.id === options.pageId);
-            const bin = page?.bins?.find(b => b.id === id);
-            objectName = bin ? `Bin: ${bin.title || id}` : 'Bin';
+            const page = appState?.documents?.find(p => p.id === options.pageId);
+            const bin = page?.groups?.find(b => b.id === id);
+            objectName = bin ? `Group: ${bin.title || id}` : 'Group';
         } else if (type === 'element') {
-            objectName = 'Element';
+            objectName = 'Item';
         }
         
         let html = `<h3 style="margin-bottom: 20px; color: #ffffff;">Visual Customization: ${objectName}</h3>`;

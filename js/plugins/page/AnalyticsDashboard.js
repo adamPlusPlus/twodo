@@ -107,14 +107,16 @@ export default class AnalyticsDashboard extends BasePlugin {
     }
     
     calculateCompletionRate(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.documents?.find(p => p.id === pageId);
         if (!page) return 0;
         
         let total = 0;
         let completed = 0;
         
-        page.bins?.forEach(bin => {
-            bin.elements?.forEach(element => {
+        page.groups?.forEach(bin => {
+            const items = bin.items || [];
+            bin.items = items;
+            items.forEach(element => {
                 total++;
                 if (element.completed) completed++;
             });

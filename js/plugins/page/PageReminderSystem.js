@@ -52,7 +52,8 @@ export default class PageReminderSystem extends BasePlugin {
     }
 
     checkReminders() {
-        this.app.pages.forEach(page => {
+        const pages = this.app.documents || [];
+        pages.forEach(page => {
             const reminders = page.pluginConfigs?.[this.id]?.reminders || [];
             const now = new Date();
             

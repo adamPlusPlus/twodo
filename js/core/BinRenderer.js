@@ -29,17 +29,17 @@ export class BinRenderer {
         
         // Apply visual settings for this bin (includes tag-based settings)
         if (this.app.visualSettingsManager) {
-            const page = this.app.appState?.pages?.find(page => page.id === pageId);
+            const page = this.app.appState?.documents?.find(page => page.id === pageId);
             const viewFormat = page?.format || 'default';
             // Tags are automatically retrieved and applied in applyVisualSettings
             this.app.visualSettingsManager.applyVisualSettings(binDiv, 'bin', bin.id, pageId, viewFormat);
         }
         
         // Initialize bin state if not set (default to expanded)
-        if (!(bin.id in this.app.appState.binStates)) {
-            this.app.appState.binStates[bin.id] = true;
+        if (!(bin.id in this.app.appState.groupStates)) {
+            this.app.appState.groupStates[bin.id] = true;
         }
-        const isExpanded = this.app.appState.binStates[bin.id];
+        const isExpanded = this.app.appState.groupStates[bin.id];
         
         const header = document.createElement('div');
         header.className = 'bin-header';
@@ -72,13 +72,14 @@ export class BinRenderer {
         
         // Context menu is now handled by unified handler in EventHandler
         
-        // Ensure bin.elements exists and is an array
-        if (!bin.elements || !Array.isArray(bin.elements)) {
-            console.warn('bin.elements is not an array:', bin.elements, 'for bin:', bin.id);
-            bin.elements = [];
+        // Ensure bin.items exists and is an array
+        const items = bin.items || [];
+        if (!Array.isArray(items)) {
+            console.warn('bin.items is not an array:', items, 'for bin:', bin.id);
         }
+        bin.items = items;
         
-        bin.elements.forEach((element, elIndex) => {
+        items.forEach((element, elIndex) => {
             // Delegate to ElementRenderer (will be created)
             const elementElement = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
             elementsList.appendChild(elementElement);
@@ -93,7 +94,7 @@ export class BinRenderer {
         
         // Track active bin when clicking on bin
         binDiv.addEventListener('click', () => {
-            this.app.appState.activeBinId = bin.id;
+            this.app.appState.activeGroupId = bin.id;
         });
         
         // Context menu is now handled by unified handler in EventHandler
@@ -155,13 +156,13 @@ export class BinRenderer {
         if (toggleArrow) {
             toggleArrow.addEventListener('click', (e) => {
             e.stopPropagation();
-                const isCurrentlyExpanded = this.app.appState.binStates[bin.id] !== false; // default to true
-            this.app.appState.binStates[bin.id] = !isCurrentlyExpanded;
+                const isCurrentlyExpanded = this.app.appState.groupStates[bin.id] !== false; // default to true
+            this.app.appState.groupStates[bin.id] = !isCurrentlyExpanded;
             const content = document.getElementById(binContentId);
             if (content) {
-                content.style.display = this.app.appState.binStates[bin.id] ? 'block' : 'none';
+                content.style.display = this.app.appState.groupStates[bin.id] ? 'block' : 'none';
             }
-            toggleArrow.textContent = this.app.appState.binStates[bin.id] ? '▼' : '▶';
+            toggleArrow.textContent = this.app.appState.groupStates[bin.id] ? '▼' : '▶';
                 this.app.dataManager.saveData(); // Save collapse state
             });
         }
@@ -318,9 +319,9 @@ export class BinRenderer {
                 // If this is a nested element being dragged to a bin, un-nest it
                 if (dragData.isChild && dragData.parentElementIndex !== null) {
                     // Find the parent element to place the un-nested element immediately below it
-                    const sourcePage = this.app.appState.pages.find(page => page.id === dragData.pageId);
-                    const sourceBin = sourcePage?.bins?.find(bin => bin.id === dragData.binId);
-                    if (sourceBin && sourceBin.elements[dragData.parentElementIndex]) {
+                    const sourcePage = this.app.appState.documents.find(page => page.id === dragData.pageId);
+                    const sourceBin = sourcePage?.groups?.find(bin => bin.id === dragData.binId);
+                    if (sourceBin && sourceBin.items[dragData.parentElementIndex]) {
                         // If dropping on the same bin as parent, place immediately after parent
                         if (bin.id === dragData.binId && pageId === dragData.pageId) {
                             const targetIndex = dragData.parentElementIndex + 1;
@@ -331,19 +332,19 @@ export class BinRenderer {
                             // If dropping on different bin, find parent's position in target bin or add to end
                             // For now, just add to end - could be enhanced to find matching parent
                             // console.log('Moving nested element to different bin (un-nesting):', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
-                            this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                            this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.items.length,
                                 dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                         }
                     } else {
                         // Fallback: just un-nest and add to end
                         // console.log('Moving nested element to bin (un-nesting):', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
-                        this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                        this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.items.length,
                             dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                     }
                 } else {
                     // console.log('Moving element to bin:', dragData.pageId, dragData.binId, dragData.elementIndex, '->', pageId, bin.id);
                 // Move element to this bin at the end
-                    this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.elements.length,
+                    this.app.moveElement(dragData.pageId, dragData.binId, dragData.elementIndex, pageId, bin.id, bin.items.length,
                         dragData.isChild || false, dragData.parentElementIndex || null, dragData.childIndex || null);
                 }
             }
@@ -419,7 +420,7 @@ export class BinRenderer {
             const relativeY = mouseY - elementsListRect.top;
             
             // Find the insertion point
-            let insertIndex = bin.elements.length; // Default to end
+            let insertIndex = bin.items.length; // Default to end
             let targetElement = null;
             
             for (let i = 0; i < elements.length; i++) {
@@ -452,7 +453,7 @@ export class BinRenderer {
             }
             
             // If we didn't find a target element, check if we should append at the end
-            if (targetElement === null && insertIndex >= bin.elements.length) {
+            if (targetElement === null && insertIndex >= bin.items.length) {
                 const addButton = elementsList.querySelector('.add-element-btn');
                 if (addButton) {
                     targetElement = addButton;
@@ -539,7 +540,7 @@ export class BinRenderer {
                 }
                 
                 // PRIORITY: Always use the indicator position if available
-                let targetIndex = bin.elements.length; // Default to end
+                let targetIndex = bin.items.length; // Default to end
                 let elementElement = null; // Declare outside if/else so it's available later
                 
                 if (elementsList._dropTargetIndex !== null && elementsList._dropTargetIndex !== undefined) {
@@ -573,9 +574,9 @@ export class BinRenderer {
                 
                 // If this is a nested element being dropped on empty space, un-nest and place below parent
                 if (dragData.isChild && dragData.parentElementIndex !== null && !elementElement) {
-                    const sourcePage = this.app.appState.pages.find(page => page.id === dragData.pageId);
-                    const sourceBin = sourcePage?.bins?.find(bin => bin.id === dragData.binId);
-                    if (sourceBin && bin.id === dragData.binId && pageId === dragData.pageId && sourceBin.elements[dragData.parentElementIndex]) {
+                    const sourcePage = this.app.appState.documents.find(page => page.id === dragData.pageId);
+                    const sourceBin = sourcePage?.groups?.find(bin => bin.id === dragData.binId);
+                    if (sourceBin && bin.id === dragData.binId && pageId === dragData.pageId && sourceBin.items[dragData.parentElementIndex]) {
                         // Place immediately after parent
                         targetIndex = dragData.parentElementIndex + 1;
                         // console.log('Un-nesting element and placing below parent at index:', targetIndex);

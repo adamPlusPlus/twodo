@@ -1,4 +1,4 @@
-// TemplateManager - Manages page and bin templates
+// TemplateManager - Manages document and group templates
 import { StorageUtils } from '../utils/storage.js';
 import { DataUtils } from '../utils/data.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
@@ -21,9 +21,10 @@ export class TemplateManager {
      * @returns {Object} - Templates object
      */
     loadTemplates() {
-        return StorageUtils.get(this.templatesKey) || {
-            pages: [],
-            bins: []
+        const stored = StorageUtils.get(this.templatesKey) || {};
+        return {
+            documents: stored.documents || [],
+            groups: stored.groups || []
         };
     }
     
@@ -42,7 +43,7 @@ export class TemplateManager {
      */
     savePageAsTemplate(pageId, templateName) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
         // Create template copy (deep clone)
@@ -57,7 +58,7 @@ export class TemplateManager {
         // Remove ID from template data to allow new page creation
         delete template.data.id;
         
-        this.templates.pages.push(template);
+        this.templates.documents.push(template);
         this.saveTemplates();
         
         return true;
@@ -72,11 +73,13 @@ export class TemplateManager {
      */
     saveBinAsTemplate(pageId, binId, templateName) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return false;
+        const items = bin.items || [];
+        bin.items = items;
         
         // Create template copy (deep clone)
         const template = {
@@ -90,7 +93,7 @@ export class TemplateManager {
         // Remove ID from template data to allow new bin creation
         delete template.data.id;
         
-        this.templates.bins.push(template);
+        this.templates.groups.push(template);
         this.saveTemplates();
         
         return true;
@@ -101,7 +104,7 @@ export class TemplateManager {
      * @returns {Array} - Array of page templates
      */
     getPageTemplates() {
-        return this.templates.pages || [];
+        return this.templates.documents || [];
     }
     
     /**
@@ -109,7 +112,7 @@ export class TemplateManager {
      * @returns {Array} - Array of bin templates
      */
     getBinTemplates() {
-        return this.templates.bins || [];
+        return this.templates.groups || [];
     }
     
     /**
@@ -118,10 +121,10 @@ export class TemplateManager {
      * @returns {Object|null} - Template object or null
      */
     getTemplate(templateId) {
-        const pageTemplate = this.templates.pages.find(t => t.id === templateId);
+        const pageTemplate = this.templates.documents.find(t => t.id === templateId);
         if (pageTemplate) return pageTemplate;
         
-        const binTemplate = this.templates.bins.find(t => t.id === templateId);
+        const binTemplate = this.templates.groups.find(t => t.id === templateId);
         if (binTemplate) return binTemplate;
         
         return null;
@@ -143,11 +146,13 @@ export class TemplateManager {
         newPage.id = `page-${Date.now()}`;
         
         // Generate new IDs for bins and elements
-        if (newPage.bins) {
-            newPage.bins.forEach(bin => {
+        const groups = newPage.groups || [];
+        groups.forEach(bin => {
                 bin.id = `bin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                if (bin.elements) {
-                    bin.elements.forEach(element => {
+                const items = bin.items || [];
+                bin.items = items;
+                if (items.length > 0) {
+                    items.forEach(element => {
                         // Elements don't need IDs, but ensure children have proper structure
                         if (element.children) {
                             element.children.forEach(child => {
@@ -157,7 +162,7 @@ export class TemplateManager {
                     });
                 }
             });
-        }
+        newPage.groups = groups;
         
         return newPage;
     }
@@ -178,8 +183,10 @@ export class TemplateManager {
         newBin.id = `bin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         // Ensure elements have proper structure
-        if (newBin.elements) {
-            newBin.elements.forEach(element => {
+        const items = newBin.items || [];
+        newBin.items = items;
+        if (items.length > 0) {
+            items.forEach(element => {
                 if (element.children) {
                     element.children.forEach(child => {
                         // Ensure children are properly structured
@@ -197,16 +204,16 @@ export class TemplateManager {
      * @returns {boolean} - Success status
      */
     deleteTemplate(templateId) {
-        const pageIndex = this.templates.pages.findIndex(t => t.id === templateId);
+        const pageIndex = this.templates.documents.findIndex(t => t.id === templateId);
         if (pageIndex !== -1) {
-            this.templates.pages.splice(pageIndex, 1);
+            this.templates.documents.splice(pageIndex, 1);
             this.saveTemplates();
             return true;
         }
         
-        const binIndex = this.templates.bins.findIndex(t => t.id === templateId);
+        const binIndex = this.templates.groups.findIndex(t => t.id === templateId);
         if (binIndex !== -1) {
-            this.templates.bins.splice(binIndex, 1);
+            this.templates.groups.splice(binIndex, 1);
             this.saveTemplates();
             return true;
         }
@@ -244,9 +251,9 @@ export class TemplateManager {
             template.createdAt = Date.now();
             
             if (template.type === 'page') {
-                this.templates.pages.push(template);
+                this.templates.documents.push(template);
             } else if (template.type === 'bin') {
-                this.templates.bins.push(template);
+                this.templates.groups.push(template);
             } else {
                 return false;
             }

@@ -23,15 +23,17 @@ export class SearchIndex {
         
         const appState = this._getAppState();
         // Check if app and pages exist and is an array
-        if (!appState || !appState.pages || !Array.isArray(appState.pages)) {
+        if (!appState || !appState.documents || !Array.isArray(appState.documents)) {
             return;
         }
         
-        appState.pages.forEach(page => {
-            if (page && page.bins) {
-                page.bins.forEach(bin => {
-                    if (bin && bin.elements) {
-                        bin.elements.forEach((element, elementIndex) => {
+        appState.documents.forEach(page => {
+            if (page && page.groups) {
+                page.groups.forEach(bin => {
+                    const items = bin.items || [];
+                    bin.items = items;
+                    if (items.length > 0) {
+                        items.forEach((element, elementIndex) => {
                             const elementId = this.getElementId(page.id, bin.id, elementIndex);
                             this.index.set(elementId, this.extractSearchableData(page, bin, element, elementIndex));
                         });
@@ -163,13 +165,15 @@ export class SearchIndex {
      */
     updateElement(pageId, binId, elementIndex) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
         
-        const element = bin.elements?.[elementIndex];
+        const items = bin.items || [];
+        bin.items = items;
+        const element = items?.[elementIndex];
         if (!element) return;
         
         const elementId = this.getElementId(pageId, binId, elementIndex);

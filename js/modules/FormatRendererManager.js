@@ -28,8 +28,8 @@ export class FormatRendererManager {
      */
     initializeFromSavedData() {
         const appState = this._getAppState();
-        if (appState && appState.pages) {
-            appState.pages.forEach(page => {
+        if (appState && appState.documents) {
+            appState.documents.forEach(page => {
                 if (page.format) {
                     this.activeFormats.set(page.id, page.format);
                 }
@@ -121,7 +121,7 @@ export class FormatRendererManager {
         }
         
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
         // Initialize format if needed
@@ -152,7 +152,7 @@ export class FormatRendererManager {
      */
     clearPageFormat(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
         // Remove from activeFormats
@@ -185,10 +185,10 @@ export class FormatRendererManager {
         }
         
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return false;
         
         // Initialize format if needed
@@ -226,8 +226,8 @@ export class FormatRendererManager {
         
         // Fallback: check page data (for when data is loaded but activeFormats wasn't initialized)
         const appState = this._getAppState();
-        if (appState && appState.pages) {
-            const page = appState.pages.find(p => p.id === pageId);
+        if (appState && appState.documents) {
+            const page = appState.documents.find(p => p.id === pageId);
             if (page && page.format) {
                 // Sync to activeFormats for future lookups
                 this.activeFormats.set(pageId, page.format);
@@ -264,7 +264,7 @@ export class FormatRendererManager {
         const format = this.getFormat(formatName);
         if (format && format.renderPage) {
             const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
             format.renderPage(container, page, {});
         }
     }
@@ -285,8 +285,8 @@ export class FormatRendererManager {
         const format = this.getFormat(formatName);
         if (format && format.renderBin) {
             const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-            const bin = page.bins?.find(b => b.id === binId);
+        const page = appState.documents.find(p => p.id === pageId);
+            const bin = page.groups?.find(b => b.id === binId);
             format.renderBin(container, bin, { page });
         }
     }

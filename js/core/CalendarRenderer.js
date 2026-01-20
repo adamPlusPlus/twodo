@@ -325,61 +325,73 @@ export class CalendarRenderer {
         container.appendChild(monthGrid);
 
     getCalendarSummary(element, dateStr, compact = false) {
-        // Get elements based on targeting mode
+        // Get items based on targeting mode
         let relevantElements = [];
         
         switch (element.targetingMode) {
             case 'default':
-                // Get all elements from all pages
-                this.app.appState.pages.forEach(page => {
-                    page.bins?.forEach(bin => {
-                        bin.elements?.forEach((el, idx) => {
+                // Get all items from all documents
+                this.app.appState.documents.forEach(page => {
+                    page.groups?.forEach(bin => {
+                        const items = bin.items || [];
+                        bin.items = items;
+                        items.forEach((el, idx) => {
                             relevantElements.push({ page, bin, element: el, elementIndex: idx });
                         });
                     });
                 });
                 break;
             case 'specific':
-                // Get elements from specific pages/bins/elements
+                // Get items from specific documents/groups/items
                 element.targetPages.forEach(pageId => {
-                    const page = this.app.appState.pages.find(p => p.id === pageId);
+                    const page = this.app.appState.documents.find(p => p.id === pageId);
                     if (page) {
-                        page.bins?.forEach(bin => {
-                            bin.elements?.forEach((el, idx) => {
+                        page.groups?.forEach(bin => {
+                            const items = bin.items || [];
+                            bin.items = items;
+                            items.forEach((el, idx) => {
                                 relevantElements.push({ page, bin, element: el, elementIndex: idx });
                             });
                         });
 
                 });
                 element.targetBins.forEach(({ pageId, binId }) => {
-                    const page = this.app.appState.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
+                    const page = this.app.appState.documents.find(p => p.id === pageId);
+                    const bin = page?.groups?.find(b => b.id === binId);
                     if (bin) {
-                        bin.elements?.forEach((el, idx) => {
+                        const items = bin.items || [];
+                        bin.items = items;
+                        items.forEach((el, idx) => {
                             relevantElements.push({ page, bin, element: el, elementIndex: idx });
                         });
 
                 });
                 element.targetElements.forEach(({ pageId, binId, elementIndex }) => {
-                    const page = this.app.appState.pages.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    const el = bin?.elements?.[elementIndex];
+                    const page = this.app.appState.documents.find(p => p.id === pageId);
+                    const bin = page?.groups?.find(b => b.id === binId);
+                    const items = bin?.items || [];
+                    if (bin) {
+                        bin.items = items;
+                    }
+                    const el = items?.[elementIndex];
                     if (el) {
                         relevantElements.push({ page, bin, element: el, elementIndex });
                     }
                 });
                 break;
             case 'tags':
-                // Get elements with matching tags
-                this.app.appState.pages.forEach(page => {
-                    page.bins?.forEach(bin => {
-                        bin.elements?.forEach((el, idx) => {
+                // Get items with matching tags
+                this.app.appState.documents.forEach(page => {
+                    page.groups?.forEach(bin => {
+                        const items = bin.items || [];
+                        bin.items = items;
+                        items.forEach((el, idx) => {
                             if (el.tags && Array.isArray(el.tags)) {
                                 const hasMatchingTag = element.targetTags.some(tag => el.tags.includes(tag));
                                 if (hasMatchingTag) {
                                     relevantElements.push({ page, bin, element: el, elementIndex: idx });
-
-
+                                }
+                            }
                         });
                     });
                 });

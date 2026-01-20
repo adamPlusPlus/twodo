@@ -281,8 +281,8 @@ export default class WorkflowAutomation extends BasePlugin {
         this.app.automationEngine.addRule(pageId, binId, rule);
         
         // Save to bin config
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
         if (bin) {
             if (!bin.pluginConfigs) bin.pluginConfigs = {};
             if (!bin.pluginConfigs.WorkflowAutomation) bin.pluginConfigs.WorkflowAutomation = {};

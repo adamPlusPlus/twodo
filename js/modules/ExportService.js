@@ -18,7 +18,7 @@ export class ExportService {
      */
     exportToJSON(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
         const exportData = DataUtils.deepClone(page);
@@ -30,14 +30,16 @@ export class ExportService {
      */
     exportToCSV(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
         const rows = [];
         rows.push(['Page', 'Bin', 'Type', 'Text', 'Completed', 'Tags', 'Deadline', 'Time Allocated'].join(','));
         
-        page.bins?.forEach(bin => {
-            bin.elements?.forEach(element => {
+        page.groups?.forEach(bin => {
+            const items = bin.items || [];
+            bin.items = items;
+            items.forEach(element => {
                 const row = [
                     `"${(page.title || page.id).replace(/"/g, '""')}"`,
                     `"${(bin.title || bin.id).replace(/"/g, '""')}"`,
@@ -60,15 +62,16 @@ export class ExportService {
      */
     exportToMarkdown(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
         let md = `# ${page.title || page.id}\n\n`;
         
-        page.bins?.forEach(bin => {
+        page.groups?.forEach(bin => {
             md += `## ${bin.title || bin.id}\n\n`;
-            
-            bin.elements?.forEach(element => {
+            const items = bin.items || [];
+            bin.items = items;
+            items.forEach(element => {
                 const checkbox = element.completed ? '[x]' : '[ ]';
                 const tags = element.tags && element.tags.length > 0 
                     ? ` ${element.tags.map(t => `#${t}`).join(' ')}` 
@@ -98,7 +101,7 @@ export class ExportService {
      */
     async exportToPDF(pageId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
         // Check if jsPDF is available
@@ -117,7 +120,7 @@ export class ExportService {
         doc.text(page.title || page.id, 10, y);
         y += 10;
         
-        page.bins?.forEach(bin => {
+        page.groups?.forEach(bin => {
             if (y > 280) {
                 doc.addPage();
                 y = 20;
@@ -127,7 +130,9 @@ export class ExportService {
             doc.text(bin.title || bin.id, 10, y);
             y += 8;
             
-            bin.elements?.forEach(element => {
+            const items = bin.items || [];
+            bin.items = items;
+            items.forEach(element => {
                 if (y > 280) {
                     doc.addPage();
                     y = 20;

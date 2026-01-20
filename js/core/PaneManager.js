@@ -137,9 +137,9 @@ export class PaneManager {
         
         // Create initial single pane if no panes exist
         if (this.panes.size === 0) {
-            const currentPageId = this.app.appState.currentPageId;
-            if (currentPageId) {
-                this.openPane(currentPageId);
+            const currentDocumentId = this.app.appState.currentDocumentId;
+            if (currentDocumentId) {
+                this.openPane(currentDocumentId);
             }
         }
     }
@@ -286,7 +286,7 @@ export class PaneManager {
         if (!newPaneId) {
             // Use active tab from existing pane or current page
             const activeTab = existingPane.tabs[existingPane.activeTabIndex];
-            newPageId = newPageId || (activeTab ? activeTab.pageId : this.app.appState.currentPageId);
+            newPageId = newPageId || (activeTab ? activeTab.pageId : this.app.appState.currentDocumentId);
             newFormat = newFormat || (activeTab ? activeTab.format : null);
             newPaneId = this.openPane(newPageId, newFormat);
         }
@@ -553,7 +553,7 @@ export class PaneManager {
         
         // Render active tab's page in pane
         
-        const page = this.app.appState.pages.find(page => page.id === activeTab.pageId);
+        const page = this.app.appState.documents.find(page => page.id === activeTab.pageId);
         if (page) {
             // Check if format renderer exists
             const format = activeTab.format 
@@ -573,12 +573,12 @@ export class PaneManager {
                     this.app.themeManager.applyPageTheme(page.id, 'default', content);
                 }
                 // Default rendering
-                if (page.bins && page.bins.length > 0) {
+                if (page.groups && page.groups.length > 0) {
                     // Access binRenderer through appRenderer or renderService
                     const binRenderer = this.appRenderer?.binRenderer || 
                                        this.app.renderService?.getRenderer()?.binRenderer;
                     if (binRenderer) {
-                        page.bins.forEach((bin) => {
+                        page.groups.forEach((bin) => {
                             const binElement = binRenderer.renderBin(page.id, bin);
                             content.appendChild(binElement);
                         });
@@ -642,7 +642,7 @@ export class PaneManager {
             if (!activeTab) return;
             
             // Get the page
-            const page = this.app.appState.pages.find(page => page.id === activeTab.pageId);
+            const page = this.app.appState.documents.find(page => page.id === activeTab.pageId);
             if (!page) return;
             
             // Determine view format
@@ -789,7 +789,7 @@ export class PaneManager {
      */
     createTabElement(pane, tab, index) {
         const isActive = index === pane.activeTabIndex;
-        const page = this.app.appState.pages.find(page => page.id === tab.pageId);
+        const page = this.app.appState.documents.find(page => page.id === tab.pageId);
         const pageTitle = page ? (page.title || page.id) : tab.pageId;
         const formatName = tab.format 
             ? (this.app.formatRendererManager?.getFormat(tab.format)?.name || tab.format)
@@ -887,8 +887,8 @@ export class PaneManager {
                 if (this.app.appState.setContextMenuState) {
                     this.app.appState.setContextMenuState({
                         visible: true,
-                        pageId: tab.pageId,
-                        binId: undefined, // undefined (not null) indicates page edit
+                        documentId: tab.pageId,
+                        groupId: null, // null indicates page edit
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -897,8 +897,8 @@ export class PaneManager {
                 } else {
                     this.app.appState.contextMenuState = {
                         visible: true,
-                        pageId: tab.pageId,
-                        binId: undefined, // undefined (not null) indicates page edit
+                        documentId: tab.pageId,
+                        groupId: null, // null indicates page edit
                         elementIndex: null,
                         subtaskIndex: null,
                         x: e.clientX,
@@ -1427,7 +1427,7 @@ export class PaneManager {
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 8px; color: #dcddde;">Page:</label>
                 <select id="add-tab-page-select" style="width: 100%; padding: 8px; background: #1a1a1a; color: #dcddde; border: 1px solid #3a3a3a; border-radius: 4px;">
-                    ${this.app.appState.pages.map(page => 
+                    ${this.app.appState.documents.map(page => 
                         `<option value="${page.id}">${page.title || page.id}</option>`
                     ).join('')}
                 </select>
@@ -1453,8 +1453,8 @@ export class PaneManager {
         // Set default to current page
         const pageSelect = dialog.querySelector('#add-tab-page-select');
         const formatSelect = dialog.querySelector('#add-tab-format-select');
-        if (pageSelect && this.app.appState.currentPageId) {
-            pageSelect.value = this.app.appState.currentPageId;
+        if (pageSelect && this.app.appState.currentDocumentId) {
+            pageSelect.value = this.app.appState.currentDocumentId;
         }
         
         // Set default format to active tab's format or page format
@@ -1530,8 +1530,8 @@ export class PaneManager {
         const positions = {
             container: {},
             content: {},
-            bins: {},
-            elements: {}
+            groups: {},
+            items: {}
         };
         
         // Preserve pane container scroll
@@ -1551,13 +1551,13 @@ export class PaneManager {
             };
         }
         
-        // Preserve bin scroll positions (for bins with max-height)
+        // Preserve group scroll positions (for groups with max-height)
         const bins = pane.container?.querySelectorAll('.bin-content');
         if (bins) {
             bins.forEach(binContent => {
                 const binId = binContent.closest('.bin')?.dataset.binId;
                 if (binId) {
-                    positions.bins[binId] = {
+                    positions.groups[binId] = {
                         scrollTop: binContent.scrollTop,
                         scrollLeft: binContent.scrollLeft
                     };
@@ -1571,7 +1571,7 @@ export class PaneManager {
             scrollables.forEach((el, index) => {
                 const key = el.dataset.binId || el.dataset.elementIndex || `scrollable-${index}`;
                 if (el.scrollTop > 0 || el.scrollLeft > 0) {
-                    positions.elements[key] = {
+                    positions.items[key] = {
                         scrollTop: el.scrollTop,
                         scrollLeft: el.scrollLeft
                     };
@@ -1601,20 +1601,20 @@ export class PaneManager {
             content.scrollLeft = positions.content.scrollLeft || 0;
         }
         
-        // Restore bin scroll positions
-        if (positions.bins) {
-            Object.keys(positions.bins).forEach(binId => {
+        // Restore group scroll positions
+        if (positions.groups) {
+            Object.keys(positions.groups).forEach(binId => {
                 const binContent = pane.container?.querySelector(`.bin[data-bin-id="${binId}"] .bin-content`);
-                if (binContent && positions.bins[binId]) {
-                    binContent.scrollTop = positions.bins[binId].scrollTop || 0;
-                    binContent.scrollLeft = positions.bins[binId].scrollLeft || 0;
+                if (binContent && positions.groups[binId]) {
+                    binContent.scrollTop = positions.groups[binId].scrollTop || 0;
+                    binContent.scrollLeft = positions.groups[binId].scrollLeft || 0;
                 }
             });
         }
         
-        // Restore other scrollable elements
-        if (positions.elements) {
-            Object.keys(positions.elements).forEach(key => {
+        // Restore other scrollable items
+        if (positions.items) {
+            Object.keys(positions.items).forEach(key => {
                 let element = null;
                 if (key.startsWith('scrollable-')) {
                     const index = parseInt(key.replace('scrollable-', ''));
@@ -1626,9 +1626,9 @@ export class PaneManager {
                     element = pane.container?.querySelector(`[data-bin-id="${key}"], [data-element-index="${key}"]`);
                 }
                 
-                if (element && positions.elements[key]) {
-                    element.scrollTop = positions.elements[key].scrollTop || 0;
-                    element.scrollLeft = positions.elements[key].scrollLeft || 0;
+                if (element && positions.items[key]) {
+                    element.scrollTop = positions.items[key].scrollTop || 0;
+                    element.scrollLeft = positions.items[key].scrollLeft || 0;
                 }
             });
         }

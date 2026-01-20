@@ -10,7 +10,7 @@ export default class PageTemplates extends BasePlugin {
             name: 'Page Templates',
             type: 'page',
             version: '1.0.0',
-            description: 'Save and load page configurations as templates',
+            description: 'Save and load document configurations as templates',
             defaultConfig: {
                 enabled: true
             },
@@ -153,7 +153,7 @@ export default class PageTemplates extends BasePlugin {
                         <div style="font-weight: 600; color: #e0e0e0; margin-bottom: 5px;">${StringUtils.escapeHtml(template.name)}</div>
                         <div style="font-size: 11px; color: #888;">
                             Created: ${new Date(template.createdAt).toLocaleDateString()}
-                            ${template.data.bins ? ` | ${template.data.bins.length} bins` : ''}
+                            ${template.data.groups ? ` | ${template.data.groups.length} groups` : ''}
                         </div>
                     </div>
                 `;
@@ -204,12 +204,14 @@ export default class PageTemplates extends BasePlugin {
         }
         
         // Add page to app
-        this.app.pages.push(newPage);
+        const pages = this.app.documents || [];
+        pages.push(newPage);
+        this.app.documents = pages;
         this.app.dataManager.saveData();
         this.app.render();
         
         // Switch to new page
-        this.app.currentPageId = newPage.id;
+        this.app.currentDocumentId = newPage.id;
         this.app.render();
         
         this.app.modalHandler.closeModal();

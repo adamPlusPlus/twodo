@@ -18,15 +18,15 @@ export class AnimationRenderer {
         console.log('🎬 ANIMATION SEQUENCE STARTING');
         console.log('═══════════════════════════════════════════════════════════');
         console.log('📊 Old positions captured:', {
-            pages: Object.keys(oldPositions.pages || {}).length,
-            elements: Object.keys(oldPositions.elements || {}).length
+            documents: Object.keys(oldPositions.documents || {}).length,
+            items: Object.keys(oldPositions.items || {}).length
         });
         const binCount = document.querySelectorAll('.bin').length;
         const elementCount = document.querySelectorAll('.element').length;
-        console.log(`📦 Current DOM: ${binCount} bins, ${elementCount} elements`);
+        console.log(`📦 Current DOM: ${binCount} groups, ${elementCount} items`);
         
         if (this.app.appState.lastMovedElement) {
-            console.log('🎯 Element being moved:', {
+            console.log('🎯 Item being moved:', {
                 pageId: this.app.appState.lastMovedElement.pageId,
                 elementIndex: this.app.appState.lastMovedElement.elementIndex,
                 elementText: this.app.appState.lastMovedElement.element?.text?.substring(0, 30) || 'N/A'
@@ -35,16 +35,16 @@ export class AnimationRenderer {
             console.log('⚠️  No lastMovedElement tracked - this might be initial render');
         }
         
-        // Animate pages
+        // Animate documents
         let pageAnimations = 0;
         document.querySelectorAll('.page').forEach(pageElement => {
             const pageId = pageElement.dataset.pageId;
             if (!pageId) return;
             
-            const oldPos = oldPositions.pages[pageId];
+            const oldPos = oldPositions.documents[pageId];
             if (!oldPos) {
-                console.log(`📄 Page ${pageId}: New page, skipping animation`);
-                return; // New page, no animation needed
+                console.log(`📄 Document ${pageId}: New document, skipping animation`);
+                return; // New document, no animation needed
             }
             
             const newRect = pageElement.getBoundingClientRect();
@@ -53,8 +53,8 @@ export class AnimationRenderer {
             
             if (Math.abs(deltaY) > 1 || Math.abs(deltaX) > 1) {
                 pageAnimations++;
-                console.log(`📄 Page ${pageId}: Animating (deltaY: ${deltaY.toFixed(2)}px, deltaX: ${deltaX.toFixed(2)}px)`);
-                // Pages just slide smoothly - no pop effects
+                console.log(`📄 Document ${pageId}: Animating (deltaY: ${deltaY.toFixed(2)}px, deltaX: ${deltaX.toFixed(2)}px)`);
+                // Documents just slide smoothly - no pop effects
                 pageElement.style.transition = 'transform 2.5s ease-out';
                 pageElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
                 
@@ -77,7 +77,7 @@ export class AnimationRenderer {
             }
         });
         
-        // Animate elements - match by content/text since indices change
+        // Animate items - match by content/text since indices change
         let elementAnimations = 0;
         let movingElementFound = false;
         document.querySelectorAll('.element').forEach(elementElement => {
@@ -93,7 +93,7 @@ export class AnimationRenderer {
             if (textElement) {
                 const text = (textElement.textContent || textElement.innerText || '').substring(0, 20);
                 // Search for matching element in old positions
-                for (const [key, pos] of Object.entries(oldPositions.elements)) {
+                for (const [key, pos] of Object.entries(oldPositions.items)) {
                     if (pos.pageId === pageId && key.includes(text)) {
                         oldPos = pos;
                         matchMethod = 'text-content';
@@ -105,13 +105,13 @@ export class AnimationRenderer {
             // Fallback: try exact index match
             if (!oldPos) {
                 const key = `${pageId}-${elementIndex}`;
-                oldPos = oldPositions.elements[key];
+                oldPos = oldPositions.items[key];
                 if (oldPos) matchMethod = 'index';
             }
             
             if (!oldPos) {
-                console.log(`🔹 Element ${pageId}-${elementIndex}: New element, skipping animation`);
-                return; // New element, no animation needed
+                console.log(`🔹 Item ${pageId}-${elementIndex}: New item, skipping animation`);
+                return; // New item, no animation needed
             }
             
             const newRect = elementElement.getBoundingClientRect();

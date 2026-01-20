@@ -75,9 +75,13 @@ export class InlineEditor {
             // Users can use markdown/HTML syntax which will be rendered by parseLinks
             if (newText !== originalText) {
                 const appState = this._getAppState();
-                const page = appState.pages.find(p => p.id === pageId);
-                const bin = page?.bins?.find(b => b.id === binId);
-                const el = bin?.elements[elementIndex];
+                const page = appState.documents.find(p => p.id === pageId);
+                const bin = page?.groups?.find(b => b.id === binId);
+                const items = bin?.items || [];
+                if (bin) {
+                    bin.items = items;
+                }
+                const el = items[elementIndex];
                 if (el) {
                     // Record undo/redo change
                     const undoRedoManager = this._getUndoRedoManager();

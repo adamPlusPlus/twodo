@@ -6,21 +6,21 @@ import { EVENTS } from './AppEvents.js';
 /**
  * AppState - Centralized state management for TodoApp
  * 
- * Manages all application state including pages, current page, UI state, etc.
+ * Manages all application state including documents, current document, UI state, etc.
  * Emits events when state changes to allow other modules to react.
  */
 export class AppState {
     constructor() {
         // Core data
-        this._pages = [];
-        this._currentPageId = 'page-1';
+        this._documents = [];
+        this._currentDocumentId = 'document-1';
         
         // UI state
         this._currentEditModal = null;
         this._contextMenuState = {
             visible: false,
-            pageId: null,
-            binId: null,
+            documentId: null,
+            groupId: null,
             elementIndex: null,
             subtaskIndex: null,
             x: 0,
@@ -31,12 +31,12 @@ export class AppState {
         this._doubleClickThreshold = 300;
         this._doubleClickDelay = 150;
         this._clickTimeout = null;
-        this._binStates = {}; // Track collapsed/expanded state of bins
+        this._groupStates = {}; // Track collapsed/expanded state of groups
         this._subtaskStates = {}; // Track individual subtask visibility
-        this._activeBinId = null;
+        this._activeGroupId = null;
         this._currentEnterKeyHandler = null;
         this._multiEditState = null;
-        this._pageStates = {}; // Track collapsed/expanded state of pages
+        this._documentStates = {}; // Track collapsed/expanded state of documents
         
         // Drag and drop state
         this._dragData = null;
@@ -76,32 +76,32 @@ export class AppState {
         eventBus.emit(EVENTS.UI.CHANGED, { type: 'multiPaneEnabled', value });
     }
     
-    // Pages getter/setter
-    get pages() {
-        return this._pages;
+    // Documents getter/setter (canonical)
+    get documents() {
+        return this._documents;
     }
     
-    set pages(value) {
+    set documents(value) {
         if (!Array.isArray(value)) {
-            console.warn('[AppState] pages must be an array');
+            console.warn('[AppState] documents must be an array');
             return;
         }
-        this._pages = value;
-        eventBus.emit(EVENTS.DATA.CHANGED, { type: 'pages', value });
+        this._documents = value;
+        eventBus.emit(EVENTS.DATA.CHANGED, { type: 'documents', value });
     }
     
-    // Current page ID getter/setter
-    get currentPageId() {
-        return this._currentPageId;
+    // Current document ID getter/setter (canonical)
+    get currentDocumentId() {
+        return this._currentDocumentId;
     }
     
-    set currentPageId(value) {
+    set currentDocumentId(value) {
         if (typeof value !== 'string') {
-            console.warn('[AppState] currentPageId must be a string');
+            console.warn('[AppState] currentDocumentId must be a string');
             return;
         }
-        const oldValue = this._currentPageId;
-        this._currentPageId = value;
+        const oldValue = this._currentDocumentId;
+        this._currentDocumentId = value;
         if (oldValue !== value) {
             eventBus.emit(EVENTS.PAGE.SWITCHED, { pageId: value });
         }
@@ -122,7 +122,8 @@ export class AppState {
     }
     
     setContextMenuState(state) {
-        this._contextMenuState = { ...this._contextMenuState, ...state };
+        const merged = { ...this._contextMenuState, ...state };
+        this._contextMenuState = merged;
     }
     
     // Subtasks expanded state
@@ -134,25 +135,25 @@ export class AppState {
         this._allSubtasksExpanded = Boolean(value);
     }
     
-    // Bin states
-    get binStates() {
-        return this._binStates;
+    // Group states
+    get groupStates() {
+        return this._groupStates;
     }
     
-    set binStates(value) {
+    set groupStates(value) {
         if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-            console.warn('[AppState] binStates must be an object');
+            console.warn('[AppState] groupStates must be an object');
             return;
         }
-        this._binStates = value || {};
+        this._groupStates = value || {};
     }
     
-    setBinState(binId, state) {
-        this._binStates[binId] = state;
+    setGroupState(groupId, state) {
+        this._groupStates[groupId] = state;
     }
     
-    getBinState(binId) {
-        return this._binStates[binId];
+    getGroupState(groupId) {
+        return this._groupStates[groupId];
     }
     
     // Subtask states
@@ -176,34 +177,34 @@ export class AppState {
         return this._subtaskStates[key];
     }
     
-    // Page states
-    get pageStates() {
-        return this._pageStates;
+    // Document states
+    get documentStates() {
+        return this._documentStates;
     }
     
-    set pageStates(value) {
+    set documentStates(value) {
         if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-            console.warn('[AppState] pageStates must be an object');
+            console.warn('[AppState] documentStates must be an object');
             return;
         }
-        this._pageStates = value || {};
+        this._documentStates = value || {};
     }
     
-    setPageState(pageId, state) {
-        this._pageStates[pageId] = state;
+    setDocumentState(documentId, state) {
+        this._documentStates[documentId] = state;
     }
     
-    getPageState(pageId) {
-        return this._pageStates[pageId];
+    getDocumentState(documentId) {
+        return this._documentStates[documentId];
     }
     
-    // Active bin ID
-    get activeBinId() {
-        return this._activeBinId;
+    // Active group ID
+    get activeGroupId() {
+        return this._activeGroupId;
     }
     
-    set activeBinId(value) {
-        this._activeBinId = value;
+    set activeGroupId(value) {
+        this._activeGroupId = value;
     }
     
     // Drag data
@@ -402,8 +403,8 @@ export class AppState {
      * @param {Object} app - TodoApp instance
      */
     initializeFromApp(app) {
-        this._pages = app.pages || [];
-        this._currentPageId = app.currentPageId || 'page-1';
+        this._documents = app.documents || [];
+        this._currentDocumentId = app.currentDocumentId || 'document-1';
         this._currentEditModal = app.currentEditModal || null;
         this._contextMenuState = app.contextMenuState || this._contextMenuState;
         this._allSubtasksExpanded = app.allSubtasksExpanded !== undefined ? app.allSubtasksExpanded : true;
@@ -411,9 +412,9 @@ export class AppState {
         this._doubleClickThreshold = app.doubleClickThreshold || 300;
         this._doubleClickDelay = app.doubleClickDelay || 150;
         this._clickTimeout = app.clickTimeout || null;
-        this._binStates = app.binStates || {};
+        this._groupStates = app.groupStates || {};
         this._subtaskStates = app.subtaskStates || {};
-        this._activeBinId = app.activeBinId || null;
+        this._activeGroupId = app.activeGroupId || null;
         this._currentEnterKeyHandler = app.currentEnterKeyHandler || null;
         this._dragData = app.dragData || null;
         this._nestTargetElement = app.nestTargetElement || null;
@@ -430,6 +431,7 @@ export class AppState {
         this._recordingTimer = app.recordingTimer || null;
         this._inlineAudioRecorders = app.inlineAudioRecorders || {};
         this._inlineAudioPlayers = app.inlineAudioPlayers || {};
+        this._documentStates = app.documentStates || {};
     }
     
     /**
@@ -437,8 +439,8 @@ export class AppState {
      * @param {Object} app - TodoApp instance
      */
     syncToApp(app) {
-        app.pages = this._pages;
-        app.currentPageId = this._currentPageId;
+        app.documents = this._documents;
+        app.currentDocumentId = this._currentDocumentId;
         app.currentEditModal = this._currentEditModal;
         app.contextMenuState = this._contextMenuState;
         app.allSubtasksExpanded = this._allSubtasksExpanded;
@@ -446,12 +448,12 @@ export class AppState {
         app.doubleClickThreshold = this._doubleClickThreshold;
         app.doubleClickDelay = this._doubleClickDelay;
         app.clickTimeout = this._clickTimeout;
-        app.binStates = this._binStates;
+        app.groupStates = this._groupStates;
         app.subtaskStates = this._subtaskStates;
-        app.activeBinId = this._activeBinId;
+        app.activeGroupId = this._activeGroupId;
         app.currentEnterKeyHandler = this._currentEnterKeyHandler;
         app.multiEditState = this._multiEditState;
-        app.pageStates = this._pageStates;
+        app.documentStates = this._documentStates;
         app.dragData = this._dragData;
         app.nestTargetElement = this._nestTargetElement;
         app.lastMovedElement = this._lastMovedElement;

@@ -8,6 +8,20 @@ export class AutomationEngine {
         this.logs = [];
         this.maxLogSize = 1000;
     }
+
+    _getDocument(pageId) {
+        const documents = this.app.appState?.documents || this.app.documents || [];
+        return documents.find(page => page.id === pageId) || null;
+    }
+
+    _getGroup(pageId, binId) {
+        const document = this._getDocument(pageId);
+        const group = document?.groups?.find(bin => bin.id === binId) || null;
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return group;
+    }
     
     /**
      * Add automation rule to a bin
@@ -210,9 +224,8 @@ export class AutomationEngine {
         // Get element data if needed
         let element = null;
         if (data.elementIndex !== undefined) {
-            const page = this.app.pages.find(p => p.id === data.pageId);
-            const bin = page?.bins?.find(b => b.id === data.binId);
-            element = bin?.elements?.[data.elementIndex];
+            const group = this._getGroup(data.pageId, data.binId);
+            element = group?.items?.[data.elementIndex];
         }
         
         // Check all conditions (AND logic)
@@ -270,22 +283,20 @@ export class AutomationEngine {
      * Move element to different bin
      */
     moveElement(pageId, binId, elementIndex, targetPageId, targetBinId) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = this._getGroup(pageId, binId);
+        if (!bin || !bin.items) return;
         
-        const element = bin.elements[elementIndex];
+        const element = bin.items[elementIndex];
         if (!element) return;
         
         // Remove from source
-        bin.elements.splice(elementIndex, 1);
+        bin.items.splice(elementIndex, 1);
         
         // Add to target
-        const targetPage = this.app.pages.find(p => p.id === targetPageId);
-        const targetBin = targetPage?.bins?.find(b => b.id === targetBinId);
+        const targetBin = this._getGroup(targetPageId, targetBinId);
         if (targetBin) {
-            if (!targetBin.elements) targetBin.elements = [];
-            targetBin.elements.push(element);
+            if (!targetBin.items) targetBin.items = [];
+            targetBin.items.push(element);
         }
         
         this.app.dataManager.saveData();
@@ -296,11 +307,10 @@ export class AutomationEngine {
      * Set element property
      */
     setElementProperty(pageId, binId, elementIndex, property, value) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = this._getGroup(pageId, binId);
+        if (!bin || !bin.items) return;
         
-        const element = bin.elements[elementIndex];
+        const element = bin.items[elementIndex];
         if (!element) return;
         
         element[property] = value;
@@ -312,11 +322,10 @@ export class AutomationEngine {
      * Add tag to element
      */
     addElementTag(pageId, binId, elementIndex, tag) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = this._getGroup(pageId, binId);
+        if (!bin || !bin.items) return;
         
-        const element = bin.elements[elementIndex];
+        const element = bin.items[elementIndex];
         if (!element) return;
         
         if (!element.tags) element.tags = [];
@@ -331,11 +340,10 @@ export class AutomationEngine {
      * Remove tag from element
      */
     removeElementTag(pageId, binId, elementIndex, tag) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = this._getGroup(pageId, binId);
+        if (!bin || !bin.items) return;
         
-        const element = bin.elements[elementIndex];
+        const element = bin.items[elementIndex];
         if (!element || !element.tags) return;
         
         const index = element.tags.indexOf(tag);
@@ -350,12 +358,11 @@ export class AutomationEngine {
      * Create new element
      */
     createElement(pageId, binId, elementData) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
+        const bin = this._getGroup(pageId, binId);
         if (!bin) return;
         
-        if (!bin.elements) bin.elements = [];
-        bin.elements.push(elementData);
+        if (!bin.items) bin.items = [];
+        bin.items.push(elementData);
         
         this.app.dataManager.saveData();
         this.app.render();
@@ -365,11 +372,10 @@ export class AutomationEngine {
      * Delete element
      */
     deleteElement(pageId, binId, elementIndex) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = this._getGroup(pageId, binId);
+        if (!bin || !bin.items) return;
         
-        const deletedElement = bin.elements[elementIndex];
+        const deletedElement = bin.items[elementIndex];
         if (!deletedElement) return;
         
         // Record undo/redo change
@@ -377,7 +383,7 @@ export class AutomationEngine {
             this.app.undoRedoManager.recordElementDelete(pageId, binId, elementIndex, deletedElement);
         }
         
-        bin.elements.splice(elementIndex, 1);
+        bin.items.splice(elementIndex, 1);
         this.app.dataManager.saveData();
         this.app.render();
     }

@@ -30,10 +30,15 @@ export class AppInitializer {
             try {
                 // Load the file specified in URL
                 const fileData = await this.app.fileManager.loadFile(fileParam);
-                if (fileData.pages && Array.isArray(fileData.pages)) {
-                    this.app.pages = fileData.pages;
+                const documents = fileData.documents || [];
+                if (Array.isArray(documents)) {
+                    this.app.documents = documents;
                     if (this.app.appState) {
-                        this.app.appState.pages = fileData.pages;
+                        this.app.appState.documents = documents;
+                        const currentId = fileData.currentDocumentId;
+                        if (currentId) {
+                            this.app.appState.currentDocumentId = currentId;
+                        }
                     }
                     // Store as last opened file
                     localStorage.setItem('twodo-last-opened-file', fileParam);
@@ -212,15 +217,15 @@ export class AppInitializer {
         // Load all available plugins first (already parallel)
         await this.loadAllPlugins();
         
-        // Initialize plugins for existing pages and bins in parallel
+        // Initialize plugins for existing documents and groups in parallel
         const initPromises = [];
-        for (const page of this.app.pages) {
+        for (const page of this.app.documents) {
             initPromises.push(
                 this.app.pagePluginManager.initializePagePlugins(page.id)
                     .catch(err => console.warn(`Failed to initialize page plugins for ${page.id}:`, err))
             );
-            if (page.bins) {
-                for (const bin of page.bins) {
+            if (page.groups) {
+                for (const bin of page.groups) {
                     initPromises.push(
                         this.app.binPluginManager.initializeBinPlugins(page.id, bin.id)
                             .catch(err => console.warn(`Failed to initialize bin plugins for ${page.id}/${bin.id}:`, err))

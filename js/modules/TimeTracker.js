@@ -99,9 +99,13 @@ export class TimeTracker {
         
         // Update element's total time if it has time tracking
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const element = bin?.elements?.[elementIndex];
+        const page = appState.documents.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        const items = bin?.items || [];
+        if (bin) {
+            bin.items = items;
+        }
+        const element = items?.[elementIndex];
         
         if (element) {
             if (!element.timeTracked) element.timeTracked = 0;
@@ -182,7 +186,7 @@ export class TimeTracker {
      */
     getPageTimeReport(pageId, startDate, endDate) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
         const report = {
@@ -192,8 +196,10 @@ export class TimeTracker {
             byDate: {}
         };
         
-        page.bins?.forEach(bin => {
-            bin.elements?.forEach((element, elementIndex) => {
+        page.groups?.forEach(bin => {
+            const items = bin.items || [];
+            bin.items = items;
+            items.forEach((element, elementIndex) => {
                 const time = this.getTimeForRange(pageId, bin.id, elementIndex, startDate, endDate);
                 if (time > 0) {
                     report.totalTime += time;

@@ -10,7 +10,7 @@ export default class CustomProperties extends BaseElementType {
             name: 'Custom Properties',
             elementType: 'custom-properties',
             version: '1.0.0',
-            description: 'Add custom properties to elements'
+            description: 'Add custom properties to items'
         });
     }
     
@@ -28,7 +28,7 @@ export default class CustomProperties extends BaseElementType {
     
     render(container, element, context) {
         // This plugin doesn't render a new element type
-        // Instead, it adds UI to existing elements for managing custom properties
+        // Instead, it adds UI to existing items for managing custom properties
         return container;
     }
     

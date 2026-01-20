@@ -8,7 +8,7 @@ export default class PageGoalSetting extends BasePlugin {
         super({
             id: 'page-goal-setting',
             name: 'Goal Setting',
-            description: 'Set and track goals for pages with progress visualization.',
+            description: 'Set and track goals for documents with progress visualization.',
             type: 'page',
             defaultConfig: {
                 enabled: true,
@@ -78,7 +78,7 @@ export default class PageGoalSetting extends BasePlugin {
     }
 
     calculateGoalProgress(pageId, goal) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.documents?.find(p => p.id === pageId);
         if (!page) return 0;
 
         // Calculate progress based on goal type
@@ -86,8 +86,10 @@ export default class PageGoalSetting extends BasePlugin {
             let total = 0;
             let completed = 0;
 
-            page.bins?.forEach(bin => {
-                bin.elements?.forEach(element => {
+            page.groups?.forEach(bin => {
+                const items = bin.items || [];
+                bin.items = items;
+                items.forEach(element => {
                     total++;
                     if (element.completed) completed++;
                 });
@@ -97,8 +99,10 @@ export default class PageGoalSetting extends BasePlugin {
             return Math.min(100, Math.round((currentProgress / goal.target) * 100));
         } else if (goal.type === 'count') {
             let count = 0;
-            page.bins?.forEach(bin => {
-                count += bin.elements?.length || 0;
+            page.groups?.forEach(bin => {
+                const items = bin.items || [];
+                bin.items = items;
+                count += items.length;
             });
             return Math.min(100, Math.round((count / goal.target) * 100));
         }

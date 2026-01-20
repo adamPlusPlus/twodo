@@ -10,7 +10,7 @@ export default class ElementRelationships extends BaseElementType {
             name: 'Element Relationships',
             elementType: 'relationship',
             version: '1.0.0',
-            description: 'Link elements with relationships (blocks, depends on, related to)'
+            description: 'Link items with relationships (blocks, depends on, related to)'
         });
     }
     
@@ -41,7 +41,7 @@ export default class ElementRelationships extends BaseElementType {
      * @returns {HTMLElement}
      */
     render(container, element, context) {
-        // This is called to add relationship indicators to existing elements
+        // This is called to add relationship indicators to existing items
         if (!element.relationships) return container;
         
         const hasRelationships = 
@@ -146,20 +146,20 @@ export default class ElementRelationships extends BaseElementType {
                         <option value="">Select element...</option>
         `;
         
-        // Add all elements as options
-        this.app.pages.forEach(page => {
-            if (page.bins) {
-                page.bins.forEach(bin => {
-                    if (bin.elements) {
-                        bin.elements.forEach((el, idx) => {
+        // Add all items as options
+        const pages = this.app.documents || [];
+        pages.forEach(page => {
+            const groups = page.groups || [];
+            groups.forEach(bin => {
+                const items = bin.items || [];
+                bin.items = items;
+                items.forEach((el, idx) => {
                             const targetId = relationshipManager.getElementId(page.id, bin.id, idx);
                             if (targetId !== elementId) {
                                 html += `<option value="${targetId}">${StringUtils.escapeHtml(el.text || 'Untitled')}</option>`;
                             }
-                        });
-                    }
                 });
-            }
+            });
         });
         
         html += `

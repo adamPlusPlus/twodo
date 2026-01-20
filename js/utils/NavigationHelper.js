@@ -30,7 +30,7 @@ export class NavigationHelper {
         
         // Switch to page
         if (app && app.appState) {
-            app.appState.currentPageId = pageId;
+            app.appState.currentDocumentId = pageId;
         }
         
         // Emit events
@@ -60,7 +60,7 @@ export class NavigationHelper {
         const { render = true } = options;
         
         if (app && app.appState) {
-            app.appState.currentPageId = pageId;
+            app.appState.currentDocumentId = pageId;
         }
         
         if (render) {

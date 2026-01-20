@@ -143,11 +143,12 @@ export class TagManager {
         const normalizedTag = tag.trim().toLowerCase();
         
         const appState = this._getAppState();
-        appState.pages.forEach(page => {
-            if (page.bins) {
-                page.bins.forEach(bin => {
-                    if (bin.elements) {
-                        bin.elements.forEach((element, elementIndex) => {
+        appState.documents.forEach(page => {
+            if (page.groups) {
+                page.groups.forEach(bin => {
+                    const items = bin.items || [];
+                    bin.items = items;
+                    items.forEach((element, elementIndex) => {
                             if (element.tags && element.tags.includes(normalizedTag)) {
                                 results.push({
                                     page,
@@ -158,8 +159,7 @@ export class TagManager {
                                     binId: bin.id
                                 });
                             }
-                        });
-                    }
+                    });
                 });
             }
         });
@@ -175,18 +175,18 @@ export class TagManager {
         const stats = {};
         
         const appState = this._getAppState();
-        appState.pages.forEach(page => {
-            if (page.bins) {
-                page.bins.forEach(bin => {
-                    if (bin.elements) {
-                        bin.elements.forEach(element => {
+        appState.documents.forEach(page => {
+            if (page.groups) {
+                page.groups.forEach(bin => {
+                    const items = bin.items || [];
+                    bin.items = items;
+                    items.forEach(element => {
                             if (element.tags) {
                                 element.tags.forEach(tag => {
                                     stats[tag] = (stats[tag] || 0) + 1;
                                 });
                             }
-                        });
-                    }
+                    });
                 });
             }
         });

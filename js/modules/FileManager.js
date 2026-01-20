@@ -28,6 +28,15 @@ export class FileManager {
     _getAppState() {
         return getService(SERVICES.APP_STATE);
     }
+
+    _normalizeFileData(rawData) {
+        if (!rawData || typeof rawData !== 'object') {
+            return { documents: [] };
+        }
+        const normalized = { ...rawData };
+        normalized.documents = normalized.documents || [];
+        return normalized;
+    }
     
     async listFiles() {
         try {
@@ -445,7 +454,7 @@ export class FileManager {
                 // Overwrite original file
                 try {
                     const fileData = {
-                        pages: this._getAppState().pages
+                        documents: this._getAppState().documents
                     };
                     
                     // Store temp filename for cleanup
@@ -492,7 +501,7 @@ export class FileManager {
         
         try {
             const fileData = {
-                pages: this._getAppState().pages
+                documents: this._getAppState().documents
             };
             
             console.log('[FileManager] Manual save - currentFilename:', this.currentFilename);
@@ -534,7 +543,7 @@ export class FileManager {
         
         try {
             const fileData = {
-                pages: this._getAppState().pages
+                documents: this._getAppState().documents
             };
             
             // Store temp filename for cleanup
@@ -580,22 +589,23 @@ export class FileManager {
         
         try {
             const fileData = await this.loadFile(filename);
+            const normalizedFile = this._normalizeFileData(fileData);
             
-            if (!fileData.pages || !Array.isArray(fileData.pages)) {
+            if (!normalizedFile.documents || !Array.isArray(normalizedFile.documents)) {
                 if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "documents" array.');
                 } else {
-                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    alert('Invalid file format. Expected a JSON file with a "documents" array.');
                 }
                 return;
             }
             
-            // Update appState.pages
+            // Update appState.documents
             const appState = this._getAppState();
-            appState.pages = fileData.pages;
-            // Update currentPageId if needed
-            if (fileData.pages.length > 0 && !fileData.pages.find(p => p.id === appState.currentPageId)) {
-                appState.currentPageId = fileData.pages[0].id;
+            appState.documents = normalizedFile.documents;
+            // Update currentDocumentId if needed
+            if (normalizedFile.documents.length > 0 && !normalizedFile.documents.find(doc => doc.id === appState.currentDocumentId)) {
+                appState.currentDocumentId = normalizedFile.documents[0].id;
             }
             
             // Store last opened file in localStorage (device-specific)
@@ -645,12 +655,13 @@ export class FileManager {
         try {
             // Load the backup file
             const backupData = await this.loadFile(backupFilename);
+            const normalizedBackup = this._normalizeFileData(backupData);
             
-            if (!backupData.pages || !Array.isArray(backupData.pages)) {
+            if (!normalizedBackup.documents || !Array.isArray(normalizedBackup.documents)) {
                 if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "documents" array.');
                 } else {
-                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    alert('Invalid file format. Expected a JSON file with a "documents" array.');
                 }
                 return;
             }
@@ -660,10 +671,10 @@ export class FileManager {
             let differs = true;
             try {
                 currentData = await this.loadFile(filename);
-                // Compare the pages data (normalize by stringifying)
-                const backupPagesStr = JSON.stringify(backupData.pages);
-                const currentPagesStr = JSON.stringify(currentData.pages || []);
-                differs = backupPagesStr !== currentPagesStr;
+                // Compare the documents data (normalize by stringifying)
+                const backupDocsStr = JSON.stringify(normalizedBackup.documents);
+                const currentDocsStr = JSON.stringify(currentData.documents || []);
+                differs = backupDocsStr !== currentDocsStr;
             } catch (error) {
                 // Current file doesn't exist or can't be loaded - assume it differs
                 differs = true;
@@ -685,12 +696,12 @@ export class FileManager {
                 this.currentFilename = filename;
             }
             
-            // Update appState.pages
+            // Update appState.documents
             const appState = this._getAppState();
-            appState.pages = backupData.pages;
-            // Update currentPageId if needed
-            if (backupData.pages.length > 0 && !backupData.pages.find(p => p.id === appState.currentPageId)) {
-                appState.currentPageId = backupData.pages[0].id;
+            appState.documents = normalizedBackup.documents;
+            // Update currentDocumentId if needed
+            if (normalizedBackup.documents.length > 0 && !normalizedBackup.documents.find(doc => doc.id === appState.currentDocumentId)) {
+                appState.currentDocumentId = normalizedBackup.documents[0].id;
             }
             
             // Store last opened file in localStorage (device-specific) - use original filename, not backup
@@ -801,10 +812,10 @@ export class FileManager {
         try {
             // Auto-save current file if one is open
             const appState = this._getAppState();
-            if (this.currentFilename && appState && appState.pages) {
+            if (this.currentFilename && appState && appState.documents) {
                 try {
                     const currentData = {
-                        pages: this._getAppState().pages
+                        documents: this._getAppState().documents
                     };
                     await this.saveFile(this.currentFilename, currentData);
                 } catch (saveError) {
@@ -815,7 +826,7 @@ export class FileManager {
             
             // Create a new empty todo file with default structure
             const newFileData = {
-                pages: []
+                documents: []
             };
             
             await this.saveAsFile(filename, newFileData);
@@ -833,21 +844,22 @@ export class FileManager {
             
             // Load the new file into the UI
             const loadedData = await this.loadFile(this.currentFilename);
+            const normalizedLoaded = this._normalizeFileData(loadedData);
             
-            if (!loadedData.pages || !Array.isArray(loadedData.pages)) {
+            if (!normalizedLoaded.documents || !Array.isArray(normalizedLoaded.documents)) {
                 if (this.app && this.app.modalHandler) {
-                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    await this.app.modalHandler.showAlert('Invalid file format. Expected a JSON file with a "documents" array.');
                 } else {
-                    alert('Invalid file format. Expected a JSON file with a "pages" array.');
+                    alert('Invalid file format. Expected a JSON file with a "documents" array.');
                 }
                 return;
             }
             
-            // Update appState.pages (reuse appState from line 791)
-            appState.pages = loadedData.pages;
-            // Update currentPageId if needed
-            if (loadedData.pages.length > 0 && !loadedData.pages.find(p => p.id === appState.currentPageId)) {
-                appState.currentPageId = loadedData.pages[0].id;
+            // Update appState.documents (reuse appState from line 791)
+            appState.documents = normalizedLoaded.documents;
+            // Update currentDocumentId if needed
+            if (normalizedLoaded.documents.length > 0 && !normalizedLoaded.documents.find(doc => doc.id === appState.currentDocumentId)) {
+                appState.currentDocumentId = normalizedLoaded.documents[0].id;
             }
             
             // Store last opened file in localStorage (device-specific)
@@ -887,18 +899,19 @@ export class FileManager {
      */
     async diagnoseFileIntegrity(filename) {
         const issues = [];
-        let elementCounts = { pages: 0, bins: 0, elements: 0 };
-        const structure = { pages: [], bins: [], elements: [] };
+        let elementCounts = { documents: 0, groups: 0, items: 0 };
+        const structure = { documents: [], groups: [], items: [] };
         
         try {
             // Load the file
             const fileData = await this.loadFile(filename);
+            const normalizedFile = this._normalizeFileData(fileData);
             
-            if (!fileData || !fileData.pages) {
+            if (!normalizedFile || !normalizedFile.documents) {
                 issues.push({
-                    type: 'missing_pages',
+                    type: 'missing_documents',
                     location: 'root',
-                    description: 'File does not contain a pages array'
+                    description: 'File does not contain a documents array'
                 });
                 return {
                     isValid: false,
@@ -908,11 +921,11 @@ export class FileManager {
                 };
             }
             
-            if (!Array.isArray(fileData.pages)) {
+            if (!Array.isArray(normalizedFile.documents)) {
                 issues.push({
-                    type: 'invalid_pages',
+                    type: 'invalid_documents',
                     location: 'root',
-                    description: 'Pages is not an array'
+                    description: 'Documents is not an array'
                 });
                 return {
                     isValid: false,
@@ -922,100 +935,100 @@ export class FileManager {
                 };
             }
             
-            elementCounts.pages = fileData.pages.length;
+            elementCounts.documents = normalizedFile.documents.length;
             
-            // Check each page
-            fileData.pages.forEach((page, pageIndex) => {
-                const pageId = page.id || `page-${pageIndex}`;
-                structure.pages.push({ id: pageId, index: pageIndex });
+            // Check each document
+            normalizedFile.documents.forEach((document, documentIndex) => {
+                const documentId = document.id || `document-${documentIndex}`;
+                structure.documents.push({ id: documentId, index: documentIndex });
                 
-                if (!page.bins) {
+                if (!document.groups) {
                     issues.push({
-                        type: 'missing_bins',
-                        location: `pages[${pageIndex}]`,
-                        description: `Page ${pageId} does not have a bins array`
+                        type: 'missing_groups',
+                        location: `documents[${documentIndex}]`,
+                        description: `Document ${documentId} does not have a groups array`
                     });
                     return;
                 }
                 
-                if (!Array.isArray(page.bins)) {
+                if (!Array.isArray(document.groups)) {
                     issues.push({
-                        type: 'invalid_bins',
-                        location: `pages[${pageIndex}]`,
-                        description: `Page ${pageId} bins is not an array`
+                        type: 'invalid_groups',
+                        location: `documents[${documentIndex}]`,
+                        description: `Document ${documentId} groups is not an array`
                     });
                     return;
                 }
                 
-                elementCounts.bins += page.bins.length;
+                elementCounts.groups += document.groups.length;
                 
-                // Check each bin
-                page.bins.forEach((bin, binIndex) => {
-                    const binId = bin.id || `bin-${binIndex}`;
-                    structure.bins.push({ 
-                        pageId, 
-                        binId, 
-                        pageIndex, 
-                        binIndex 
+                // Check each group
+                document.groups.forEach((group, groupIndex) => {
+                    const groupId = group.id || `group-${groupIndex}`;
+                    structure.groups.push({ 
+                        documentId, 
+                        groupId, 
+                        documentIndex, 
+                        groupIndex 
                     });
                     
-                    if (!bin.elements) {
+                    if (!group.items) {
                         issues.push({
-                            type: 'missing_elements',
-                            location: `pages[${pageIndex}].bins[${binIndex}]`,
-                            description: `Bin ${binId} does not have an elements array`
+                            type: 'missing_items',
+                            location: `documents[${documentIndex}].groups[${groupIndex}]`,
+                            description: `Group ${groupId} does not have an items array`
                         });
                         return;
                     }
                     
-                    if (!Array.isArray(bin.elements)) {
+                    if (!Array.isArray(group.items)) {
                         issues.push({
-                            type: 'invalid_elements',
-                            location: `pages[${pageIndex}].bins[${binIndex}]`,
-                            description: `Bin ${binId} elements is not an array`
+                            type: 'invalid_items',
+                            location: `documents[${documentIndex}].groups[${groupIndex}]`,
+                            description: `Group ${groupId} items is not an array`
                         });
                         return;
                     }
                     
-                    elementCounts.elements += bin.elements.length;
+                    elementCounts.items += group.items.length;
                     
-                    // Check each element
-                    bin.elements.forEach((element, elementIndex) => {
-                        structure.elements.push({
-                            pageId,
-                            binId,
-                            pageIndex,
-                            binIndex,
-                            elementIndex
+                    // Check each item
+                    group.items.forEach((item, itemIndex) => {
+                        structure.items.push({
+                            documentId,
+                            groupId,
+                            documentIndex,
+                            groupIndex,
+                            itemIndex
                         });
                         
-                        // Check for null/undefined elements
-                        if (element === null || element === undefined) {
+                        // Check for null/undefined items
+                        if (item === null || item === undefined) {
                             issues.push({
-                                type: 'null_element',
-                                location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}]`,
-                                description: `Element at index ${elementIndex} is null or undefined`
+                                type: 'null_item',
+                                location: `documents[${documentIndex}].groups[${groupIndex}].items[${itemIndex}]`,
+                                description: `Item at index ${itemIndex} is null or undefined`
                             });
                             return;
                         }
                         
                         // Check for missing critical properties
-                        if (element.type === undefined || element.type === null) {
+                        if (item.type === undefined || item.type === null) {
                             issues.push({
                                 type: 'missing_type',
-                                location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}]`,
-                                description: `Element at index ${elementIndex} is missing type property`
+                                location: `documents[${documentIndex}].groups[${groupIndex}].items[${itemIndex}]`,
+                                description: `Item at index ${itemIndex} is missing type property`
                             });
                         }
                         
                         // Check for orphaned children references
-                        if (element.children && Array.isArray(element.children)) {
-                            element.children.forEach((child, childIndex) => {
+                        if (item.children && Array.isArray(item.children)) {
+                            item.children.forEach((child, childIndex) => {
                                 if (child === null || child === undefined) {
                                     issues.push({
                                         type: 'null_child',
-                                        location: `pages[${pageIndex}].bins[${binIndex}].elements[${elementIndex}].children[${childIndex}]`,
-                                        description: `Child element at index ${childIndex} is null or undefined`
+                                        location: `documents[${documentIndex}].groups[${groupIndex}].items[${itemIndex}].children[${childIndex}]`,
+                                        description: `Child item at index ${childIndex} is null or undefined`
                                     });
                                 }
                             });

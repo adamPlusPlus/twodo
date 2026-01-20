@@ -145,11 +145,15 @@ export class CardRenderer {
                     onCheckboxChange(e, pageId, binId, elementIndex);
                 } else {
                     // Default handler
-                    const page = app.pages?.find(p => p.id === pageId) || 
-                                app.appState?.pages?.find(p => p.id === pageId);
-                    const bin = page?.bins?.find(b => b.id === binId);
-                    if (bin && bin.elements[elementIndex]) {
-                        bin.elements[elementIndex].completed = e.target.checked;
+                    const page = app.documents?.find(p => p.id === pageId) || 
+                                app.appState?.documents?.find(p => p.id === pageId);
+                    const bin = page?.groups?.find(b => b.id === binId);
+                    const items = bin?.items || [];
+                    if (bin) {
+                        bin.items = items;
+                    }
+                    if (items[elementIndex]) {
+                        items[elementIndex].completed = e.target.checked;
                         if (app.dataManager) {
                             app.dataManager.saveData();
                         }

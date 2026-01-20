@@ -115,7 +115,7 @@ export default class CustomViews extends BasePlugin {
         const view = this.config.views[viewIndex];
         if (!view) return;
 
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.documents?.find(p => p.id === pageId);
         if (!page) return;
 
         if (!page.pluginConfigs) page.pluginConfigs = {};
@@ -129,7 +129,7 @@ export default class CustomViews extends BasePlugin {
     }
 
     clearView(pageId) {
-        const page = this.app.pages.find(p => p.id === pageId);
+        const page = this.app.documents?.find(p => p.id === pageId);
         if (!page) return;
 
         if (page.pluginConfigs?.[this.id]) {

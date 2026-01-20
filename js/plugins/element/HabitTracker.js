@@ -191,9 +191,13 @@ export default class HabitTracker extends BaseElementType {
     }
     
     toggleHabit(pageId, binId, elementIndex, checked) {
-        const page = this.app.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const element = bin?.elements?.[elementIndex];
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        const items = bin?.items || [];
+        if (bin) {
+            bin.items = items;
+        }
+        const element = items[elementIndex];
         if (!element) return;
         
         if (!element.habitData) {

@@ -318,11 +318,16 @@ export class TouchGestureHandler {
                         // Swipe left - delete
                         if (confirm('Delete this element?')) {
                             const appState = this._getAppState();
-                            const page = appState.pages.find(p => p.id === pageId);
+                            const page = appState.documents.find(p => p.id === pageId);
                             if (page) {
-                                const bin = page.bins?.find(b => b.id === binId);
-                                if (bin && bin.elements && bin.elements[elementIndex]) {
-                                    bin.elements.splice(elementIndex, 1);
+                                const bin = page.groups?.find(b => b.id === binId);
+                                const items = bin?.items || [];
+                                if (bin) {
+                                    bin.items = items;
+                                }
+                                if (items[elementIndex]) {
+                                    items.splice(elementIndex, 1);
+                                    bin.items = items;
                                     const dataManager = this._getDataManager();
                                     if (dataManager) {
                                         dataManager.saveData();

@@ -294,13 +294,16 @@ export class RelationshipManager {
     updateElementRelationships(elementId) {
         const [pageId, binId, elementIndex] = elementId.split(':');
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return;
+        const bin = page.groups?.find(b => b.id === binId);
+        if (!bin) return;
+        const items = bin.items || [];
+        bin.items = items;
+        if (!items) return;
         
-        const element = bin.elements[parseInt(elementIndex)];
+        const element = items[parseInt(elementIndex)];
         if (!element) return;
         
         // Initialize relationships object with all relationship types
@@ -400,13 +403,16 @@ export class RelationshipManager {
     getElement(elementId) {
         const { pageId, binId, elementIndex } = this.parseElementId(elementId);
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return null;
         
-        const bin = page.bins?.find(b => b.id === binId);
-        if (!bin || !bin.elements) return null;
+        const bin = page.groups?.find(b => b.id === binId);
+        if (!bin) return null;
+        const items = bin.items || [];
+        bin.items = items;
+        if (!items) return null;
         
-        const element = bin.elements[elementIndex];
+        const element = items[elementIndex];
         if (!element) return null;
         
         return {
@@ -426,15 +432,15 @@ export class RelationshipManager {
         this.relationships.clear();
         
         const appState = this._getAppState();
-        appState.pages.forEach(page => {
-            if (page.bins) {
-                page.bins.forEach(bin => {
-                    if (bin.elements) {
-                        bin.elements.forEach((element, index) => {
+        appState.documents.forEach(page => {
+            if (page.groups) {
+                page.groups.forEach(bin => {
+                    const items = bin.items || [];
+                    bin.items = items;
+                    items.forEach((element, index) => {
                             const elementId = this.getElementId(page.id, bin.id, index);
                             this.loadRelationships(elementId, element);
                         });
-                    }
                 });
             }
         });

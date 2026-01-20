@@ -23,6 +23,14 @@ export class CounterRenderer {
      * @returns {void}
      */
     render(div, pageId, binId, element, elementIndex, depth, renderChildren) {
+        const getCounterElement = () => {
+        const document = this.app.appState.documents?.find(page => page.id === pageId);
+        const group = document?.groups?.find(bin => bin.id === binId);
+        if (!group) return null;
+        const items = group.items || [];
+        group.items = items;
+        return items[elementIndex];
+        };
         // Create counter header container (like task elements)
         const counterHeader = document.createElement('div');
         counterHeader.className = 'task-header';
@@ -78,9 +86,7 @@ export class CounterRenderer {
         decBtn.style.fontSize = '20px';
         decBtn.onclick = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const counterElement = bin?.elements[elementIndex];
+        const counterElement = getCounterElement();
         if (counterElement) {
         counterElement.value = Math.max(0, counterElement.value - counterElement.increment1);
         valueDisplay.textContent = counterElement.value;
@@ -105,9 +111,7 @@ export class CounterRenderer {
         incBtn.style.fontSize = '20px';
         incBtn.onclick = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const counterElement = bin?.elements[elementIndex];
+        const counterElement = getCounterElement();
         if (counterElement) {
         counterElement.value = (counterElement.value || 0) + counterElement.increment1;
         valueDisplay.textContent = counterElement.value;
@@ -121,9 +125,7 @@ export class CounterRenderer {
         customInc5.textContent = `+${element.increment5 || 5}`;
         customInc5.onclick = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const counterElement = bin?.elements[elementIndex];
+        const counterElement = getCounterElement();
         if (counterElement) {
         counterElement.value = (counterElement.value || 0) + (counterElement.increment5 || 5);
         valueDisplay.textContent = counterElement.value;
@@ -136,9 +138,7 @@ export class CounterRenderer {
         customInc.textContent = `+${element.customIncrement || 10}`;
         customInc.onclick = (e) => {
         e.stopPropagation();
-        const page = this.app.appState.pages.find(p => p.id === pageId);
-        const bin = page?.bins?.find(b => b.id === binId);
-        const counterElement = bin?.elements[elementIndex];
+        const counterElement = getCounterElement();
         if (counterElement) {
         counterElement.value = (counterElement.value || 0) + (counterElement.customIncrement || 10);
         valueDisplay.textContent = counterElement.value;

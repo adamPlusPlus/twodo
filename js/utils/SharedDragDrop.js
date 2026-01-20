@@ -75,14 +75,18 @@ export class SharedDragDrop {
             if (!hasTitleOrText) return;
             
             // Check if source element is a text/checkbox type
-            const sourcePage = this.app.appState?.pages?.find(p => p.id === dragPayload.pageId) || 
-                             this.app.pages?.find(p => p.id === dragPayload.pageId);
+            const sourcePage = this.app.appState?.documents?.find(p => p.id === dragPayload.pageId) || 
+                             this.app.documents?.find(p => p.id === dragPayload.pageId);
             if (!sourcePage) return;
             
-            const sourceBin = sourcePage.bins?.find(b => b.id === dragPayload.binId);
-            if (!sourceBin || !sourceBin.elements) return;
+            const sourceBin = sourcePage.groups?.find(b => b.id === dragPayload.binId);
+            const items = sourceBin?.items || [];
+            if (sourceBin) {
+                sourceBin.items = items;
+            }
+            if (!sourceBin) return;
             
-            const sourceElement = sourceBin.elements[dragPayload.elementIndex];
+            const sourceElement = items[dragPayload.elementIndex];
             if (!sourceElement) return;
             
             const sourceTypes = ['task', 'note', 'header-checkbox', 'text'];

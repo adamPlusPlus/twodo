@@ -38,10 +38,10 @@ export class BinPluginManager {
      */
     async initializeBinPlugins(pageId, binId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
         
         const enabledPlugins = bin.plugins || [];
@@ -84,10 +84,10 @@ export class BinPluginManager {
      */
     async enablePlugin(pageId, binId, pluginId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return false;
         
         const plugin = pluginRegistry.get(pluginId);
@@ -143,10 +143,10 @@ export class BinPluginManager {
      */
     async disablePlugin(pageId, binId, pluginId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return false;
         
         const success = await pluginRegistry.disable(pluginId);
@@ -206,10 +206,10 @@ export class BinPluginManager {
      */
     renderPluginUI(container, pageId, binId) {
         const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
+        const page = appState.documents.find(p => p.id === pageId);
         if (!page) return;
         
-        const bin = page.bins?.find(b => b.id === binId);
+        const bin = page.groups?.find(b => b.id === binId);
         if (!bin) return;
         
         const availablePlugins = this.getAvailablePlugins();
@@ -282,8 +282,8 @@ export class BinPluginManager {
                     class: `plugin-content plugin-${plugin.id}`
                 });
                 const appState = this._getAppState();
-        const page = appState.pages.find(p => p.id === pageId);
-                const bin = page.bins?.find(b => b.id === binId);
+        const page = appState.documents.find(p => p.id === pageId);
+                const bin = page.groups?.find(b => b.id === binId);
                 plugin.render(pluginContainer, bin, { page });
                 container.appendChild(pluginContainer);
             }

@@ -13,60 +13,60 @@ export class DataRepository {
     }
     
     /**
-     * Get all pages
-     * @returns {Array} Array of pages
+     * Get all documents
+     * @returns {Array} Array of documents
      */
-    getPages() {
+    getDocuments() {
         // This will be implemented to get from AppState service
         // For now, placeholder
         return [];
     }
-    
+
     /**
-     * Get a specific page by ID
-     * @param {string} pageId - Page ID
-     * @returns {Object|null} Page object or null
+     * Get a specific document by ID
+     * @param {string} documentId - Document ID
+     * @returns {Object|null} Document object or null
      */
-    getPage(pageId) {
-        const pages = this.getPages();
-        return pages.find(page => page.id === pageId) || null;
+    getDocument(documentId) {
+        const documents = this.getDocuments();
+        return documents.find(document => document.id === documentId) || null;
     }
-    
+
     /**
-     * Save pages
-     * @param {Array} pages - Array of pages to save
+     * Save documents
+     * @param {Array} documents - Array of documents to save
      */
-    savePages(pages) {
+    saveDocuments(documents) {
         // This will be implemented to update AppState
         // For now, placeholder
     }
-    
+
     /**
-     * Get current page ID
-     * @returns {string} Current page ID
+     * Get current document ID
+     * @returns {string} Current document ID
      */
-    getCurrentPageId() {
+    getCurrentDocumentId() {
         // Placeholder - will get from AppState
         return null;
     }
-    
+
     /**
-     * Set current page ID
-     * @param {string} pageId - Page ID
+     * Set current document ID
+     * @param {string} documentId - Document ID
      */
-    setCurrentPageId(pageId) {
+    setCurrentDocumentId(documentId) {
         // Placeholder - will set in AppState
     }
-    
+
     /**
-     * Get bin states
-     * @returns {Object} Bin states object
+     * Get group states
+     * @returns {Object} Group states object
      */
-    getBinStates() {
+    getGroupStates() {
         // Placeholder
         return {};
     }
-    
+
     /**
      * Get subtask states
      * @returns {Object} Subtask states object
@@ -104,38 +104,38 @@ export class AppStateRepository extends DataRepository {
         return null;
     }
     
-    getPages() {
+    getDocuments() {
         const appState = this._getAppState();
-        return appState ? appState.pages : [];
+        return appState ? appState.documents : [];
     }
     
-    getPage(pageId) {
-        const pages = this.getPages();
-        return pages.find(page => page.id === pageId) || null;
+    getDocument(documentId) {
+        const documents = this.getDocuments();
+        return documents.find(document => document.id === documentId) || null;
     }
     
-    savePages(pages) {
+    saveDocuments(documents) {
         const appState = this._getAppState();
         if (appState) {
-            appState.pages = pages;
+            appState.documents = documents;
         }
     }
     
-    getCurrentPageId() {
+    getCurrentDocumentId() {
         const appState = this._getAppState();
-        return appState ? appState.currentPageId : null;
+        return appState ? appState.currentDocumentId : null;
     }
     
-    setCurrentPageId(pageId) {
+    setCurrentDocumentId(documentId) {
         const appState = this._getAppState();
         if (appState) {
-            appState.currentPageId = pageId;
+            appState.currentDocumentId = documentId;
         }
     }
     
-    getBinStates() {
+    getGroupStates() {
         const appState = this._getAppState();
-        return appState ? appState.binStates : {};
+        return appState ? appState.groupStates : {};
     }
     
     getSubtaskStates() {
