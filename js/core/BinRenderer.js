@@ -2,6 +2,7 @@
 // Extracted from app.js to improve modularity
 import { eventBus } from './EventBus.js';
 import { EventHelper } from '../utils/EventHelper.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 /**
  * BinRenderer - Handles rendering of bins
@@ -78,8 +79,9 @@ export class BinRenderer {
             console.warn('bin.items is not an array:', items, 'for bin:', bin.id);
         }
         bin.items = items;
-        
-        items.forEach((element, elIndex) => {
+
+        const rootItems = ItemHierarchy.getRootItems(items);
+        rootItems.forEach((element, elIndex) => {
             // Delegate to ElementRenderer (will be created)
             const elementElement = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
             elementsList.appendChild(elementElement);

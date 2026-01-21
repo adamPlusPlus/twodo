@@ -37,15 +37,18 @@ export class PageManager {
             id: 'group-0',
             title: 'Group 1',
             items: [],
-            elements: []
+            level: 0,
+            parentGroupId: null
         }];
         const newDocument = {
             id: documentId,
             groups: seededGroups,
-            bins: seededGroups,
+            groupMode: 'manual',
             plugins: [],
             format: null,
-            config: {}
+            config: {
+                groupMode: 'manual'
+            }
         };
         const pageIndex = appState.documents.length;
         appState.documents.push(newDocument);
@@ -91,12 +94,16 @@ export class PageManager {
                     id: 'group-0',
                     title: 'Group 1',
                     items: [],
-                    elements: []
+                    level: 0,
+                    parentGroupId: null
                 }];
                 const defaultDocument = {
                     id: 'page-1',
                     groups: seededGroups,
-                    bins: seededGroups
+                    groupMode: 'manual',
+                    config: {
+                        groupMode: 'manual'
+                    }
                 };
                 appState.documents = [defaultDocument];
                 appState.currentDocumentId = 'page-1';

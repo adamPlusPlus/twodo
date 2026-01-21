@@ -152,13 +152,8 @@ export class TemplateManager {
                 const items = bin.items || [];
                 bin.items = items;
                 if (items.length > 0) {
-                    items.forEach(element => {
-                        // Elements don't need IDs, but ensure children have proper structure
-                        if (element.children) {
-                            element.children.forEach(child => {
-                                // Ensure children are properly structured
-                            });
-                        }
+                    items.forEach(() => {
+                        // Template elements are validated elsewhere
                     });
                 }
             });
@@ -186,12 +181,8 @@ export class TemplateManager {
         const items = newBin.items || [];
         newBin.items = items;
         if (items.length > 0) {
-            items.forEach(element => {
-                if (element.children) {
-                    element.children.forEach(child => {
-                        // Ensure children are properly structured
-                    });
-                }
+            items.forEach(() => {
+                // Template elements are validated elsewhere
             });
         }
         

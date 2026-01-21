@@ -1,6 +1,7 @@
 // SearchIndex.js - Builds and maintains a search index for all elements
 import { DataUtils } from '../utils/data.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class SearchIndex {
     constructor() {
@@ -33,9 +34,10 @@ export class SearchIndex {
                     const items = bin.items || [];
                     bin.items = items;
                     if (items.length > 0) {
+                        const itemIndex = ItemHierarchy.buildItemIndex(items);
                         items.forEach((element, elementIndex) => {
                             const elementId = this.getElementId(page.id, bin.id, elementIndex);
-                            this.index.set(elementId, this.extractSearchableData(page, bin, element, elementIndex));
+                            this.index.set(elementId, this.extractSearchableData(page, bin, element, elementIndex, itemIndex));
                         });
                     }
                 });
@@ -53,7 +55,8 @@ export class SearchIndex {
     /**
      * Extract searchable data from an element
      */
-    extractSearchableData(page, bin, element, elementIndex) {
+    extractSearchableData(page, bin, element, elementIndex, itemIndex) {
+        const childItems = itemIndex ? ItemHierarchy.getChildItems(element, itemIndex) : [];
         const searchableData = {
             pageId: page.id,
             pageTitle: page.title || '',
@@ -69,7 +72,7 @@ export class SearchIndex {
             funModifier: element.funModifier || '',
             customProperties: element.customProperties || {},
             // Include children text
-            childrenText: (element.children || []).map(child => child.text || '').join(' '),
+            childrenText: childItems.map(child => child.text || '').join(' '),
             // Include items text for multi-checkbox
             itemsText: (element.items || []).map(item => item.text || '').join(' ')
         };

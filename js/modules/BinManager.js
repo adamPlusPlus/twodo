@@ -25,11 +25,21 @@ export class BinManager {
     _getBinPluginManager() {
         return getService(SERVICES.BIN_PLUGIN_MANAGER);
     }
+
+    _isManualGroupMode(document) {
+        const groupMode = document?.groupMode || document?.config?.groupMode || 'manual';
+        if (groupMode !== 'manual') {
+            console.warn('[BinManager] Group modifications are disabled in header-derived mode.');
+            return false;
+        }
+        return true;
+    }
     
     async addBin(pageId, afterBinId = null) {
         const appState = this._getAppState();
         const document = appState.documents.find(p => p.id === pageId);
         if (!document) return;
+        if (!this._isManualGroupMode(document)) return;
 
         if (!document.groups) {
             document.groups = [];
@@ -39,7 +49,7 @@ export class BinManager {
         let binId;
         let counter = 0;
         do {
-            binId = `bin-${counter}`;
+            binId = `group-${counter}`;
             counter++;
         } while (document.groups.some(b => b.id === binId));
 
@@ -48,6 +58,8 @@ export class BinManager {
             id: binId,
             title: `Group ${binNum}`,
             items: [],
+            level: 0,
+            parentGroupId: null,
             plugins: [],
             format: null,
             config: {}
@@ -98,6 +110,7 @@ export class BinManager {
         const appState = this._getAppState();
         const document = appState.documents.find(p => p.id === pageId);
         if (!document || !document.groups) return;
+        if (!this._isManualGroupMode(document)) return;
         
         const group = document.groups.find(b => b.id === binId);
         if (!group) return;
@@ -122,9 +135,14 @@ export class BinManager {
         // If no groups left, create a default one
         if (document.groups.length === 0) {
             const defaultGroup = {
-                id: 'bin-0',
+                id: 'group-0',
                 title: 'Group 1',
-                items: []
+                items: [],
+                level: 0,
+                parentGroupId: null,
+                plugins: [],
+                format: null,
+                config: {}
             };
             document.groups = [defaultGroup];
             
@@ -149,6 +167,7 @@ export class BinManager {
         const targetPage = appState.documents.find(p => p.id === targetPageId);
         
         if (!sourcePage || !targetPage || !sourcePage.groups || !targetPage.groups) return;
+        if (!this._isManualGroupMode(sourcePage) || !this._isManualGroupMode(targetPage)) return;
         
         const sourceBin = sourcePage.groups.find(b => b.id === sourceBinId);
         const targetBin = targetPage.groups.find(b => b.id === targetBinId);

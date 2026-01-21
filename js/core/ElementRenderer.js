@@ -5,6 +5,7 @@ import { EVENTS } from './AppEvents.js';
 import { ElementTypeRegistry } from './elements/ElementTypeRegistry.js';
 import { SharedDragDrop } from '../utils/SharedDragDrop.js';
 import { EventHelper } from '../utils/EventHelper.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 /**
  * ElementRenderer - Handles rendering of elements and their children
@@ -36,6 +37,20 @@ export class ElementRenderer {
         const group = this._getGroup(document, binId);
         return { document, group, items: group ? group.items : [] };
     }
+
+    _getItemIndexForGroup(group) {
+        return ItemHierarchy.buildItemIndex(group?.items || []);
+    }
+
+    _getRootItemByIndex(group, elementIndex) {
+        return ItemHierarchy.getRootItemAtIndex(group?.items || [], elementIndex);
+    }
+
+    _getChildItemByIndex(group, parentElement, childIndex) {
+        const itemIndex = this._getItemIndexForGroup(group);
+        const childItems = ItemHierarchy.getChildItems(parentElement, itemIndex);
+        return childItems[childIndex] || null;
+    }
     
     /**
      * Render children elements
@@ -51,8 +66,12 @@ export class ElementRenderer {
         if (depth > 1) {
             return null;
         }
-        
-        if (!parentElement.children || !Array.isArray(parentElement.children) || parentElement.children.length === 0) {
+
+        const { group } = this._getGroupByIds(pageId, binId);
+        const itemIndex = ItemHierarchy.buildItemIndex(group?.items || []);
+        const childItems = ItemHierarchy.getChildItems(parentElement, itemIndex);
+
+        if (!childItems.length) {
             return null;
         }
         
@@ -120,7 +139,7 @@ export class ElementRenderer {
             
             // Find which position we're hovering over
             const childElements = Array.from(content.querySelectorAll('.element.child-element'));
-            let insertIndex = parentElement.children.length; // Default to end
+            let insertIndex = childItems.length; // Default to end
             let targetElement = null;
             
             for (let i = 0; i < childElements.length; i++) {
@@ -245,7 +264,7 @@ export class ElementRenderer {
             content._dropTargetIndex = null;
         });
         
-        parentElement.children.forEach((child, childIndex) => {
+        childItems.forEach((child, childIndex) => {
             // For nested children, we use a special identifier: parentIndex-childIndex
             // But for rendering purposes, we still need to track the parent
             const childElement = this.renderElement(pageId, binId, child, `${parentElementIndex}-${childIndex}`, childIndex, depth + 1);
@@ -531,9 +550,10 @@ export class ElementRenderer {
             };
             // Log element selected for nesting debugging
             const { document: sourceDoc, group: sourceGroup } = this._getGroupByIds(actualPageId, binId);
-            const sourceElement = isChild && parentElementIndex !== null && childIndex !== null
-                ? (sourceGroup?.items?.[parentElementIndex]?.children?.[childIndex])
-                : (sourceGroup?.items?.[actualElementIndex]);
+            const parentElement = parentElementIndex !== null ? this._getRootItemByIndex(sourceGroup, parentElementIndex) : null;
+            const sourceElement = isChild && parentElement && childIndex !== null
+                ? this._getChildItemByIndex(sourceGroup, parentElement, childIndex)
+                : this._getRootItemByIndex(sourceGroup, actualElementIndex);
             const elementText = sourceElement?.text || 'N/A';
             
             console.log('📌 ELEMENT SELECTED:', {
@@ -670,7 +690,8 @@ export class ElementRenderer {
                         const parentIndex = parseInt(childrenContent.dataset.parentElementIndex);
                         if (Number.isNaN(parentIndex)) return 0;
                         const { group } = this._getGroupByIds(pageId, binId);
-                        return group?.items?.[parentIndex]?.children?.length || 0;
+                        const parentElement = this._getRootItemByIndex(group, parentIndex);
+                        return parentElement?.childIds?.length || 0;
                     })() : 0;
                     let targetElement = null;
                     
@@ -936,10 +957,11 @@ export class ElementRenderer {
                     
                     // Check if this is a valid nesting target
                     const { group: targetGroup } = this._getGroupByIds(pageId, binId);
-                    const targetElement = targetGroup && targetGroup.items[actualElementIndex];
+                    const targetElement = targetGroup ? this._getRootItemByIndex(targetGroup, actualElementIndex) : null;
                     // Check if any existing children have their own children (enforce one-level limit)
-                    const hasNestedChildren = targetElement && targetElement.children &&
-                        targetElement.children.some(child => child.children && child.children.length > 0);
+                    const itemIndex = this._getItemIndexForGroup(targetGroup);
+                    const childItems = targetElement ? ItemHierarchy.getChildItems(targetElement, itemIndex) : [];
+                    const hasNestedChildren = childItems.some(child => (child.childIds || []).length > 0);
                     const canNest = targetElement && !hasNestedChildren;
 
                     // Debug logging disabled
@@ -1339,12 +1361,12 @@ export class ElementRenderer {
                 let targetElementText = 'N/A';
                 
                 if (targetIsChild && targetParentIndex !== null) {
-                    const parentElement = targetGroup?.items?.[targetParentIndex];
+                    const parentElement = targetGroup ? this._getRootItemByIndex(targetGroup, targetParentIndex) : null;
                     const childIdx = typeof actualElementIndex === 'string' ? parseInt(actualElementIndex.split('-')[1]) : 0;
-                    targetElement = parentElement?.children?.[childIdx];
+                    targetElement = parentElement ? this._getChildItemByIndex(targetGroup, parentElement, childIdx) : null;
                     targetElementText = targetElement?.text || 'N/A';
                 } else {
-                    targetElement = targetGroup?.items?.[targetElementIndex];
+                    targetElement = targetGroup ? this._getRootItemByIndex(targetGroup, targetElementIndex) : null;
                     targetElementText = targetElement?.text || 'N/A';
                 }
                 
@@ -1395,15 +1417,14 @@ export class ElementRenderer {
                             // First un-nest: move the child to become a regular element
                             // We'll place it temporarily, then nest it
                             const { group: sourceGroup } = this._getGroupByIds(dragData.pageId, dragData.binId);
-                            const parentElement = sourceGroup?.items?.[dragData.parentElementIndex];
-                            if (parentElement && parentElement.children && parentElement.children[dragData.childIndex]) {
-                                const childElement = parentElement.children[dragData.childIndex];
-                                // Remove from parent's children
-                                parentElement.children.splice(dragData.childIndex, 1);
-                                // Clean up empty children array to ensure UI updates correctly
-                                if (parentElement.children.length === 0) {
-                                    delete parentElement.children;
+                            const parentElement = sourceGroup ? this._getRootItemByIndex(sourceGroup, dragData.parentElementIndex) : null;
+                            const childElement = parentElement ? this._getChildItemByIndex(sourceGroup, parentElement, dragData.childIndex) : null;
+                            if (parentElement && childElement) {
+                                if (!Array.isArray(parentElement.childIds)) {
+                                    parentElement.childIds = [];
                                 }
+                                parentElement.childIds.splice(dragData.childIndex, 1);
+                                childElement.parentId = null;
                                 // Now nest it as a regular element (not a child)
                                 this.this.app.nestElement(dragData.pageId, dragData.binId, dragData.parentElementIndex, actualPageId, actualBinId, nestTargetIndex,
                                     false, null, null, childElement);
@@ -1532,7 +1553,11 @@ export class ElementRenderer {
                         isDroppingOnSibling: isDroppingOnSibling,
                         calculatedTargetIndex: unnestTargetIndex,
                         sourceBinElementsLength: this._getGroupByIds(dragData.pageId, dragData.binId).group?.items?.length || 0,
-                        parentElementBefore: this._getGroupByIds(dragData.pageId, dragData.binId).group?.items?.[dragData.parentElementIndex]?.children?.length || 0,
+                        parentElementBefore: (() => {
+                            const { group } = this._getGroupByIds(dragData.pageId, dragData.binId);
+                            const parentElement = this._getRootItemByIndex(group, dragData.parentElementIndex);
+                            return parentElement?.childIds?.length || 0;
+                        })(),
                         willUnnest: true
                     });
                     

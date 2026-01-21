@@ -29,13 +29,18 @@ export class FileManager {
         return getService(SERVICES.APP_STATE);
     }
 
+    _getDataManager() {
+        return getService(SERVICES.DATA_MANAGER);
+    }
+
     _normalizeFileData(rawData) {
         if (!rawData || typeof rawData !== 'object') {
             return { documents: [] };
         }
         const normalized = { ...rawData };
         normalized.documents = normalized.documents || [];
-        return normalized;
+        const dataManager = this._getDataManager();
+        return dataManager ? dataManager.normalizeDataModel(normalized) : normalized;
     }
     
     async listFiles() {
@@ -62,7 +67,7 @@ export class FileManager {
         }
     }
     
-    async saveFile(filename, data, silent = false) {
+    async saveFile(filename, data, silent = false, saveIndexes = true) {
         try {
             // If backup is loaded and differs, use temp filename for saves
             let actualFilename = filename;
@@ -105,6 +110,9 @@ export class FileManager {
                     undoRedoManager._debouncedSaveBuffer();
                 }
                 
+                if (saveIndexes) {
+                    await this._saveDerivedIndexes(actualFilename, data, true);
+                }
                 return result;
             } else {
                 throw new Error(result.error || 'Failed to save file');
@@ -124,7 +132,7 @@ export class FileManager {
         }
     }
     
-    async saveAsFile(filename, data) {
+    async saveAsFile(filename, data, saveIndexes = true) {
         try {
             const response = await fetch('/files/save-as', {
                 method: 'POST',
@@ -145,6 +153,9 @@ export class FileManager {
             const result = await response.json();
             if (result.success) {
                 this.currentFilename = result.filename;
+                if (saveIndexes) {
+                    await this._saveDerivedIndexes(result.filename, data, true);
+                }
                 return result;
             } else {
                 throw new Error(result.error || 'Failed to save file');
@@ -159,6 +170,63 @@ export class FileManager {
             }
             throw error;
         }
+    }
+
+    _buildGroupIndexPayload(documents) {
+        const payload = {
+            generatedAt: new Date().toISOString(),
+            documents: {}
+        };
+
+        (documents || []).forEach(doc => {
+            const groupIndex = {};
+            const groups = doc.groups || [];
+            groups.forEach(group => {
+                groupIndex[group.id] = {
+                    id: group.id,
+                    parentGroupId: group.parentGroupId ?? null,
+                    level: typeof group.level === 'number' ? group.level : 0,
+                    childIds: [],
+                    ancestorIds: []
+                };
+            });
+
+            groups.forEach(group => {
+                const entry = groupIndex[group.id];
+                if (!entry) return;
+                const parentId = entry.parentGroupId;
+                if (parentId && groupIndex[parentId]) {
+                    groupIndex[parentId].childIds.push(group.id);
+                }
+            });
+
+            Object.values(groupIndex).forEach(entry => {
+                const ancestors = [];
+                let currentParent = entry.parentGroupId;
+                while (currentParent && groupIndex[currentParent]) {
+                    ancestors.push(currentParent);
+                    currentParent = groupIndex[currentParent].parentGroupId;
+                }
+                entry.ancestorIds = ancestors;
+            });
+
+            payload.documents[doc.id] = {
+                groupMode: doc.groupMode || doc.config?.groupMode || 'manual',
+                groups: groupIndex
+            };
+        });
+
+        return payload;
+    }
+
+    async _saveDerivedIndexes(filename, data, silent = true) {
+        if (!data || !Array.isArray(data.documents)) {
+            return;
+        }
+
+        const indexPayload = this._buildGroupIndexPayload(data.documents);
+        const indexFilename = `indexes/${filename}.groups.json`;
+        await this.saveFile(indexFilename, indexPayload, silent, false);
     }
     
     async loadFile(filename, loadBuffer = true) {
@@ -992,6 +1060,13 @@ export class FileManager {
                     
                     elementCounts.items += group.items.length;
                     
+                    const itemIndexMap = {};
+                    group.items.forEach(item => {
+                        if (item && item.id) {
+                            itemIndexMap[item.id] = item;
+                        }
+                    });
+                    
                     // Check each item
                     group.items.forEach((item, itemIndex) => {
                         structure.items.push({
@@ -1021,14 +1096,14 @@ export class FileManager {
                             });
                         }
                         
-                        // Check for orphaned children references
-                        if (item.children && Array.isArray(item.children)) {
-                            item.children.forEach((child, childIndex) => {
-                                if (child === null || child === undefined) {
+                        // Check for orphaned child ID references
+                        if (Array.isArray(item.childIds)) {
+                            item.childIds.forEach((childId, childIndex) => {
+                                if (!itemIndexMap[childId]) {
                                     issues.push({
-                                        type: 'null_child',
-                                        location: `documents[${documentIndex}].groups[${groupIndex}].items[${itemIndex}].children[${childIndex}]`,
-                                        description: `Child item at index ${childIndex} is null or undefined`
+                                        type: 'missing_child',
+                                        location: `documents[${documentIndex}].groups[${groupIndex}].items[${itemIndex}].childIds[${childIndex}]`,
+                                        description: `Child id ${childId} at index ${childIndex} is missing from items`
                                     });
                                 }
                             });

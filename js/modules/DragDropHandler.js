@@ -2,6 +2,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class DragDropHandler {
     constructor() {
@@ -43,6 +44,61 @@ export class DragDropHandler {
     _getRenderer() {
         return getService(SERVICES.RENDERER);
     }
+
+    _getRootItems(items) {
+        return ItemHierarchy.getRootItems(items);
+    }
+
+    _getRootItemAtIndex(items, elementIndex) {
+        return ItemHierarchy.getRootItemAtIndex(items, elementIndex);
+    }
+
+    _getFlatInsertIndex(items, rootIndex) {
+        if (rootIndex <= 0) return 0;
+        let seenRoots = 0;
+        for (let i = 0; i < items.length; i++) {
+            if (!items[i]?.parentId) {
+                if (seenRoots === rootIndex) {
+                    return i;
+                }
+                seenRoots += 1;
+            }
+        }
+        return items.length;
+    }
+
+    _getChildItemsForGroup(group, parentElement) {
+        const itemIndex = ItemHierarchy.buildItemIndex(group?.items || []);
+        return ItemHierarchy.getChildItems(parentElement, itemIndex);
+    }
+
+    _getChildItemForGroup(group, parentElement, childIndex) {
+        const children = this._getChildItemsForGroup(group, parentElement);
+        return children[childIndex] || null;
+    }
+
+    _getDescendantIds(item, itemIndex) {
+        const descendants = [];
+        const walk = (node) => {
+            const children = ItemHierarchy.getChildItems(node, itemIndex);
+            children.forEach(child => {
+                descendants.push(child.id);
+                walk(child);
+            });
+        };
+        walk(item);
+        return descendants;
+    }
+
+    _removeItemsByIds(items, ids) {
+        const idSet = ids instanceof Set ? ids : new Set(ids);
+        return (items || []).filter(item => !idSet.has(item.id));
+    }
+
+    _getItemsByIds(items, ids) {
+        const idSet = ids instanceof Set ? ids : new Set(ids);
+        return (items || []).filter(item => idSet.has(item.id));
+    }
     
     moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
         const appState = this._getAppState();
@@ -57,35 +113,41 @@ export class DragDropHandler {
             console.error('Source bin not found:', sourceBinId);
             return;
         }
-        const sourceItems = sourceBin.items || [];
+        let sourceItems = sourceBin.items || [];
         sourceBin.items = sourceItems;
+        const sourceRootItems = this._getRootItems(sourceItems);
+        const sourceItemIndex = ItemHierarchy.buildItemIndex(sourceItems);
         
         let element;
         
         // Handle children being moved
         if (isChild && parentElementIndex !== null && childIndex !== null) {
-            const parentElement = sourceItems[parentElementIndex];
-            if (!parentElement || !parentElement.children || !parentElement.children[childIndex]) {
+            const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
+            const childItems = parentElement ? ItemHierarchy.getChildItems(parentElement, sourceItemIndex) : [];
+            if (!parentElement || !childItems[childIndex]) {
                 console.error('Source child element not found:', childIndex, 'in parent', parentElementIndex);
                 return;
             }
-            element = parentElement.children[childIndex];
-            // Remove from parent's children
-            parentElement.children.splice(childIndex, 1);
-            // Clean up empty children array to ensure UI updates correctly
-            if (parentElement.children.length === 0) {
-                delete parentElement.children;
+            element = childItems[childIndex];
+            if (!Array.isArray(parentElement.childIds)) {
+                parentElement.childIds = [];
             }
+            parentElement.childIds.splice(childIndex, 1);
+            element.parentId = null;
         } else {
             // Regular element move
-            if (!sourceItems[sourceElementIndex]) {
+            if (!sourceRootItems[sourceElementIndex]) {
                 console.error('Source element not found:', sourceElementIndex, 'in bin', sourceBinId);
                 return;
             }
-            element = sourceItems[sourceElementIndex];
-            // Remove from source
-            sourceItems.splice(sourceElementIndex, 1);
+            element = sourceRootItems[sourceElementIndex];
         }
+
+        const descendantIds = this._getDescendantIds(element, sourceItemIndex);
+        const movingIds = new Set([element.id, ...descendantIds]);
+        const movingItems = this._getItemsByIds(sourceItems, movingIds);
+        sourceItems = this._removeItemsByIds(sourceItems, movingIds);
+        sourceBin.items = sourceItems;
         
         // Add to target
         const targetPage = appState.documents.find(p => p.id === targetPageId);
@@ -93,14 +155,19 @@ export class DragDropHandler {
             console.error('Target page not found:', targetPageId);
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceItems[parentElementIndex];
+                const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
                 if (parentElement) {
-                    if (!parentElement.children) parentElement.children = [];
-                    parentElement.children.splice(childIndex, 0, element);
+                    if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                    parentElement.childIds.splice(childIndex, 0, element.id);
+                    element.parentId = parentElement.id;
                 }
+                const insertIndex = this._getFlatInsertIndex(sourceItems, sourceElementIndex);
+                sourceItems.splice(insertIndex, 0, ...movingItems);
             } else {
-                sourceItems.splice(sourceElementIndex, 0, element);
+                const insertIndex = this._getFlatInsertIndex(sourceItems, sourceElementIndex);
+                sourceItems.splice(insertIndex, 0, ...movingItems);
             }
+            sourceBin.items = sourceItems;
             return;
         }
         
@@ -109,14 +176,19 @@ export class DragDropHandler {
             console.error('Target bin not found:', targetBinId);
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceItems[parentElementIndex];
+                const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
                 if (parentElement) {
-                    if (!parentElement.children) parentElement.children = [];
-                    parentElement.children.splice(childIndex, 0, element);
+                    if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                    parentElement.childIds.splice(childIndex, 0, element.id);
+                    element.parentId = parentElement.id;
                 }
+                const insertIndex = this._getFlatInsertIndex(sourceItems, sourceElementIndex);
+                sourceItems.splice(insertIndex, 0, ...movingItems);
             } else {
-                sourceItems.splice(sourceElementIndex, 0, element);
+                const insertIndex = this._getFlatInsertIndex(sourceItems, sourceElementIndex);
+                sourceItems.splice(insertIndex, 0, ...movingItems);
             }
+            sourceBin.items = sourceItems;
             return;
         }
         const targetItems = targetBin.items || [];
@@ -194,7 +266,8 @@ export class DragDropHandler {
             }
         }
         
-        targetItems.splice(adjustedTargetIndex, 0, element);
+        const insertFlatIndex = this._getFlatInsertIndex(targetItems, adjustedTargetIndex);
+        targetItems.splice(insertFlatIndex, 0, ...movingItems);
         targetBin.items = targetItems;
         
         // Record undo/redo change
@@ -238,17 +311,17 @@ export class DragDropHandler {
         };
         // Log resulting structure
         const resultBin = this._getGroup(targetPageId, targetBinId);
-        const resultElement = resultBin?.items?.[adjustedTargetIndex];
+        const resultElement = resultBin ? this._getRootItemAtIndex(resultBin.items, adjustedTargetIndex) : null;
         const resultText = resultElement?.text || 'N/A';
         
         // If we un-nested a child, check if parent still has children
         let parentChildrenInfo = 'N/A';
         if (isChild && parentElementIndex !== null) {
             const sourceBin = this._getGroup(sourcePageId, sourceBinId);
-            const parentElement = sourceBin?.items?.[parentElementIndex];
+            const parentElement = sourceBin ? this._getRootItemAtIndex(sourceBin.items, parentElementIndex) : null;
             if (parentElement) {
-                const childrenCount = parentElement.children?.length || 0;
-                parentChildrenInfo = `${childrenCount} child${childrenCount !== 1 ? 'ren' : ''} (${parentElement.children ? 'array exists' : 'no array'})`;
+                const childrenCount = parentElement.childIds?.length || 0;
+                parentChildrenInfo = `${childrenCount} child${childrenCount !== 1 ? 'ren' : ''} (${parentElement.childIds ? 'ids exist' : 'no ids'})`;
             }
         }
         
@@ -285,14 +358,14 @@ export class DragDropHandler {
             return;
         }
 
-        const parentElement = bin.items[parentElementIndex];
-        if (!parentElement || !parentElement.children || !parentElement.children[sourceChildIndex]) {
+        const parentElement = this._getRootItemAtIndex(bin.items, parentElementIndex);
+        if (!parentElement || !Array.isArray(parentElement.childIds) || !parentElement.childIds[sourceChildIndex]) {
             console.error('Parent element or child not found:', parentElementIndex, sourceChildIndex);
             return;
         }
 
         // Remove the child from its current position
-        const childElement = parentElement.children.splice(sourceChildIndex, 1)[0];
+        const childId = parentElement.childIds.splice(sourceChildIndex, 1)[0];
 
         // Insert it at the new position
         // Adjust target index if moving to a higher position (since we already removed the source)
@@ -302,12 +375,14 @@ export class DragDropHandler {
         }
 
         // Ensure index is valid
-        adjustedTargetIndex = Math.max(0, Math.min(adjustedTargetIndex, parentElement.children.length));
-        parentElement.children.splice(adjustedTargetIndex, 0, childElement);
+        adjustedTargetIndex = Math.max(0, Math.min(adjustedTargetIndex, parentElement.childIds.length));
+        parentElement.childIds.splice(adjustedTargetIndex, 0, childId);
 
         // Record undo/redo change
         const undoRedoManager = this._getUndoRedoManager();
         if (undoRedoManager) {
+            const itemIndex = ItemHierarchy.buildItemIndex(bin.items);
+            const childElement = itemIndex[childId];
             undoRedoManager.recordChildReorder(
                 pageId, binId, parentElementIndex, sourceChildIndex, adjustedTargetIndex,
                 JSON.parse(JSON.stringify(childElement))
@@ -366,8 +441,13 @@ export class DragDropHandler {
         }
         const targetItems = targetBin.items || [];
         targetBin.items = targetItems;
+        const sourceRootItems = this._getRootItems(sourceItems);
+        const targetRootItems = this._getRootItems(targetItems);
+        const sourceItemIndex = ItemHierarchy.buildItemIndex(sourceItems);
+        const targetItemIndex = ItemHierarchy.buildItemIndex(targetItems);
+        const isSameGroup = sourcePageId === targetPageId && sourceBinId === targetBinId;
         
-        if (!targetItems[targetElementIndex]) {
+        if (!targetRootItems[targetElementIndex]) {
             console.error('Target item not found:', targetElementIndex, 'in bin', targetBinId);
             return;
         }
@@ -382,43 +462,61 @@ export class DragDropHandler {
             sourceChildText = element.text || 'N/A';
         } else if (isChild && parentElementIndex !== null && childIndex !== null) {
             // Handle children being nested
-            const parentElement = sourceItems[parentElementIndex];
+            const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
             if (!parentElement) {
                 console.error('Source parent element not found at index:', parentElementIndex, 'in bin', sourceBinId);
                 console.error('Available items:', sourceItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
                 return;
             }
             sourceParentText = parentElement.text || 'N/A';
-            if (!parentElement.children || !parentElement.children[childIndex]) {
+            const childElement = this._getChildItemForGroup(sourceBin, parentElement, childIndex);
+            if (!childElement) {
                 console.error('Source child element not found:', {
                     childIndex: childIndex,
                     parentIndex: parentElementIndex,
                     parentText: sourceParentText,
-                    childrenCount: parentElement.children?.length || 0,
-                    availableChildren: parentElement.children?.map((c, i) => `${i}: "${c.text || 'N/A'}"`).join(', ') || 'none'
+                    childrenCount: parentElement.childIds?.length || 0,
+                    availableChildren: parentElement.childIds?.map((id, i) => `${i}: "${sourceItemIndex[id]?.text || 'N/A'}"`).join(', ') || 'none'
                 });
                 return;
             }
-            element = parentElement.children[childIndex];
+            element = childElement;
             sourceChildText = element.text || 'N/A';
-            // Remove from parent's children
-            parentElement.children.splice(childIndex, 1);
-            // Clean up empty children array to ensure UI updates correctly
-            if (parentElement.children.length === 0) {
-                delete parentElement.children;
+            if (!Array.isArray(parentElement.childIds)) {
+                parentElement.childIds = [];
             }
+            parentElement.childIds.splice(childIndex, 1);
+            element.parentId = null;
         } else {
             // Regular element nesting
-            if (!sourceItems[sourceElementIndex]) {
+            if (!sourceRootItems[sourceElementIndex]) {
                 console.error('Source element not found:', sourceElementIndex, 'in bin', sourceBinId);
                 console.error('Available items:', sourceItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
                 return;
             }
-            element = sourceItems[sourceElementIndex];
+            element = sourceRootItems[sourceElementIndex];
             sourceChildText = element.text || 'N/A';
-            // Remove from source
-            sourceItems.splice(sourceElementIndex, 1);
+            // Root item nesting does not remove from flat list
         }
+
+        const descendantIds = this._getDescendantIds(element, sourceItemIndex);
+        const movingIds = new Set([element.id, ...descendantIds]);
+        let movingItems = this._getItemsByIds(sourceItems, movingIds);
+        if (movingItems.length === 0) {
+            movingItems = [element];
+        }
+        if (!isSameGroup) {
+            sourceItems = this._removeItemsByIds(sourceItems, movingIds);
+            sourceBin.items = sourceItems;
+        }
+
+        const restoreToSource = () => {
+            if (!isSameGroup) {
+                const insertIndex = this._getFlatInsertIndex(sourceItems, sourceElementIndex);
+                sourceItems.splice(insertIndex, 0, ...movingItems);
+                sourceBin.items = sourceItems;
+            }
+        };
         
         // Adjust target index if source item was removed from items array and was before target
         // (This only applies to regular items, not children, since children are removed from children array)
@@ -428,20 +526,20 @@ export class DragDropHandler {
             adjustedTargetElementIndex = targetElementIndex - 1;
         }
         
-        const targetElement = targetItems[adjustedTargetElementIndex];
+        const targetElement = targetRootItems[adjustedTargetElementIndex];
         if (!targetElement) {
             console.error('Target element not found at index:', targetElementIndex, 'in bin', targetBinId);
             console.error('Available items:', targetItems.map((e, i) => `${i}: "${e.text || 'N/A'}"`).join(', '));
             // Re-add element to source if target is invalid
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceItems[parentElementIndex];
+                const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
                 if (parentElement) {
-                    if (!parentElement.children) parentElement.children = [];
-                    parentElement.children.splice(childIndex, 0, element);
+                    if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                    parentElement.childIds.splice(childIndex, 0, element.id);
+                    element.parentId = parentElement.id;
                 }
-            } else {
-                sourceItems.splice(sourceElementIndex, 0, element);
             }
+            restoreToSource();
             return;
         }
         
@@ -449,7 +547,7 @@ export class DragDropHandler {
         // Skip this check if elementToNest is provided (element already removed from array)
         // Compare actual element objects, not just indices (indices can be stale after moves)
         if (!elementToNest && !isChild && sourcePageId === targetPageId && sourceBinId === targetBinId) {
-            const targetElementForCheck = targetItems[adjustedTargetElementIndex];
+            const targetElementForCheck = targetRootItems[adjustedTargetElementIndex];
             
             // Only prevent if the actual element objects are the same
             // Compare the element we're nesting with the target element
@@ -470,77 +568,84 @@ export class DragDropHandler {
             if (actualParentIndex === adjustedTargetElementIndex) {
                 console.error('Cannot nest: cannot nest a child into its own parent');
                 // Re-add element to source
-                const parentElement = sourceItems[actualParentIndex];
+                const parentElement = this._getRootItemAtIndex(sourceItems, actualParentIndex);
                 if (parentElement) {
-                    if (!parentElement.children) parentElement.children = [];
-                    parentElement.children.splice(childIndex, 0, element);
+                    if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                    parentElement.childIds.splice(childIndex, 0, element.id);
+                    element.parentId = parentElement.id;
                 }
+                restoreToSource();
                 return;
             }
         }
         
         // Prevent circular nesting - check if target is a descendant of source
-        const isDescendant = (parent, child) => {
-            if (!parent.children || !Array.isArray(parent.children)) {
-                return false;
-            }
-            for (const c of parent.children) {
+        const isDescendant = (parent, child, itemIndex) => {
+            const children = ItemHierarchy.getChildItems(parent, itemIndex);
+            for (const c of children) {
                 if (c === child) {
                     return true;
                 }
-                if (isDescendant(c, child)) {
+                if (isDescendant(c, child, itemIndex)) {
                     return true;
                 }
             }
             return false;
         };
         
-        if (isDescendant(element, targetElement)) {
+        if (isDescendant(element, targetElement, targetItemIndex)) {
             console.error('Cannot nest: target is a descendant of source (circular nesting prevented)');
             // Re-add element to source
             if (isChild && parentElementIndex !== null) {
-                const parentElement = sourceItems[parentElementIndex];
+                const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
                 if (parentElement) {
-                    if (!parentElement.children) parentElement.children = [];
-                    parentElement.children.splice(childIndex, 0, element);
+                    if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                    parentElement.childIds.splice(childIndex, 0, element.id);
+                    element.parentId = parentElement.id;
                 }
-            } else {
-                sourceItems.splice(sourceElementIndex, 0, element);
             }
+            restoreToSource();
             return;
         }
         
         // Enforce one-level limit: check if any existing children have their own children
-        if (targetElement.children && targetElement.children.length > 0) {
-            const hasNestedChildren = targetElement.children.some(child => 
-                child.children && child.children.length > 0
-            );
+        if (Array.isArray(targetElement.childIds) && targetElement.childIds.length > 0) {
+            const targetChildren = ItemHierarchy.getChildItems(targetElement, targetItemIndex);
+            const hasNestedChildren = targetChildren.some(child => (child.childIds || []).length > 0);
             if (hasNestedChildren) {
                 console.error('Cannot nest: target has children with their own children (one-level limit enforced)');
                 // Re-add element to source
                 if (isChild && parentElementIndex !== null) {
-                    const parentElement = sourceItems[parentElementIndex];
+                    const parentElement = this._getRootItemAtIndex(sourceItems, parentElementIndex);
                     if (parentElement) {
-                        if (!parentElement.children) parentElement.children = [];
-                        parentElement.children.splice(childIndex, 0, element);
+                        if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+                        parentElement.childIds.splice(childIndex, 0, element.id);
+                        element.parentId = parentElement.id;
                     }
-                } else {
-                    sourceItems.splice(sourceElementIndex, 0, element);
                 }
+                restoreToSource();
                 return;
             }
         }
         
-        // Initialize children array if it doesn't exist
-        if (!targetElement.children) {
-            targetElement.children = [];
+        // Initialize childIds if it doesn't exist
+        if (!Array.isArray(targetElement.childIds)) {
+            targetElement.childIds = [];
         }
         
         // Add to target's children
-        targetElement.children.push(element);
+        targetElement.childIds.push(element.id);
+        element.parentId = targetElement.id;
+
+        if (!isSameGroup) {
+            const targetFlatIndex = targetItems.findIndex(item => item.id === targetElement.id);
+            const insertAt = targetFlatIndex === -1 ? targetItems.length : targetFlatIndex + 1;
+            targetItems.splice(insertAt, 0, ...movingItems);
+            targetBin.items = targetItems;
+        }
         
         // Log resulting structure
-        const resultElement = targetItems[adjustedTargetElementIndex];
+        const resultElement = targetRootItems[adjustedTargetElementIndex];
         const resultText = resultElement?.text || 'N/A';
         const dataManager = this._getDataManager();
         if (dataManager) {
@@ -612,11 +717,14 @@ export class DragDropHandler {
                 if (bin) {
                     const items = bin.items || [];
                     bin.items = items;
+                    const rootItems = this._getRootItems(items);
                     if (dragData.isChild && dragData.parentElementIndex !== null && dragData.childIndex !== null) {
                         // Delete child element
-                        const parentElement = items[dragData.parentElementIndex];
-                        if (parentElement && parentElement.children) {
-                            const deletedChild = parentElement.children[dragData.childIndex];
+                        const parentElement = this._getRootItemAtIndex(items, dragData.parentElementIndex);
+                        if (parentElement && Array.isArray(parentElement.childIds)) {
+                            const childId = parentElement.childIds[dragData.childIndex];
+                            const itemIndex = ItemHierarchy.buildItemIndex(items);
+                            const deletedChild = childId ? itemIndex[childId] : null;
                             // Record undo/redo change
                             const undoRedoManager = this._getUndoRedoManager();
                             if (undoRedoManager && deletedChild) {
@@ -627,20 +735,28 @@ export class DragDropHandler {
                                     undoRedoManager.recordChange(change);
                                 }
                             }
-                            parentElement.children.splice(dragData.childIndex, 1);
-                            if (parentElement.children.length === 0) {
-                                delete parentElement.children;
+                            parentElement.childIds.splice(dragData.childIndex, 1);
+                            if (deletedChild) {
+                                const descendantIds = this._getDescendantIds(deletedChild, itemIndex);
+                                const removeIds = new Set([deletedChild.id, ...descendantIds]);
+                                items = this._removeItemsByIds(items, removeIds);
+                                bin.items = items;
                             }
                         }
                     } else {
                         // Delete regular element
-                        const deletedElement = items[dragData.elementIndex];
+                        const deletedElement = rootItems[dragData.elementIndex];
                         // Record undo/redo change
                         const undoRedoManager = this._getUndoRedoManager();
                         if (undoRedoManager && deletedElement) {
                             undoRedoManager.recordElementDelete(dragData.pageId, dragData.binId, dragData.elementIndex, deletedElement);
                         }
-                        items.splice(dragData.elementIndex, 1);
+                        if (deletedElement) {
+                            const itemIndex = ItemHierarchy.buildItemIndex(items);
+                            const descendantIds = this._getDescendantIds(deletedElement, itemIndex);
+                            const removeIds = new Set([deletedElement.id, ...descendantIds]);
+                            items = this._removeItemsByIds(items, removeIds);
+                        }
                         bin.items = items;
                     }
                     const dataManager = this._getDataManager();

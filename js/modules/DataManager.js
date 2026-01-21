@@ -2,6 +2,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class DataManager {
     constructor() {
@@ -61,12 +62,19 @@ export class DataManager {
                     if (document.groups) {
                         document.groups.forEach(group => {
                             if (group.items) {
-                                group.items = group.items.filter(item => {
-                                    // Delete one-time tasks that are completed
-                                    if (item.repeats === false && item.completed) {
-                                        return false;
+                                const removeIds = new Set(
+                                    group.items
+                                        .filter(item => item?.repeats === false && item?.completed)
+                                        .map(item => item.id)
+                                );
+                                group.items = group.items.filter(item => !removeIds.has(item.id));
+                                group.items.forEach(item => {
+                                    if (Array.isArray(item.childIds)) {
+                                        item.childIds = item.childIds.filter(id => !removeIds.has(id));
                                     }
-                                    return true;
+                                    if (item.parentId && removeIds.has(item.parentId)) {
+                                        item.parentId = null;
+                                    }
                                 });
                             }
                         });
@@ -83,13 +91,14 @@ export class DataManager {
                 });
                 
                 // Reset all repeating tasks
-                const resetItem = (item, documentId, itemIndex) => {
+                const resetItem = (item, documentId, itemIndex, itemIndexMap) => {
                     if (item.repeats !== false) {
                         item.completed = false;
                         
                         // Reset children (one level for current implementation)
-                        if (item.children && Array.isArray(item.children)) {
-                            item.children.forEach(child => {
+                        if (itemIndexMap) {
+                            const childItems = ItemHierarchy.getChildItems(item, itemIndexMap);
+                            childItems.forEach(child => {
                                 if (child.repeats !== false) {
                                     child.completed = false;
                                 }
@@ -119,8 +128,9 @@ export class DataManager {
                     if (document.groups) {
                         document.groups.forEach(group => {
                             if (group.items) {
+                                const itemIndexMap = ItemHierarchy.buildItemIndex(group.items);
                                 group.items.forEach((item, itemIndex) => {
-                                    resetItem(item, document.id, itemIndex);
+                                    resetItem(item, document.id, itemIndex, itemIndexMap);
                                 });
                             }
                         });
@@ -160,94 +170,182 @@ export class DataManager {
         normalized.documents = normalized.documents || [];
         normalized.documentStates = normalized.documentStates || {};
         normalized.groupStates = normalized.groupStates || {};
-
+        normalized.documents = this._migrateDocumentsToIdLinks(normalized.documents);
         return normalized;
     }
-    
-    migrateSubtasksToChildren(data) {
-        // Recursively migrate subtasks to children for all items
-        if (!data) {
-            return data;
-        }
-        
-        const migrateElement = (element) => {
-            if (!element) return element;
-            
-            // Initialize children array if it doesn't exist
-            if (!element.children) {
-                element.children = [];
+
+    normalizeDataModel(rawData) {
+        return this._normalizeDataModel(rawData);
+    }
+
+    _generateItemId() {
+        return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    }
+
+    _ensureDocumentDefaults(document) {
+        const config = document.config && typeof document.config === 'object' ? document.config : {};
+        const groupMode = document.groupMode || config.groupMode || 'manual';
+        return {
+            ...document,
+            groups: Array.isArray(document.groups) ? document.groups : [],
+            config: { ...config, groupMode },
+            groupMode
+        };
+    }
+
+    _ensureGroupDefaults(group) {
+        return {
+            ...group,
+            items: Array.isArray(group.items) ? group.items : [],
+            level: typeof group.level === 'number' ? group.level : 0,
+            parentGroupId: group.parentGroupId ?? null
+        };
+    }
+
+    _migrateItemsToIdLinks(items) {
+        const flatItems = [];
+        const seen = new Set();
+
+        const addItem = (item, parentId = null) => {
+            if (!item || typeof item !== 'object') {
+                return null;
             }
-            
-            // Migrate subtasks to children if they exist
-            if (element.subtasks && Array.isArray(element.subtasks) && element.subtasks.length > 0) {
-                element.subtasks.forEach(subtask => {
-                    // Convert subtask to full element object
-                    const childElement = {
+
+            const itemId = item.id || this._generateItemId();
+            item.id = itemId;
+            if (parentId !== null) {
+                item.parentId = parentId;
+            } else if (!item.parentId) {
+                item.parentId = null;
+            }
+
+            const existingChildIds = Array.isArray(item.childIds) ? [...item.childIds] : [];
+            const children = Array.isArray(item.children) ? item.children : [];
+
+            if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
+                item.subtasks.forEach(subtask => {
+                    const childItem = {
+                        id: this._generateItemId(),
                         type: 'task',
                         text: subtask.text || 'Subtask',
                         completed: subtask.completed || false,
                         timeAllocated: subtask.timeAllocated || '',
                         repeats: subtask.repeats !== undefined ? subtask.repeats : true,
                         funModifier: subtask.funModifier || '',
-                        children: [] // Initialize children for nested elements
+                        parentId: itemId,
+                        childIds: [],
+                        config: {}
                     };
-                    element.children.push(childElement);
+                    children.push(childItem);
                 });
-                // Remove subtasks property after migration
-                delete element.subtasks;
+                delete item.subtasks;
             }
-            
-            // Recursively migrate children (for future unlimited depth support)
-            if (element.children && Array.isArray(element.children)) {
-                element.children.forEach(child => {
-                    migrateElement(child);
-                });
+
+            if (!seen.has(itemId)) {
+                flatItems.push(item);
+                seen.add(itemId);
             }
-            
-            return element;
-        };
-        
-        const documents = data.documents || [];
-        documents.forEach(document => {
-            const groups = document.groups || [];
-            groups.forEach(group => {
-                const items = group.items || [];
-                items.forEach(element => {
-                    migrateElement(element);
-                });
+
+            item.childIds = [];
+            children.forEach(child => {
+                const childId = addItem(child, itemId);
+                if (childId) {
+                    item.childIds.push(childId);
+                }
             });
+
+            if (item.childIds.length === 0 && existingChildIds.length > 0) {
+                item.childIds = existingChildIds;
+            }
+
+            delete item.children;
+            return itemId;
+        };
+
+        (items || []).forEach(item => addItem(item, null));
+
+        const itemIndex = ItemHierarchy.buildItemIndex(flatItems);
+        flatItems.forEach(item => {
+            if (item.parentId && itemIndex[item.parentId]) {
+                const parent = itemIndex[item.parentId];
+                if (!Array.isArray(parent.childIds)) {
+                    parent.childIds = [];
+                }
+                if (!parent.childIds.includes(item.id)) {
+                    parent.childIds.push(item.id);
+                }
+            }
         });
-        
+
+        flatItems.forEach(item => {
+            const childIds = Array.isArray(item.childIds) ? item.childIds : [];
+            item.childIds = childIds.filter(childId => itemIndex[childId]);
+            if (item.parentId && !itemIndex[item.parentId]) {
+                item.parentId = null;
+            }
+        });
+
+        return flatItems;
+    }
+
+    _migrateDocumentsToIdLinks(documents) {
+        return documents.map(rawDocument => {
+            const document = this._ensureDocumentDefaults(rawDocument);
+            let groups = document.groups;
+
+            if ((!groups || groups.length === 0) && Array.isArray(document.items)) {
+                groups = [{
+                    id: 'group-0',
+                    title: 'Group 1',
+                    items: document.items,
+                    level: 0,
+                    parentGroupId: null
+                }];
+                delete document.items;
+            }
+
+            const normalizedGroups = (groups || []).map(group => {
+                const normalizedGroup = this._ensureGroupDefaults(group);
+                normalizedGroup.items = this._migrateItemsToIdLinks(normalizedGroup.items);
+                return normalizedGroup;
+            });
+
+            return {
+                ...document,
+                groups: normalizedGroups
+            };
+        });
+    }
+    
+    migrateSubtasksToChildren(data) {
+        if (!data) {
+            return data;
+        }
+        data.documents = this._migrateDocumentsToIdLinks(data.documents || []);
         return data;
     }
     
     loadData() {
         const normalized = this._normalizeDataModel(this.loadFromStorage());
-        const migratedData = this.migrateSubtasksToChildren(normalized);
         const appState = this._getAppState();
         
-        const documents = (migratedData.documents || []).map((document) => {
+        const documents = (normalized.documents || []).map((document) => {
             const groups = document.groups || [];
-            const normalizedGroups = groups.map((group) => {
-                const items = group.items || [];
-                return {
-                    ...group,
-                    items
-                };
-            });
-            if (normalizedGroups.length === 0) {
+            if (groups.length === 0) {
                 return {
                     ...document,
                     groups: [{
                         id: 'group-0',
                         title: 'Group 1',
-                        items: []
+                        items: [],
+                        level: 0,
+                        parentGroupId: null
                     }]
                 };
             }
             return {
                 ...document,
-                groups: normalizedGroups
+                groups
             };
         });
         
@@ -259,43 +357,45 @@ export class DataManager {
                 groups: [{
                     id: 'group-0',
                     title: 'Group 1',
-                    items: []
+                    items: [],
+                    level: 0,
+                    parentGroupId: null
                 }]
             }];
         }
         
-        const storedCurrentId = migratedData.currentDocumentId;
+        const storedCurrentId = normalized.currentDocumentId;
         if (storedCurrentId) {
             appState.currentDocumentId = storedCurrentId;
         } else if (appState.documents.length > 0) {
             appState.currentDocumentId = appState.documents[0].id;
         }
         
-        if (migratedData.documentStates) {
-            appState.documentStates = migratedData.documentStates;
+        if (normalized.documentStates) {
+            appState.documentStates = normalized.documentStates;
         }
         
-        if (migratedData.groupStates) {
-            appState.groupStates = migratedData.groupStates;
+        if (normalized.groupStates) {
+            appState.groupStates = normalized.groupStates;
         }
         
-        if (migratedData.subtaskStates) {
+        if (normalized.subtaskStates) {
             if (appState.setSubtaskState) {
-                Object.keys(migratedData.subtaskStates).forEach(key => {
-                    appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                Object.keys(normalized.subtaskStates).forEach(key => {
+                    appState.setSubtaskState(key, normalized.subtaskStates[key]);
                 });
             } else {
-                appState.subtaskStates = migratedData.subtaskStates;
+                appState.subtaskStates = normalized.subtaskStates;
             }
         }
-        if (migratedData.allSubtasksExpanded !== undefined) {
-            appState.allSubtasksExpanded = migratedData.allSubtasksExpanded;
+        if (normalized.allSubtasksExpanded !== undefined) {
+            appState.allSubtasksExpanded = normalized.allSubtasksExpanded;
         }
         
-        if (migratedData.settings) {
+        if (normalized.settings) {
             const settingsManager = this._getSettingsManager();
             if (settingsManager) {
-                settingsManager.saveSettings(migratedData.settings);
+                settingsManager.saveSettings(normalized.settings);
             }
         }
         
@@ -457,10 +557,8 @@ export class DataManager {
             }
             
             if (confirm(`Load ${normalizedDefault.documents.length} document(s) from default.json? This will replace your current data.`)) {
-                // Migrate subtasks to children before loading
-                const migratedData = this.migrateSubtasksToChildren(normalizedDefault);
                 const appState = this._getAppState();
-                appState.documents = migratedData.documents;
+                appState.documents = normalizedDefault.documents;
                 
                 // Restore collapse states if they exist, otherwise reset to closed state
                 if (normalizedDefault.documentStates) {
@@ -470,10 +568,10 @@ export class DataManager {
                     appState.groupStates = normalizedDefault.groupStates;
                 }
                 
-                if (migratedData.subtaskStates) {
-                    Object.keys(migratedData.subtaskStates).forEach(key => {
+                if (normalizedDefault.subtaskStates) {
+                    Object.keys(normalizedDefault.subtaskStates).forEach(key => {
                         if (appState.setSubtaskState) {
-                            appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                            appState.setSubtaskState(key, normalizedDefault.subtaskStates[key]);
                         }
                     });
                 }
@@ -593,10 +691,8 @@ export class DataManager {
                 
                 // Ask for confirmation
                 if (confirm(`Load ${normalizedImport.documents.length} document(s) from file? This will replace your current data.`)) {
-                    // Migrate subtasks to children before loading
-                    const migratedData = this.migrateSubtasksToChildren(normalizedImport);
                     const appState = this._getAppState();
-                    appState.documents = migratedData.documents;
+                    appState.documents = normalizedImport.documents;
                     
                     // Restore collapse states if they exist, otherwise reset to closed state
                     if (normalizedImport.documentStates) {
@@ -606,10 +702,10 @@ export class DataManager {
                         appState.groupStates = normalizedImport.groupStates;
                     }
                     
-                    if (migratedData.subtaskStates) {
-                        Object.keys(migratedData.subtaskStates).forEach(key => {
+                    if (normalizedImport.subtaskStates) {
+                        Object.keys(normalizedImport.subtaskStates).forEach(key => {
                             if (appState.setSubtaskState) {
-                                appState.setSubtaskState(key, migratedData.subtaskStates[key]);
+                                appState.setSubtaskState(key, normalizedImport.subtaskStates[key]);
                             }
                         });
                     }

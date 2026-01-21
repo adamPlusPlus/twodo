@@ -2,6 +2,7 @@
 // HeaderCheckboxRenderer.js - Extracted from ElementRenderer.js to improve modularity
 import { eventBus } from '../EventBus.js';
 import { EVENTS } from '../AppEvents.js';
+import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 
 /**
  * HeaderCheckboxRenderer - Handles rendering of header-checkbox elements
@@ -86,15 +87,14 @@ export class HeaderCheckboxRenderer {
         if (sourceBin) {
         sourceBin.items = items;
         }
-        const parentElement = items[dragData.parentElementIndex];
-        if (parentElement && parentElement.children && parentElement.children[dragData.childIndex]) {
-        const childElement = parentElement.children[dragData.childIndex];
-        // Remove from parent's children
-        parentElement.children.splice(dragData.childIndex, 1);
-        // Clean up empty children array to ensure UI updates correctly
-        if (parentElement.children.length === 0) {
-        delete parentElement.children;
-        }
+        const itemIndex = ItemHierarchy.buildItemIndex(items);
+        const parentElement = ItemHierarchy.getRootItemAtIndex(items, dragData.parentElementIndex);
+        const childItems = parentElement ? ItemHierarchy.getChildItems(parentElement, itemIndex) : [];
+        const childElement = childItems[dragData.childIndex];
+        if (parentElement && childElement) {
+        if (!Array.isArray(parentElement.childIds)) parentElement.childIds = [];
+        parentElement.childIds.splice(dragData.childIndex, 1);
+        childElement.parentId = null;
         // Now nest it as a regular element (not a child)
         this.app.nestElement(dragData.pageId, dragData.binId, dragData.parentElementIndex, checkboxPageId, actualBinId, checkboxElementIndex,
         false, null, null, childElement);
@@ -156,7 +156,7 @@ export class HeaderCheckboxRenderer {
         }
 
         // Render children if they exist
-        if (element.children && element.children.length > 0) {
+        if (Array.isArray(element.childIds) && element.childIds.length > 0) {
             const childrenContainer = renderChildren(pageId, binId, element, elementIndex, depth);
             if (childrenContainer) {
                 div.appendChild(childrenContainer);

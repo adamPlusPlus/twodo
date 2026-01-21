@@ -24,8 +24,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Sanitize filename
-    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // Sanitize filename (allow subpaths for derived indexes)
+    let safeFilename = filename.replace(/[^a-zA-Z0-9._/-]/g, '_');
+    safeFilename = safeFilename.replace(/(\.\.)+/g, '_').replace(/^\/+/, '');
     
     // Ensure data is a string
     const contentString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);

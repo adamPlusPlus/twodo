@@ -3,6 +3,7 @@ import { BaseFormatRenderer } from '../../core/BaseFormatRenderer.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
 import { eventBus } from '../../core/EventBus.js';
+import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 
 export default class PageKanbanFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -470,17 +471,21 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         }
         
         // Child items (subitems)
-        if (element.children && Array.isArray(element.children) && element.children.length > 0) {
+        const document = app?.appState?.documents?.find(page => page.id === pageId);
+        const group = document?.groups?.find(bin => bin.id === binId);
+        const itemIndex = ItemHierarchy.buildItemIndex(group?.items || []);
+        const childItems = ItemHierarchy.getChildItems(element, itemIndex);
+        if (childItems.length > 0) {
             const childrenContainer = DOMUtils.createElement('div', {
                 style: 'margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a2a;'
             });
             
             const childrenHeader = DOMUtils.createElement('div', {
                 style: 'font-size: 11px; color: #888; margin-bottom: 6px;'
-            }, `📋 ${element.children.length} subtask${element.children.length !== 1 ? 's' : ''}`);
+            }, `📋 ${childItems.length} subtask${childItems.length !== 1 ? 's' : ''}`);
             childrenContainer.appendChild(childrenHeader);
             
-            element.children.forEach((child, childIndex) => {
+            childItems.forEach((child, childIndex) => {
                 const childCard = this.renderCard(child, pageId, binId, `${elementIndex}-${childIndex}`, app);
                 childCard.style.marginBottom = '6px';
                 childCard.style.marginLeft = '12px';

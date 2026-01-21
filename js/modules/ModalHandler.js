@@ -6,9 +6,14 @@ import { DOMBuilder } from '../utils/DOMBuilder.js?v=103';
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { ModalService } from './modal/ModalService.js';
+import { ModalRenderer } from './modal/ModalRenderer.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class ModalHandler {
     constructor() {
+        this.modalService = new ModalService();
+        this.modalRenderer = new ModalRenderer();
     }
     
     /**
@@ -576,18 +581,23 @@ export class ModalHandler {
             if (!bin) return;
             const items = bin.items || [];
             bin.items = items;
-            const element = items[elementIndex];
+            const element = ItemHierarchy.getRootItemAtIndex(items, elementIndex);
             if (!element) return;
             
-            // Initialize children if needed
-            if (!element.children) {
-                element.children = [];
+            if (!Array.isArray(element.childIds)) {
+                element.childIds = [];
             }
             
             // Add multiple child elements
             for (let i = 0; i < count; i++) {
                 const newChild = app.elementManager.createElementTemplate(type);
-                element.children.push(newChild);
+                if (!newChild.id) {
+                    newChild.id = `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+                }
+                newChild.parentId = element.id;
+                newChild.childIds = Array.isArray(newChild.childIds) ? newChild.childIds : [];
+                element.childIds.push(newChild.id);
+                items.push(newChild);
             }
             
             app.dataManager.saveData();
@@ -753,10 +763,7 @@ export class ModalHandler {
      */
     async showAlert(message) {
         return new Promise((resolve) => {
-            const modal = document.getElementById('modal');
-            const modalBody = document.getElementById('modal-body');
-            
-            modalBody.innerHTML = `
+            const modalBodyHtml = `
                 <div style="padding: 20px; text-align: center;">
                     <p style="margin-bottom: 20px; color: #e0e0e0;">${this.escapeHtml(message)}</p>
                     <button onclick="app.modalHandler.closeModal(); app.modalHandler._alertResolve();" 
@@ -765,8 +772,8 @@ export class ModalHandler {
                     </button>
                 </div>
             `;
-            
-            modal.classList.add('active');
+            this.modalRenderer?.setContent(modalBodyHtml);
+            this.modalRenderer?.show();
             this._alertResolve = resolve;
         });
     }
@@ -802,11 +809,8 @@ export class ModalHandler {
      */
     async showPrompt(message, defaultValue = '') {
         return new Promise((resolve) => {
-            const modal = document.getElementById('modal');
-            const modalBody = document.getElementById('modal-body');
-            
             const inputId = 'prompt-input-' + Date.now();
-            modalBody.innerHTML = `
+            const modalBodyHtml = `
                 <div style="padding: 20px;">
                     <p style="margin-bottom: 15px; color: #e0e0e0;">${this.escapeHtml(message)}</p>
                     <input type="text" id="${inputId}" value="${this.escapeHtml(defaultValue)}" 
@@ -824,8 +828,8 @@ export class ModalHandler {
                     </div>
                 </div>
             `;
-            
-            modal.classList.add('active');
+            this.modalRenderer?.setContent(modalBodyHtml);
+            this.modalRenderer?.show();
             this._promptResolve = resolve;
             
             // Focus input and handle Enter key
@@ -2020,131 +2024,47 @@ export class ModalHandler {
         const element = items[elementIndex];
         if (!element) return;
         
-        // Update basic fields (only if text field exists)
         const textField = document.getElementById('edit-text');
-        if (textField) {
-            const oldText = element.text || '';
-            let newText = textField.value.trim();
-            
-            // Store text as-is (preserve markdown or HTML as user typed it)
-            // Views will handle rendering via parseLinks which supports both markdown and HTML
-            // This allows users to edit raw formatting text in modals
-            
-            const undoRedoManager = this._getUndoRedoManager();
-            if (oldText !== newText && undoRedoManager) {
-                const undoRedoManager = this._getUndoRedoManager();
-                if (undoRedoManager) {
-                    undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, oldText);
-                }
-            }
-            element.text = newText;
-        }
-        // Update plugins
         const progressCheckbox = document.getElementById('edit-plugin-progress');
-        if (progressCheckbox) {
-            if (progressCheckbox.checked) {
-                const progressValue = document.getElementById('edit-progress-value');
-                if (progressValue) {
-                    element.progress = parseInt(progressValue.value) || 0;
-                }
-            } else {
-                delete element.progress;
-            }
-        }
-        
+        const progressValue = document.getElementById('edit-progress-value');
         const recurringCheckbox = document.getElementById('edit-plugin-recurring');
-        if (recurringCheckbox) {
-            if (recurringCheckbox.checked) {
-                const scheduleSelect = document.getElementById('edit-recurring-schedule');
-                if (scheduleSelect) {
-                    element.recurringSchedule = scheduleSelect.value;
-                    if (scheduleSelect.value === 'custom') {
-                        const customPattern = document.getElementById('edit-recurring-custom-pattern');
-                        if (customPattern) {
-                            element.recurringCustomPattern = customPattern.value.trim();
-                        }
-                    } else {
-                        delete element.recurringCustomPattern;
-                    }
-                }
-            } else {
-                delete element.recurringSchedule;
-                delete element.recurringCustomPattern;
-            }
-        }
-        
+        const scheduleSelect = document.getElementById('edit-recurring-schedule');
+        const customPattern = document.getElementById('edit-recurring-custom-pattern');
         const deadlineCheckbox = document.getElementById('edit-plugin-deadline');
-        if (deadlineCheckbox) {
-            if (deadlineCheckbox.checked) {
-                const dateField = document.getElementById('edit-deadline-date');
-                const timeField = document.getElementById('edit-deadline-time');
-                if (dateField && dateField.value) {
-                    const date = dateField.value;
-                    const time = timeField && timeField.value ? timeField.value : '00:00';
-                    element.deadline = `${date}T${time}:00`;
-                } else {
-                    delete element.deadline;
-                }
-            } else {
-                delete element.deadline;
-            }
-        }
-        
+        const dateField = document.getElementById('edit-deadline-date');
+        const timeField = document.getElementById('edit-deadline-time');
         const persistentCheckbox = document.getElementById('edit-plugin-persistent');
-        if (persistentCheckbox) {
-            if (persistentCheckbox.checked) {
-                element.persistent = true;
-            } else {
-                // Only delete persistent flag if it's not an image type (images are always persistent)
-                if (element.type !== 'image') {
-                    delete element.persistent;
-                }
-            }
-        }
-        
         const timeCheckbox = document.getElementById('edit-plugin-time');
-        if (timeCheckbox) {
-            if (timeCheckbox.checked) {
-                const timeField = document.getElementById('edit-time');
-                if (timeField) {
-                    element.timeAllocated = timeField.value.trim();
-                }
-            } else {
-                element.timeAllocated = '';
-            }
-        } else {
-            // Fallback if checkbox doesn't exist
-            const timeField = document.getElementById('edit-time');
-            if (timeField) {
-                element.timeAllocated = timeField.value.trim();
-            }
-        }
-        
+        const timeValueField = document.getElementById('edit-time');
         const funCheckbox = document.getElementById('edit-plugin-fun');
-        if (funCheckbox) {
-            if (funCheckbox.checked) {
-                const funField = document.getElementById('edit-fun');
-                if (funField) {
-                    element.funModifier = funField.value.trim();
-                }
-            } else {
-                element.funModifier = '';
-            }
-        } else {
-            // Fallback if checkbox doesn't exist
-            const funField = document.getElementById('edit-fun');
-            if (funField) {
-                element.funModifier = funField.value.trim();
-            }
-        }
-        
+        const funField = document.getElementById('edit-fun');
         const repeatsCheckbox = document.getElementById('edit-plugin-repeats');
-        if (repeatsCheckbox) {
-            element.repeats = repeatsCheckbox.checked;
-        } else {
-            // Fallback if checkbox doesn't exist (for header-checkbox)
-            element.repeats = true; // Default
-        }
+
+        const undoRedoManager = this._getUndoRedoManager();
+        this.modalService?.applyElementEditUpdates({
+            element,
+            updates: {
+                text: textField ? textField.value : undefined,
+                progressEnabled: progressCheckbox ? progressCheckbox.checked : undefined,
+                progressValue: progressValue ? progressValue.value : undefined,
+                recurringEnabled: recurringCheckbox ? recurringCheckbox.checked : undefined,
+                recurringSchedule: scheduleSelect ? scheduleSelect.value : undefined,
+                recurringCustomPattern: customPattern ? customPattern.value : undefined,
+                deadlineEnabled: deadlineCheckbox ? deadlineCheckbox.checked : undefined,
+                deadlineDate: dateField ? dateField.value : undefined,
+                deadlineTime: timeField ? timeField.value : undefined,
+                persistentEnabled: persistentCheckbox ? persistentCheckbox.checked : undefined,
+                timeEnabled: timeCheckbox ? timeCheckbox.checked : undefined,
+                timeValue: timeValueField ? timeValueField.value : undefined,
+                funEnabled: funCheckbox ? funCheckbox.checked : undefined,
+                funValue: funField ? funField.value : undefined,
+                repeatsEnabled: repeatsCheckbox ? repeatsCheckbox.checked : true
+            },
+            undoRedoManager,
+            pageId,
+            binId,
+            elementIndex
+        });
         
         // Update items for multi-checkbox (preserve completion states)
         if (element.type === 'multi-checkbox') {

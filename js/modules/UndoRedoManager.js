@@ -3,6 +3,7 @@ import { serviceLocator } from '../core/ServiceLocator.js';
 import { SERVICES, getService, hasService } from '../core/AppServices.js';
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class UndoRedoManager {
     constructor() {
@@ -1453,6 +1454,7 @@ export class UndoRedoManager {
             
             for (const bin of page.groups) {
                 if (!bin || !bin.items) continue;
+                const itemIndex = ItemHierarchy.buildItemIndex(bin.items);
                 
                 // Search main items
                 for (let i = 0; i < bin.items.length; i++) {
@@ -1469,9 +1471,10 @@ export class UndoRedoManager {
                     }
                     
                     // Search child items
-                    if (element && element.children && Array.isArray(element.children)) {
-                        for (let j = 0; j < element.children.length; j++) {
-                            const child = element.children[j];
+                    if (element) {
+                        const childItems = ItemHierarchy.getChildItems(element, itemIndex);
+                        for (let j = 0; j < childItems.length; j++) {
+                            const child = childItems[j];
                             if (child && child.id === elementId) {
                                 return {
                                     element: child,

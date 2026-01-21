@@ -98,3 +98,21 @@ Legacy naming sweep
 - remove remaining .pages/.bins/.elements usage and alias fallbacks
 - rename theme/template storage to documents/groups
 - update UI strings/descriptions to document/group/item terms
+
+Document group/header decision
+
+- select materialized groups (Document -> Group -> Item)
+- update naming review and discussion docs to reflect decision and performance notes
+- tighten discussion doc into explicit decision prompts for nesting and coexistence
+- decide group nesting shape: flat groups with level metadata
+- decide parent reference: canonical parentGroupId+level, ancestry index in indexes
+- decide coexistence: per-document mode flag (header-derived vs manual)
+- trim naming review to only open issues and implementation tasks
+- add id-link nesting decision to naming review and remove discussion doc
+- remove redundancy analysis doc
+- resolve outstanding naming issues into implementation decisions
+- implement naming review changes in core modules
+- add group mode defaults, parentGroupId/level, item ids/childIds
+- migrate data normalization and derived group index saving (indexes/)
+- update drag/drop and element rendering for childIds with legacy children sync
+- update modal handling to use ModalService and ModalRenderer

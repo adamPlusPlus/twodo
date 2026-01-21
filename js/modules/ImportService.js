@@ -89,6 +89,7 @@ export class ImportService {
             if (values.length === 0) continue;
             
             const element = {
+                id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                 type: 'task',
                 text: values[textIndex] || 'Imported Task',
                 completed: completedIndex >= 0 && (
@@ -96,7 +97,8 @@ export class ImportService {
                     values[completedIndex]?.toLowerCase() === 'true' ||
                     values[completedIndex] === '1'
                 ) || false,
-                children: []
+                parentId: null,
+                childIds: []
             };
             
             if (dueDateIndex >= 0 && values[dueDateIndex]) {
@@ -190,10 +192,12 @@ export class ImportService {
                 }
                 
                 currentElement = {
+                    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                     type: 'task',
                     text: taskMatch[2].trim(),
                     completed: taskMatch[1] === 'x',
-                    children: []
+                    parentId: null,
+                    childIds: []
                 };
                 
                 // Extract tags (#tag)
@@ -217,11 +221,16 @@ export class ImportService {
             if (currentElement && line.match(/^\s{2,}-/)) {
                 const childMatch = line.match(/\[([ x])\]\s*(.+)$/);
                 if (childMatch) {
-                    currentElement.children.push({
+                    const childItem = {
+                        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                         type: 'task',
                         text: childMatch[2].trim(),
-                        completed: childMatch[1] === 'x'
-                    });
+                        completed: childMatch[1] === 'x',
+                        parentId: currentElement.id,
+                        childIds: []
+                    };
+                    currentElement.childIds.push(childItem.id);
+                    currentBin.items.push(childItem);
                 }
             }
         });
@@ -285,10 +294,12 @@ export class ImportService {
                             .filter(card => card.idList === list.id)
                             .forEach((card, cardIndex) => {
                                 const element = {
+                                    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                                     type: 'task',
                                     text: card.name || 'Untitled Card',
                                     completed: card.closed || false,
-                                    children: []
+                                    parentId: null,
+                                    childIds: []
                                 };
                                 
                                 // Add due date if present
@@ -314,11 +325,16 @@ export class ImportService {
                                         .forEach(checklist => {
                                             if (checklist.checkItems) {
                                                 checklist.checkItems.forEach(item => {
-                                                    element.children.push({
+                                                    const childItem = {
+                                                        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                                                         type: 'task',
                                                         text: item.name,
-                                                        completed: item.state === 'complete'
-                                                    });
+                                                        completed: item.state === 'complete',
+                                                        parentId: element.id,
+                                                        childIds: []
+                                                    };
+                                                    element.childIds.push(childItem.id);
+                                                    bin.items.push(childItem);
                                                 });
                                             }
                                         });

@@ -2,6 +2,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES } from '../core/AppServices.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class ElementManager {
     constructor() {
@@ -37,6 +38,8 @@ export class ElementManager {
         if (!group) return;
         
         const newElement = this.createElementTemplate(elementType);
+        newElement.parentId = null;
+        newElement.childIds = Array.isArray(newElement.childIds) ? newElement.childIds : [];
         // Generate unique ID for the element
         if (!newElement.id) {
             newElement.id = `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -104,7 +107,8 @@ export class ElementManager {
                 repeats: true,
                 timeAllocated: '',
                 funModifier: '',
-                children: []
+                parentId: null,
+                childIds: []
             },
             'header-checkbox': {
                 type: 'header-checkbox',
@@ -113,7 +117,8 @@ export class ElementManager {
                 repeats: true,
                 timeAllocated: '',
                 funModifier: '',
-                children: []
+                parentId: null,
+                childIds: []
             },
             'multi-checkbox': {
                 type: 'multi-checkbox',
@@ -125,7 +130,8 @@ export class ElementManager {
                 repeats: true,
                 timeAllocated: '',
                 funModifier: '',
-                children: []
+                parentId: null,
+                childIds: []
             },
             'one-time': {
                 type: 'task',
@@ -134,7 +140,8 @@ export class ElementManager {
                 repeats: false,
                 timeAllocated: '',
                 funModifier: '',
-                children: []
+                parentId: null,
+                childIds: []
             },
             'audio': {
                 type: 'audio',
@@ -143,7 +150,8 @@ export class ElementManager {
                 date: null,
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'timer': {
                 type: 'timer',
@@ -158,7 +166,8 @@ export class ElementManager {
                 alarmPlaying: false, // Whether alarm is currently playing
                 alarmAudio: null, // Reference to alarm audio element
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'counter': {
                 type: 'counter',
@@ -169,7 +178,8 @@ export class ElementManager {
                 customIncrement: 10,
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'tracker': {
                 type: 'tracker',
@@ -179,7 +189,8 @@ export class ElementManager {
                 pageCompletions: {}, // { elementId: count } for page mode
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'rating': {
                 type: 'rating',
@@ -188,7 +199,8 @@ export class ElementManager {
                 review: '',
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'image': {
                 type: 'image',
@@ -198,7 +210,8 @@ export class ElementManager {
                 imageWidth: 300,
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'time-log': {
                 type: 'time-log',
@@ -209,7 +222,8 @@ export class ElementManager {
                 sessions: [], // Array of { start, end, duration }
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'calendar': {
                 type: 'calendar',
@@ -223,7 +237,8 @@ export class ElementManager {
                 targetTags: [], // Array of tag strings for tags mode
                 completed: false,
                 persistent: true, // Calendars are persistent
-                children: []
+                parentId: null,
+                childIds: []
             },
             'note': {
                 type: 'note',
@@ -232,14 +247,16 @@ export class ElementManager {
                 format: 'markdown',
                 completed: false,
                 persistent: true,
-                children: []
+                parentId: null,
+                childIds: []
             },
             'text': {
                 type: 'text',
                 text: 'New Text',
                 completed: false,
                 repeats: true,
-                children: []
+                parentId: null,
+                childIds: []
             }
         };
         
@@ -270,13 +287,18 @@ export class ElementManager {
         
         const element = items[actualElementIndex];
         if (!element) return;
+        const itemIndexMap = ItemHierarchy.buildItemIndex(items);
         
         // If we have a childIndex, we're toggling a nested child
-        if (childIndex !== null && element.children && element.children[childIndex]) {
-            const child = element.children[childIndex];
+        if (childIndex !== null) {
+            const childItems = ItemHierarchy.getChildItems(element, itemIndexMap);
+            const child = childItems[childIndex];
+            if (!child) {
+                return;
+            }
             const oldValue = child.completed;
             child.completed = !child.completed;
-            element.completed = element.children.every(ch => ch.completed);
+            element.completed = childItems.every(ch => ch.completed);
             
             // Record undo/redo change
             if (this.undoRedoManager) {
@@ -307,15 +329,19 @@ export class ElementManager {
                     this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.subtasks[subtaskIndex].completed, oldValue, subtaskIndex);
                     this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
                 }
-            } else if (element.children && element.children[subtaskIndex]) {
-                // Use children if subtasks don't exist
-                const oldValue = element.children[subtaskIndex].completed;
-                element.children[subtaskIndex].completed = !element.children[subtaskIndex].completed;
-                element.completed = element.children.every(ch => ch.completed);
+            } else {
+                const childItems = ItemHierarchy.getChildItems(element, itemIndexMap);
+                if (!childItems[subtaskIndex]) {
+                    return;
+                }
+                // Use childIds if subtasks don't exist
+                const oldValue = childItems[subtaskIndex].completed;
+                childItems[subtaskIndex].completed = !childItems[subtaskIndex].completed;
+                element.completed = childItems.every(ch => ch.completed);
                 
                 // Record undo/redo change
                 if (this.undoRedoManager) {
-                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.children[subtaskIndex].completed, oldValue, subtaskIndex);
+                    this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', childItems[subtaskIndex].completed, oldValue, subtaskIndex);
                     this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, !element.completed);
                 }
             }
@@ -329,18 +355,17 @@ export class ElementManager {
                 this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', element.completed, oldValue);
             }
             
-            if (element.children) {
-                element.children.forEach((ch, idx) => {
-                    if (ch.repeats !== false) {
-                        const oldChildValue = ch.completed;
-                        ch.completed = element.completed;
-                        // Record child changes
-                        if (this.undoRedoManager && oldChildValue !== ch.completed) {
-                            this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', ch.completed, oldChildValue, idx);
-                        }
+            const childItems = ItemHierarchy.getChildItems(element, itemIndexMap);
+            childItems.forEach((child, idx) => {
+                if (child.repeats !== false) {
+                    const oldChildValue = child.completed;
+                    child.completed = element.completed;
+                    // Record child changes
+                    if (this.undoRedoManager && oldChildValue !== child.completed) {
+                        this.undoRedoManager.recordElementPropertyChange(pageId, binId, actualElementIndex, 'completed', child.completed, oldChildValue, idx);
                     }
-                });
-            }
+                }
+            });
             // Legacy subtask support
             if (element.subtasks) {
                 element.subtasks.forEach((st, idx) => {
@@ -523,6 +548,8 @@ export class ElementManager {
         group.items = items;
         
         const newElement = this.createElementTemplate(elementType);
+        newElement.parentId = null;
+        newElement.childIds = Array.isArray(newElement.childIds) ? newElement.childIds : [];
         // Generate unique ID for the element
         if (!newElement.id) {
             newElement.id = `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

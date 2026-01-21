@@ -1,6 +1,7 @@
 // DocumentViewFormat - Format renderer for Obsidian-style markdown document view
 import { BaseFormatRenderer } from '../../core/BaseFormatRenderer.js';
 import { eventBus } from '../../core/EventBus.js';
+import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 
 export default class DocumentViewFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -40,7 +41,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
     _getItems(bin) {
         const items = bin.items || [];
         bin.items = items;
-        return items;
+        return ItemHierarchy.getRootItems(items);
     }
     
     /**
@@ -49,7 +50,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
      * @param {number} depth - Nesting depth
      * @returns {string} Markdown string
      */
-    elementToMarkdown(element, depth = 0) {
+    elementToMarkdown(element, depth = 0, itemIndex = null) {
         const indent = '  '.repeat(depth);
         let markdown = '';
         
@@ -208,9 +209,10 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         }
         
         // Handle children/subtasks
-        if (element.children && Array.isArray(element.children) && element.children.length > 0) {
-            element.children.forEach(child => {
-                markdown += this.elementToMarkdown(child, depth + 1);
+        if (itemIndex) {
+            const childItems = ItemHierarchy.getChildItems(element, itemIndex);
+            childItems.forEach(child => {
+                markdown += this.elementToMarkdown(child, depth + 1, itemIndex);
             });
         }
         
@@ -906,6 +908,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             }
             
             // Items in group
+            const itemIndex = ItemHierarchy.buildItemIndex(bin.items || []);
             const items = this._getItems(bin);
             if (items.length > 0) {
                 items.forEach((element, elIndex) => {
@@ -921,7 +924,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                         markdown += `${placeholderId}\n\n`;
                         elementPlaceholderIndex++;
                     } else {
-                        const elementMarkdown = this.elementToMarkdown(element, 0);
+                        const elementMarkdown = this.elementToMarkdown(element, 0, itemIndex);
                         markdown += elementMarkdown;
                         // Only add extra newline if not last element and element doesn't already end with newlines
                         if (elIndex < items.length - 1 && !elementMarkdown.endsWith('\n\n')) {

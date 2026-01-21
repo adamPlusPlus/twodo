@@ -184,7 +184,7 @@ export class AudioRenderer {
         div.appendChild(progressBarContainer);
 
         // Render children if they exist
-        if (element.children && element.children.length > 0) {
+        if (Array.isArray(element.childIds) && element.childIds.length > 0) {
             const childrenContainer = renderChildren(pageId, binId, element, elementIndex, depth);
             if (childrenContainer) {
                 div.appendChild(childrenContainer);

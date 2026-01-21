@@ -139,7 +139,7 @@ export class ContextMenuHandler {
             bin.items = items;
         }
         const element = bin && items && items[elementIndex] ? items[elementIndex] : null;
-        const hasChildren = element && element.children && element.children.length > 0;
+        const hasChildren = Array.isArray(element?.childIds) && element.childIds.length > 0;
         
         if (subtaskIndex !== null || (typeof elementIndex === 'string' && elementIndex.includes('-'))) {
             // For children/subtasks, hide some options

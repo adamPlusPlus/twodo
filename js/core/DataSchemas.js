@@ -9,6 +9,7 @@ export const DataSchemas = {
         id: { type: 'string', required: true },
         name: { type: 'string', required: true },
         groups: { type: 'array', required: false },
+        groupMode: { type: 'string', required: false },
         plugins: { type: 'array', required: false },
         format: { type: 'string', required: false },
         config: { type: 'object', required: false }
@@ -21,6 +22,8 @@ export const DataSchemas = {
         id: { type: 'string', required: true },
         name: { type: 'string', required: false },
         items: { type: 'array', required: false },
+        level: { type: 'number', required: false },
+        parentGroupId: { type: 'string', required: false },
         plugins: { type: 'array', required: false },
         format: { type: 'string', required: false },
         config: { type: 'object', required: false }
@@ -30,12 +33,14 @@ export const DataSchemas = {
      * Item schema
      */
     item: {
+        id: { type: 'string', required: false },
         type: { type: 'string', required: true },
         text: { type: 'string', required: false },
         completed: { type: 'boolean', required: false },
         repeats: { type: 'boolean', required: false },
         persistent: { type: 'boolean', required: false },
-        children: { type: 'array', required: false },
+        parentId: { type: 'string', required: false },
+        childIds: { type: 'array', required: false },
         config: { type: 'object', required: false }
     },
     
@@ -117,9 +122,12 @@ export const DataSchemas = {
             id: '',
             name: 'New Document',
             groups,
+            groupMode: 'manual',
             plugins: [],
             format: null,
-            config: {}
+            config: {
+                groupMode: 'manual'
+            }
         };
     },
     
@@ -133,6 +141,8 @@ export const DataSchemas = {
             id: '',
             name: '',
             items,
+            level: 0,
+            parentGroupId: null,
             plugins: [],
             format: null,
             config: {}
@@ -145,12 +155,14 @@ export const DataSchemas = {
      */
     getDefaultItem() {
         return {
+            id: '',
             type: 'task',
             text: '',
             completed: false,
             repeats: false,
             persistent: false,
-            children: [],
+            parentId: null,
+            childIds: [],
             config: {}
         };
     },

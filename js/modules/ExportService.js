@@ -1,6 +1,7 @@
 // ExportService.js - Handles exporting pages to various formats
 import { DataUtils } from '../utils/data.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { ItemHierarchy } from '../utils/ItemHierarchy.js';
 
 export class ExportService {
     constructor() {
@@ -71,7 +72,9 @@ export class ExportService {
             md += `## ${bin.title || bin.id}\n\n`;
             const items = bin.items || [];
             bin.items = items;
-            items.forEach(element => {
+            const itemIndex = ItemHierarchy.buildItemIndex(items);
+            const rootItems = ItemHierarchy.getRootItems(items);
+            rootItems.forEach(element => {
                 const checkbox = element.completed ? '[x]' : '[ ]';
                 const tags = element.tags && element.tags.length > 0 
                     ? ` ${element.tags.map(t => `#${t}`).join(' ')}` 
@@ -82,8 +85,9 @@ export class ExportService {
                 md += `- ${checkbox} ${element.text || 'Untitled'}${tags}${deadline}\n`;
                 
                 // Add children
-                if (element.children && element.children.length > 0) {
-                    element.children.forEach(child => {
+                const childItems = ItemHierarchy.getChildItems(element, itemIndex);
+                if (childItems.length > 0) {
+                    childItems.forEach(child => {
                         const childCheckbox = child.completed ? '[x]' : '[ ]';
                         md += `  - ${childCheckbox} ${child.text || ''}\n`;
                     });
