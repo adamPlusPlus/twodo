@@ -1,3 +1,3 @@
-Implement id-link nesting and modal service split.
+Implement id-link nesting, modal service split, and immediate theme updates.
 
-Flatten item nesting to parentId/childIds across managers, renderers, and import/export flows. Normalize group defaults, derived indexes, and integrity checks to match, and move edit updates into ModalService.
+Flatten item nesting to parentId/childIds across managers, renderers, and import/export flows. Normalize group defaults, derived indexes, and integrity checks to match, and move edit updates into ModalService. Add immediate theme propagation so settings changes apply across all UI components instantly.

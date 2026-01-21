@@ -173,12 +173,13 @@ export class SettingsManager {
             } else if (themeType === 'page' && pageId) {
                 themeManager.setPageTheme(pageId, settings);
             }
-            // Apply the effective theme
-            this.applySettings(settings);
+            // ThemeManager.set*Theme already applies and triggers updates, so we don't need applySettings here
         } else {
             // Legacy: save to localStorage
             localStorage.setItem(this.storageKey, JSON.stringify(settings));
             this.applySettings(settings);
+            // Emit theme update event for legacy mode too
+            eventBus.emit('theme:updated', { type: themeType, settings });
         }
         
         // Also update the main data structure to include settings

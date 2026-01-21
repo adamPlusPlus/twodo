@@ -27,6 +27,54 @@ export class AppRenderer {
         this._lastScrollTop = null;
         this._lastScrollLeft = null;
         this._setupScrollTracking();
+        this._setupThemeListener();
+    }
+    
+    /**
+     * Setup listener for theme updates to apply immediately
+     */
+    _setupThemeListener() {
+        if (this.app.eventBus) {
+            this.app.eventBus.on('theme:updated', () => {
+                this._applyCurrentThemes();
+            });
+        }
+    }
+    
+    /**
+     * Apply current themes to all UI components immediately
+     */
+    _applyCurrentThemes() {
+        if (!this.app.themeManager) return;
+        
+        const appState = this.app.appState;
+        if (!appState || !appState.documents) return;
+        
+        // Apply global theme to root
+        this.app.themeManager.applyTheme(this.app.themeManager.themes.global, 'root');
+        
+        // Update bins-container for current page
+        const binsContainer = document.getElementById('bins-container');
+        if (binsContainer && appState.currentDocumentId) {
+            const currentPage = appState.documents.find(p => p.id === appState.currentDocumentId);
+            if (currentPage) {
+                const viewFormat = currentPage.format || 'default';
+                const effectiveTheme = this.app.themeManager.getEffectiveTheme(currentPage.id, viewFormat);
+                this.app.themeManager.applyTheme(effectiveTheme, binsContainer);
+            }
+        }
+        
+        // Update all page containers
+        appState.documents.forEach(page => {
+            const viewFormat = page.format || 'default';
+            const effectiveTheme = this.app.themeManager.getEffectiveTheme(page.id, viewFormat);
+            
+            // Update page containers
+            const pageContainers = document.querySelectorAll(`[data-page-id="${page.id}"]`);
+            pageContainers.forEach(container => {
+                this.app.themeManager.applyTheme(effectiveTheme, container);
+            });
+        });
     }
     
     /**

@@ -1,6 +1,7 @@
 // ThemeManager.js - Manages themes with view-specific and page-specific overrides
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
+import { getService, SERVICES } from '../core/AppServices.js';
 
 export class ThemeManager {
     constructor() {
@@ -135,6 +136,8 @@ export class ThemeManager {
         this.saveThemes();
         this.applyTheme(this.themes.global);
         eventBus.emit('theme:updated', { type: 'global', theme: this.themes.global });
+        // Trigger immediate UI update
+        this._updateAllUIThemes();
     }
     
     /**
@@ -149,6 +152,8 @@ export class ThemeManager {
         }
         this.saveThemes();
         eventBus.emit('theme:updated', { type: 'view', viewFormat, theme });
+        // Trigger immediate UI update
+        this._updateAllUIThemes();
     }
     
     /**
@@ -163,6 +168,64 @@ export class ThemeManager {
         }
         this.saveThemes();
         eventBus.emit('theme:updated', { type: 'page', pageId, theme });
+        // Trigger immediate UI update
+        this._updateAllUIThemes();
+    }
+    
+    /**
+     * Update all UI components with current themes immediately
+     */
+    _updateAllUIThemes() {
+        // Apply global theme to root first (this sets CSS variables globally)
+        // CSS variables cascade to all child elements, so this updates everything
+        this.applyTheme(this.themes.global, 'root');
+        
+        // Get app state for page-specific themes
+        const appState = this._getAppState();
+        if (!appState || !appState.documents) return;
+        
+        // Update bins-container for current page (main content area)
+        const binsContainer = document.getElementById('bins-container');
+        if (binsContainer && appState.currentDocumentId) {
+            const currentPage = appState.documents.find(p => p.id === appState.currentDocumentId);
+            if (currentPage) {
+                const viewFormat = currentPage.format || 'default';
+                const effectiveTheme = this.getEffectiveTheme(currentPage.id, viewFormat);
+                this.applyTheme(effectiveTheme, binsContainer);
+            }
+        }
+        
+        // Update all format view containers (format-specific views)
+        const formatContainers = document.querySelectorAll('.format-container, .pane-content');
+        formatContainers.forEach(container => {
+            const pageId = container.dataset.pageId;
+            if (pageId) {
+                const page = appState.documents.find(p => p.id === pageId);
+                if (page) {
+                    const viewFormat = page.format || container.dataset.format || 'default';
+                    const effectiveTheme = this.getEffectiveTheme(pageId, viewFormat);
+                    this.applyTheme(effectiveTheme, container);
+                }
+            }
+        });
+        
+        // Update modal if open (so theme changes are visible in settings modal)
+        const modal = document.getElementById('modal');
+        if (modal && modal.classList.contains('active')) {
+            this.applyTheme(this.themes.global, modal);
+        }
+    }
+    
+    /**
+     * Get AppState service (for accessing documents)
+     */
+    _getAppState() {
+        try {
+            return getService(SERVICES.APP_STATE);
+        } catch (e) {
+            // Fallback if services not available
+            return null;
+        }
     }
     
     /**
@@ -305,6 +368,8 @@ export class ThemeManager {
             }
             this.saveThemes();
             eventBus.emit('theme:imported', { themes: this.themes });
+            // Trigger immediate UI update
+            this._updateAllUIThemes();
             return true;
         } catch (e) {
             console.error('Failed to import themes:', e);
