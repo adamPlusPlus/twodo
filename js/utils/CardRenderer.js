@@ -33,6 +33,9 @@ export class CardRenderer {
         
         const elementInteraction = new ElementInteraction(app);
         
+        // Compute element ID for ID-first lookups
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
+        
         // Create card container
         const card = DOMUtils.createElement('div', {
             class: cardClass,
@@ -40,6 +43,7 @@ export class CardRenderer {
             'data-page-id': pageId,
             'data-bin-id': binId,
             'data-element-index': elementIndex,
+            'data-element-id': elementId,
             'data-drag-type': 'element'
         });
         

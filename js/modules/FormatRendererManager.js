@@ -320,20 +320,20 @@ export class FormatRendererManager {
     
     /**
      * Import data from format
-     * @param {string|Blob} data - Data to import
+     * @param {string|Blob} importData - Data to import
      * @param {string} formatName - Format name
      * @returns {Object} - Parsed data
      */
-    import(data, formatName) {
+    import(importData, formatName) {
         const format = this.getFormat(formatName);
         if (format && format.import) {
-            return format.import(data);
+            return format.import(importData);
         }
         
         // Default JSON import
-        if (typeof data === 'string') {
+        if (typeof importData === 'string') {
             try {
-                return JSON.parse(data);
+                return JSON.parse(importData);
             } catch (error) {
                 throw new Error('Invalid data format');
             }

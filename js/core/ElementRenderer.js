@@ -322,6 +322,11 @@ export class ElementRenderer {
         
         const elementId = `${pageId}-${binId}-${elementIndex}`;
         
+        // Set data attributes early for ID-first lookups
+        div.dataset.pageId = pageId;
+        div.dataset.binId = binId;
+        div.setAttribute('data-element-id', elementId);
+        
         // Apply visual settings for this element (includes tag-based settings)
         if (this.app.visualSettingsManager) {
             const page = this.app.appState?.documents?.find(p => p.id === pageId);
@@ -417,7 +422,7 @@ export class ElementRenderer {
         div.dataset.elementIndex = elementIndex;
             div.dataset.isChild = 'false';
         }
-        div.dataset.pageId = pageId;
+        // Ensure elementId is set (already set above, but ensure it's in dataset too)
         div.dataset.elementId = elementId;
         
         // Context menu is now handled by unified handler in EventHandler

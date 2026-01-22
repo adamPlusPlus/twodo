@@ -196,12 +196,14 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
     renderCard(element, pageId, binId, elementIndex, app) {
         const elementInteraction = new ElementInteraction(app);
         
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
         const card = DOMUtils.createElement('div', {
             class: 'trello-card',
             draggable: 'true',
             'data-page-id': pageId,
             'data-bin-id': binId,
-            'data-element-index': elementIndex
+            'data-element-index': elementIndex,
+            'data-element-id': elementId
         });
         
         // Use StyleHelper for style application

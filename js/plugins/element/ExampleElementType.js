@@ -30,9 +30,13 @@ export default class ExampleElementType extends BaseElementType {
     
     render(container, element, context) {
         // Render element
+        const elementId = `${context.pageId}-${context.binId}-${context.elementIndex}`;
         const elementDiv = DOMUtils.createElement('div', {
             class: 'element example-element',
-            'data-element-index': context.elementIndex
+            'data-page-id': context.pageId,
+            'data-bin-id': context.binId,
+            'data-element-index': context.elementIndex,
+            'data-element-id': elementId
         });
         
         const checkbox = DOMUtils.createElement('input', {

@@ -70,7 +70,7 @@ export default class AnalyticsDashboard extends BasePlugin {
         });
     }
     
-    recordEvent(pageId, eventType, data = {}) {
+    recordEvent(pageId, eventType, eventData = {}) {
         if (!this.analytics[pageId]) {
             this.analytics[pageId] = {
                 events: [],
@@ -81,7 +81,7 @@ export default class AnalyticsDashboard extends BasePlugin {
         this.analytics[pageId].events.push({
             type: eventType,
             timestamp: new Date().toISOString(),
-            ...data
+            ...eventData
         });
         
         this.updateStats(pageId);

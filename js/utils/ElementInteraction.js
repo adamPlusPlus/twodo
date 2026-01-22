@@ -58,10 +58,12 @@ export class ElementInteraction {
         }
         
         // Add data attributes for identification
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
         elementElement.dataset.pageId = pageId;
         elementElement.dataset.binId = binId;
         elementElement.dataset.elementIndex = elementIndex;
-        elementElement.dataset.elementId = `${pageId}-${binId}-${elementIndex}`;
+        elementElement.dataset.elementId = elementId;
+        elementElement.setAttribute('data-element-id', elementId);
         elementElement.dataset.elementType = element.type || 'task';
     }
     

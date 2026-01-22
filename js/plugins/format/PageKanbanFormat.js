@@ -258,12 +258,14 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
     renderCard(element, pageId, binId, elementIndex, app) {
         const elementInteraction = new ElementInteraction(app);
         
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
         const card = DOMUtils.createElement('div', {
             class: 'kanban-card',
             draggable: 'true',
             'data-page-id': pageId,
             'data-bin-id': binId,
-            'data-element-index': elementIndex
+            'data-element-index': elementIndex,
+            'data-element-id': elementId
         });
         
         // Determine border color based on element state and type

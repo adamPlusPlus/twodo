@@ -24,11 +24,14 @@ export class SharedDragDrop {
             return; // Don't make non-text/checkbox elements draggable
         }
         
+        const elementId = `${pageId}-${binId}-${elementIndex}`;
         elementElement.draggable = true;
         elementElement.dataset.dragType = 'element';
         elementElement.dataset.pageId = pageId;
         elementElement.dataset.binId = binId;
         elementElement.dataset.elementIndex = elementIndex;
+        elementElement.dataset.elementId = elementId;
+        elementElement.setAttribute('data-element-id', elementId);
         
         // Drag start
         elementElement.addEventListener('dragstart', (e) => {

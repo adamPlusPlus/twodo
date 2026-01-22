@@ -98,14 +98,14 @@ export class BaseFormatRenderer extends BasePlugin {
     
     /**
      * Import data from this format
-     * @param {string|Blob} data - Data to import
+     * @param {string|Blob} importData - Data to import
      * @returns {Object} - Parsed data
      */
-    import(data) {
+    import(importData) {
         // Override in subclasses
-        if (typeof data === 'string') {
+        if (typeof importData === 'string') {
             try {
-                return JSON.parse(data);
+                return JSON.parse(importData);
             } catch (error) {
                 throw new Error('Invalid data format');
             }

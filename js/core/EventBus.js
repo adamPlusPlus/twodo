@@ -32,15 +32,15 @@ export class EventBus extends EventEmitter {
     
     /**
      * Get event history
-     * @param {string} event - Optional event name to filter
+     * @param {string} eventName - Optional event name to filter
      * @param {number} limit - Limit number of results
      * @returns {Array}
      */
-    getHistory(event = null, limit = null) {
+    getHistory(eventName = null, limit = null) {
         let history = this.eventHistory;
         
-        if (event) {
-            history = history.filter(item => item.event === event);
+        if (eventName) {
+            history = history.filter(item => item.event === eventName);
         }
         
         if (limit) {
