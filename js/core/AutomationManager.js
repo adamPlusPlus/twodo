@@ -1,7 +1,7 @@
-// AutomationEngine - Core automation rule engine
+// AutomationManager - Core automation rule engine
 import { eventBus } from './EventBus.js';
 
-export class AutomationEngine {
+export class AutomationManager {
     constructor(app) {
         this.app = app;
         this.rules = new Map(); // binId -> Array of rules

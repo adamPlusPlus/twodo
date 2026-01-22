@@ -18,12 +18,12 @@ import { PagePluginManager } from './js/modules/PagePluginManager.js';
 import { BinPluginManager } from './js/modules/BinPluginManager.js';
 import { ElementTypeManager } from './js/modules/ElementTypeManager.js';
 import { FormatRendererManager } from './js/modules/FormatRendererManager.js';
-import { pluginRegistry } from './js/core/PluginRegistry.js';
+import { pluginRegistry } from './js/core/PluginManager.js';
 import { eventBus } from './js/core/EventBus.js';
-import { pluginLoader } from './js/core/PluginLoader.js';
+import { pluginLoader } from './js/core/PluginLoaderService.js';
 import { RelationshipManager } from './js/modules/RelationshipManager.js';
 import { TemplateManager } from './js/modules/TemplateManager.js';
-import { AutomationEngine } from './js/core/AutomationEngine.js';
+import { AutomationManager } from './js/core/AutomationManager.js';
 import { TagManager } from './js/modules/TagManager.js';
 import { SearchIndex } from './js/modules/SearchIndex.js';
 import { ExportService } from './js/modules/ExportService.js';
@@ -36,13 +36,13 @@ import { registerAllServices, registerService, SERVICES } from './js/core/AppSer
 import { RenderService } from './js/core/RenderService.js';
 import { EVENTS } from './js/core/AppEvents.js';
 import { AppState } from './js/core/AppState.js';
-import { AppInitializer } from './js/core/AppInitializer.js';
+import { AppInitializationManager } from './js/core/AppInitializationManager.js';
 import { StringUtils } from './js/utils/string.js';
 import { DailyResetManager } from './js/modules/DailyResetManager.js';
 import { InlineEditor } from './js/modules/InlineEditor.js';
 import { LinkHandler } from './js/utils/LinkHandler.js';
 import { modalEventBridge } from './js/core/ModalEventBridge.js';
-import { pluginDiscovery } from './js/core/PluginDiscovery.js';
+import { pluginDiscovery } from './js/core/PluginDiscoveryManager.js';
 
 class TodoApp {
     constructor() {
@@ -97,8 +97,8 @@ class TodoApp {
         // Initialize template manager
         this.templateManager = new TemplateManager();
         
-        // Initialize automation engine
-        this.automationEngine = new AutomationEngine();
+        // Initialize automation manager
+        this.automationEngine = new AutomationManager();
         
         // Initialize tag manager
         this.tagManager = new TagManager();
@@ -160,8 +160,8 @@ class TodoApp {
         // This is initialized after services are registered
         this.modalEventBridge = modalEventBridge;
         
-        // Initialize app initializer
-        this.appInitializer = new AppInitializer(this);
+        // Initialize app initialization manager
+        this.appInitializer = new AppInitializationManager(this);
         
         // Listen for render requests from EventBus (handled by RenderService now)
         

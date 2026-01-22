@@ -77,7 +77,7 @@ export default class BatchOperations extends BasePlugin {
 
     addSelectionCheckboxes(binElement, pageId, binId) {
         const elements = binElement.querySelectorAll('.element');
-        elements.forEach((elementElement, index) => {
+        elements.forEach((elementNode, index) => {
             const checkbox = DOMUtils.createElement('input', {
                 type: 'checkbox',
                 className: 'batch-select-checkbox',
@@ -99,11 +99,11 @@ export default class BatchOperations extends BasePlugin {
             });
 
             // Insert checkbox at the start of element
-            const firstChild = elementElement.firstChild;
+            const firstChild = elementNode.firstChild;
             if (firstChild) {
-                elementElement.insertBefore(checkbox, firstChild);
+                elementNode.insertBefore(checkbox, firstChild);
             } else {
-                elementElement.appendChild(checkbox);
+                elementNode.appendChild(checkbox);
             }
         });
     }

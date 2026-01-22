@@ -147,3 +147,19 @@ _getAppState() {
 ```
 
 This allows modules to work both with and without ServiceLocator during the migration period.
+
+## Naming Conventions
+
+### Class Suffixes
+
+Follow standardized suffixes based on the class's primary responsibility:
+
+- **\*Manager**: Manages lifecycle, state, or collections (e.g., `ThemeManager`, `PageManager`)
+- **\*Handler**: Handles events, user interactions, or external inputs (e.g., `EventHandler`, `ModalHandler`)
+- **\*Renderer**: Renders UI components or visual representations (e.g., `AppRenderer`, `ElementRenderer`)
+- **\*Service**: Provides business logic or cross-cutting concerns (e.g., `ImportService`, `ExportService`)
+- **\*Index**: Maintains searchable indexes or lookup structures (e.g., `SearchIndex`)
+- **\*Tracker**: Tracks state changes, metrics, or time-based data (e.g., `TimeTracker`)
+- **\*Editor**: Provides editing capabilities (e.g., `InlineEditor`)
+
+See [NAMING_SUFFIX_GUIDELINES.md](NAMING_SUFFIX_GUIDELINES.md) for detailed guidelines and examples.

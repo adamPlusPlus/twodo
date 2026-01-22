@@ -32,7 +32,7 @@ export const SERVICES = {
     // Feature services
     RELATIONSHIP_MANAGER: 'relationshipManager',
     TEMPLATE_MANAGER: 'templateManager',
-    AUTOMATION_ENGINE: 'automationEngine',
+    AUTOMATION_MANAGER: 'automationManager',
     TAG_MANAGER: 'tagManager',
     SEARCH_INDEX: 'searchIndex',
     EXPORT_SERVICE: 'exportService',
@@ -131,7 +131,7 @@ export function registerAllServices(app) {
     // Feature services
     registerService(SERVICES.RELATIONSHIP_MANAGER, app.relationshipManager);
     registerService(SERVICES.TEMPLATE_MANAGER, app.templateManager);
-    registerService(SERVICES.AUTOMATION_ENGINE, app.automationEngine);
+    registerService(SERVICES.AUTOMATION_MANAGER, app.automationEngine);
     registerService(SERVICES.TAG_MANAGER, app.tagManager);
     registerService(SERVICES.SEARCH_INDEX, app.searchIndex);
     registerService(SERVICES.EXPORT_SERVICE, app.exportService);

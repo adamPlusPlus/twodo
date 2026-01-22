@@ -24,8 +24,8 @@ export default class WorkflowAutomation extends BasePlugin {
         
         // Initialize automation engine if not exists
         if (!this.app.automationEngine) {
-            const { AutomationEngine } = await import('../../core/AutomationEngine.js');
-            this.app.automationEngine = new AutomationEngine(this.app);
+            const { AutomationManager } = await import('../../core/AutomationManager.js');
+            this.app.automationEngine = new AutomationManager(this.app);
         }
     }
     
@@ -295,7 +295,7 @@ export default class WorkflowAutomation extends BasePlugin {
     }
     
     async onDestroy() {
-        // Cleanup is handled by AutomationEngine
+        // Cleanup is handled by AutomationManager
         console.log(`${this.name} destroyed.`);
     }
 }

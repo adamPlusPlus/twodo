@@ -2,7 +2,7 @@
 // Replaces hardcoded plugin lists with configuration-based discovery
 
 /**
- * PluginDiscovery - Discovers plugins from manifest files
+ * PluginDiscoveryManager - Discovers plugins from manifest files
  * 
  * Supports:
  * - Loading plugins from manifest.json
@@ -10,7 +10,7 @@
  * - Configuration-based plugin loading
  * - Optional plugins (graceful failure)
  */
-export class PluginDiscovery {
+export class PluginDiscoveryManager {
     constructor() {
         this.manifestPath = '/js/plugins/plugin-manifest.json';
         this.manifest = null;
@@ -152,4 +152,4 @@ export class PluginDiscovery {
 }
 
 // Export singleton instance
-export const pluginDiscovery = new PluginDiscovery();
+export const pluginDiscovery = new PluginDiscoveryManager();

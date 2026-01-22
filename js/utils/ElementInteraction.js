@@ -8,14 +8,14 @@ export class ElementInteraction {
     
     /**
      * Setup all interactions for an element (drag-drop, context menu, visual settings)
-     * @param {HTMLElement} elementElement - The element DOM node
+     * @param {HTMLElement} elementNode - The element DOM node
      * @param {string} pageId - Page ID
      * @param {string} binId - Bin ID
      * @param {number} elementIndex - Element index
      * @param {Object} element - Element data
      * @param {Object} options - Options
      */
-    setupElementInteractions(elementElement, pageId, binId, elementIndex, element, options = {}) {
+    setupElementInteractions(elementNode, pageId, binId, elementIndex, element, options = {}) {
         const {
             enableDragDrop = true,
             enableContextMenu = true,
@@ -29,7 +29,7 @@ export class ElementInteraction {
             const elementId = `${pageId}-${binId}-${elementIndex}`;
             const page = this.app.appState?.documents?.find(p => p.id === pageId);
             const viewFormat = page?.format || 'default';
-            this.app.visualSettingsManager.applyVisualSettings(elementElement, 'element', elementId, pageId, viewFormat);
+            this.app.visualSettingsManager.applyVisualSettings(elementNode, 'element', elementId, pageId, viewFormat);
         }
         
         // Setup drag and drop
@@ -40,46 +40,46 @@ export class ElementInteraction {
                     // Dynamic import for SharedDragDrop
                     import('../utils/SharedDragDrop.js').then(({ SharedDragDrop }) => {
                         this.app.elementRenderer.sharedDragDrop = new SharedDragDrop(this.app);
-                        this.app.elementRenderer.sharedDragDrop.setupElementDragDrop(elementElement, pageId, binId, elementIndex, element);
+                        this.app.elementRenderer.sharedDragDrop.setupElementDragDrop(elementNode, pageId, binId, elementIndex, element);
                     });
                 } else {
-                    this.app.elementRenderer.sharedDragDrop.setupElementDragDrop(elementElement, pageId, binId, elementIndex, element);
+                    this.app.elementRenderer.sharedDragDrop.setupElementDragDrop(elementNode, pageId, binId, elementIndex, element);
                 }
             } else if (dragDropType === 'standard') {
-                this.setupStandardDragDrop(elementElement, pageId, binId, elementIndex, element);
+                this.setupStandardDragDrop(elementNode, pageId, binId, elementIndex, element);
             } else if (customDragHandler) {
-                customDragHandler(elementElement, pageId, binId, elementIndex, element);
+                customDragHandler(elementNode, pageId, binId, elementIndex, element);
             }
         }
         
         // Setup context menu
         if (enableContextMenu) {
-            this.setupContextMenu(elementElement, pageId, binId, elementIndex, element);
+            this.setupContextMenu(elementNode, pageId, binId, elementIndex, element);
         }
         
         // Add data attributes for identification
         const elementId = `${pageId}-${binId}-${elementIndex}`;
-        elementElement.dataset.pageId = pageId;
-        elementElement.dataset.binId = binId;
-        elementElement.dataset.elementIndex = elementIndex;
-        elementElement.dataset.elementId = elementId;
-        elementElement.setAttribute('data-element-id', elementId);
-        elementElement.dataset.elementType = element.type || 'task';
+        elementNode.dataset.pageId = pageId;
+        elementNode.dataset.binId = binId;
+        elementNode.dataset.elementIndex = elementIndex;
+        elementNode.dataset.elementId = elementId;
+        elementNode.setAttribute('data-element-id', elementId);
+        elementNode.dataset.elementType = element.type || 'task';
     }
     
     /**
      * Setup standard drag and drop
-     * @param {HTMLElement} elementElement - Element DOM node
+     * @param {HTMLElement} elementNode - Element DOM node
      * @param {string} pageId - Page ID
      * @param {string} binId - Bin ID
      * @param {number} elementIndex - Element index
      * @param {Object} element - Element data
      */
-    setupStandardDragDrop(elementElement, pageId, binId, elementIndex, element) {
-        elementElement.draggable = true;
-        elementElement.dataset.dragType = 'element';
+    setupStandardDragDrop(elementNode, pageId, binId, elementIndex, element) {
+        elementNode.draggable = true;
+        elementNode.dataset.dragType = 'element';
         
-        elementElement.addEventListener('dragstart', (e) => {
+        elementNode.addEventListener('dragstart', (e) => {
             e.stopPropagation();
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', JSON.stringify({
@@ -88,21 +88,21 @@ export class ElementInteraction {
                 binId,
                 elementIndex
             }));
-            elementElement.style.opacity = '0.5';
+            elementNode.style.opacity = '0.5';
         });
         
-        elementElement.addEventListener('dragend', (e) => {
-            elementElement.style.opacity = '1';
+        elementNode.addEventListener('dragend', (e) => {
+            elementNode.style.opacity = '1';
         });
         
         // Make droppable
-        elementElement.addEventListener('dragover', (e) => {
+        elementNode.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
         });
         
-        elementElement.addEventListener('drop', (e) => {
+        elementNode.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -128,14 +128,14 @@ export class ElementInteraction {
     
     /**
      * Setup context menu for element
-     * @param {HTMLElement} elementElement - Element DOM node
+     * @param {HTMLElement} elementNode - Element DOM node
      * @param {string} pageId - Page ID
      * @param {string} binId - Bin ID
      * @param {number} elementIndex - Element index
      * @param {Object} element - Element data
      */
-    setupContextMenu(elementElement, pageId, binId, elementIndex, element) {
-        elementElement.addEventListener('contextmenu', (e) => {
+    setupContextMenu(elementNode, pageId, binId, elementIndex, element) {
+        elementNode.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -294,17 +294,17 @@ export class ElementInteraction {
         
         // Use custom renderer if provided
         if (customRenderer) {
-            const elementElement = customRenderer(element, pageId, binId, elementIndex);
-            this.setupElementInteractions(elementElement, pageId, binId, elementIndex, element, interactionOptions);
-            return elementElement;
+            const elementNode = customRenderer(element, pageId, binId, elementIndex);
+            this.setupElementInteractions(elementNode, pageId, binId, elementIndex, element, interactionOptions);
+            return elementNode;
         }
         
         // Fallback: create basic element
-        const elementElement = document.createElement('div');
-        elementElement.className = `element ${element.type || 'task'}`;
-        elementElement.textContent = element.text || '';
-        this.setupElementInteractions(elementElement, pageId, binId, elementIndex, element, interactionOptions);
-        return elementElement;
+        const elementNode = document.createElement('div');
+        elementNode.className = `element ${element.type || 'task'}`;
+        elementNode.textContent = element.text || '';
+        this.setupElementInteractions(elementNode, pageId, binId, elementIndex, element, interactionOptions);
+        return elementNode;
     }
 }
 

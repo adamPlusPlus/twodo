@@ -1,5 +1,5 @@
 // PagePluginManager - Manages page plugin lifecycle and rendering
-import { pluginRegistry } from '../core/PluginRegistry.js';
+import { pluginRegistry } from '../core/PluginManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { DOMUtils } from '../utils/dom.js';

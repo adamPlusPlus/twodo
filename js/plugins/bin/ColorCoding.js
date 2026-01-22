@@ -41,7 +41,7 @@ export default class ColorCoding extends BasePlugin {
         // Apply color coding to items
         const items = binData.items || [];
         binData.items = items;
-        binElement.querySelectorAll('.element').forEach((elementElement, index) => {
+        binElement.querySelectorAll('.element').forEach((elementNode, index) => {
             const element = items[index];
             if (!element) return;
 
@@ -55,7 +55,7 @@ export default class ColorCoding extends BasePlugin {
             }
 
             if (color) {
-                elementElement.style.borderLeft = `4px solid ${color}`;
+                elementNode.style.borderLeft = `4px solid ${color}`;
             }
         });
     }

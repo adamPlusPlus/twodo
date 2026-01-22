@@ -83,8 +83,8 @@ export class BinRenderer {
         const rootItems = ItemHierarchy.getRootItems(items);
         rootItems.forEach((element, elIndex) => {
             // Delegate to ElementRenderer (will be created)
-            const elementElement = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
-            elementsList.appendChild(elementElement);
+            const elementNode = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
+            elementsList.appendChild(elementNode);
         });
         
         const addElementBtn = document.createElement('button');
@@ -543,7 +543,7 @@ export class BinRenderer {
                 
                 // PRIORITY: Always use the indicator position if available
                 let targetIndex = bin.items.length; // Default to end
-                let elementElement = null; // Declare outside if/else so it's available later
+                let targetElement = null; // Declare outside if/else so it's available later
                 
                 if (elementsList._dropTargetIndex !== null && elementsList._dropTargetIndex !== undefined) {
                     // Use indicator position (this is where the user intended to drop)
@@ -551,10 +551,10 @@ export class BinRenderer {
                     elementsList._dropTargetIndex = null;
                 } else {
                     // Fallback: calculate from element position (only if no indicator)
-                    elementElement = e.target.closest('.element');
-                    if (elementElement) {
+                    targetElement = e.target.closest('.element');
+                    if (targetElement) {
                         // Handle both regular elements and child elements
-                        const targetElementIndexStr = elementElement.dataset.elementIndex;
+                        const targetElementIndexStr = targetElement.dataset.elementIndex;
                         if (targetElementIndexStr) {
                             if (typeof targetElementIndexStr === 'string' && targetElementIndexStr.includes('-')) {
                                 // Target is a child element - get its parent's index
@@ -575,7 +575,7 @@ export class BinRenderer {
                 }
                 
                 // If this is a nested element being dropped on empty space, un-nest and place below parent
-                if (dragData.isChild && dragData.parentElementIndex !== null && !elementElement) {
+                if (dragData.isChild && dragData.parentElementIndex !== null && !targetElement) {
                     const sourcePage = this.app.appState.documents.find(page => page.id === dragData.pageId);
                     const sourceBin = sourcePage?.groups?.find(bin => bin.id === dragData.binId);
                     if (sourceBin && bin.id === dragData.binId && pageId === dragData.pageId && sourceBin.items[dragData.parentElementIndex]) {

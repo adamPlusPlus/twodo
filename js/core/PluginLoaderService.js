@@ -1,5 +1,5 @@
 // PluginLoader - Dynamic plugin loading
-import { pluginRegistry } from './PluginRegistry.js';
+import { pluginRegistry } from './PluginManager.js';
 import { eventBus } from './EventBus.js';
 
 export class PluginLoader {
@@ -238,5 +238,5 @@ export class PluginLoader {
 }
 
 // Singleton instance
-export const pluginLoader = new PluginLoader();
+export const pluginLoader = new PluginLoaderService();
 

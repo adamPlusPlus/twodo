@@ -1,7 +1,7 @@
-// PluginRegistry - Central registry for all plugins
+// PluginManager - Central registry for all plugins
 import { DataUtils } from '../utils/data.js';
 
-export class PluginRegistry {
+export class PluginManager {
     constructor() {
         this.plugins = new Map(); // pluginId -> plugin instance
         this.pluginsByType = new Map(); // type -> Set of pluginIds
@@ -310,5 +310,5 @@ export class PluginRegistry {
 }
 
 // Singleton instance
-export const pluginRegistry = new PluginRegistry();
+export const pluginRegistry = new PluginManager();
 

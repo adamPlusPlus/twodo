@@ -405,21 +405,21 @@ export class AppRenderer {
         });
         
         // Get item positions - use ElementFinder for consistency
-        document.querySelectorAll('.element').forEach(elementElement => {
-            const elementData = ElementFinder.getElementData(elementElement);
+        document.querySelectorAll('.element').forEach(elementNode => {
+            const elementData = ElementFinder.getElementData(elementNode);
             if (elementData.pageId && elementData.binId && elementData.elementIndex !== null) {
                 // Create a stable key using element's text/content
                 let elementKey = `${elementData.pageId}-${elementData.binId}-${elementData.elementIndex}`;
                 
                 // Try to get element text for more stable matching
-                const textElement = elementElement.querySelector('.task-text, .header-text, .audio-status');
+                const textElement = elementNode.querySelector('.task-text, .header-text, .audio-status');
                 if (textElement) {
                     const text = textElement.textContent || textElement.innerText || '';
                     // Use first 20 chars of text as part of key for stability
                     elementKey = `${elementData.pageId}-${elementData.binId}-${text.substring(0, 20)}-${elementData.elementIndex}`;
                 }
                 
-                const rect = elementElement.getBoundingClientRect();
+                const rect = elementNode.getBoundingClientRect();
                 positions.items[elementKey] = {
                     top: rect.top,
                     left: rect.left,

@@ -11,13 +11,13 @@ export class SharedDragDrop {
     /**
      * Setup drag and drop for an element in vertical/horizontal layouts
      * Allows nesting when dragging over elements with title/text
-     * @param {HTMLElement} elementElement - The element DOM node
+     * @param {HTMLElement} elementNode - The element DOM node
      * @param {string} pageId - Page ID
      * @param {string} binId - Bin ID
      * @param {number} elementIndex - Element index
      * @param {Object} element - Element data
      */
-    setupElementDragDrop(elementElement, pageId, binId, elementIndex, element) {
+    setupElementDragDrop(elementNode, pageId, binId, elementIndex, element) {
         // Only allow dragging for text/note and task/checkbox elements
         const draggableTypes = ['task', 'note', 'header-checkbox', 'text'];
         if (!draggableTypes.includes(element.type)) {
@@ -25,16 +25,16 @@ export class SharedDragDrop {
         }
         
         const elementId = `${pageId}-${binId}-${elementIndex}`;
-        elementElement.draggable = true;
-        elementElement.dataset.dragType = 'element';
-        elementElement.dataset.pageId = pageId;
-        elementElement.dataset.binId = binId;
-        elementElement.dataset.elementIndex = elementIndex;
-        elementElement.dataset.elementId = elementId;
-        elementElement.setAttribute('data-element-id', elementId);
+        elementNode.draggable = true;
+        elementNode.dataset.dragType = 'element';
+        elementNode.dataset.pageId = pageId;
+        elementNode.dataset.binId = binId;
+        elementNode.dataset.elementIndex = elementIndex;
+        elementNode.dataset.elementId = elementId;
+        elementNode.setAttribute('data-element-id', elementId);
         
         // Drag start
-        elementElement.addEventListener('dragstart', (e) => {
+        elementNode.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', JSON.stringify({
                 type: 'element',
@@ -42,12 +42,12 @@ export class SharedDragDrop {
                 binId,
                 elementIndex
             }));
-            elementElement.style.opacity = '0.5';
+            elementNode.style.opacity = '0.5';
         });
         
         // Drag end
-        elementElement.addEventListener('dragend', (e) => {
-            elementElement.style.opacity = '1';
+        elementNode.addEventListener('dragend', (e) => {
+            elementNode.style.opacity = '1';
             this.clearNestIndicator();
             if (this.dragOverTimeout) {
                 clearTimeout(this.dragOverTimeout);
@@ -56,7 +56,7 @@ export class SharedDragDrop {
         });
         
         // Drag over - allow nesting on elements with title/text
-        elementElement.addEventListener('dragover', (e) => {
+        elementNode.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -101,20 +101,20 @@ export class SharedDragDrop {
             }
             
             // Show nest indicator
-            this.showNestIndicator(elementElement);
+            this.showNestIndicator(elementNode);
             e.dataTransfer.dropEffect = 'move';
         });
         
         // Drag leave
-        elementElement.addEventListener('dragleave', (e) => {
+        elementNode.addEventListener('dragleave', (e) => {
             // Only clear if we're leaving the element (not entering a child)
-            if (!elementElement.contains(e.relatedTarget)) {
+            if (!elementNode.contains(e.relatedTarget)) {
                 this.clearNestIndicator();
             }
         });
         
         // Drop - nest the element
-        elementElement.addEventListener('drop', (e) => {
+        elementNode.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -153,9 +153,9 @@ export class SharedDragDrop {
     
     /**
      * Show visual indicator that element can be nested
-     * @param {HTMLElement} elementElement - The target element
+     * @param {HTMLElement} targetElement - The target element
      */
-    showNestIndicator(elementElement) {
+    showNestIndicator(targetElement) {
         this.clearNestIndicator();
         
         const indicator = document.createElement('div');
@@ -174,12 +174,12 @@ export class SharedDragDrop {
         `;
         
         // Make sure element has position relative
-        const computedStyle = window.getComputedStyle(elementElement);
+        const computedStyle = window.getComputedStyle(targetElement);
         if (computedStyle.position === 'static') {
-            elementElement.style.position = 'relative';
+            targetElement.style.position = 'relative';
         }
         
-        elementElement.appendChild(indicator);
+        targetElement.appendChild(indicator);
         this.nestIndicator = indicator;
     }
     

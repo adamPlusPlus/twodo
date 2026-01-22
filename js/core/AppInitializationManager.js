@@ -1,15 +1,15 @@
-// AppInitializer.js - Handles application initialization
+// AppInitializationManager.js - Handles application initialization
 // Extracted from app.js to reduce coupling and improve modularity
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
-import { pluginDiscovery } from './PluginDiscovery.js';
+import { pluginDiscovery } from './PluginDiscoveryManager.js';
 
 /**
- * AppInitializer - Manages application initialization sequence
+ * AppInitializationManager - Manages application initialization sequence
  * 
  * Handles plugin loading, async initialization, and startup sequence.
  */
-export class AppInitializer {
+export class AppInitializationManager {
     constructor(app) {
         this.app = app;
     }

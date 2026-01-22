@@ -685,17 +685,17 @@ export class EventHandler {
             const binsContainer = document.getElementById('bins-container');
             
             // Find the closest element, bin, or page tab
-            const elementElement = target.closest('.element');
+            const targetElement = target.closest('.element');
             const binElement = target.closest('.bin');
             const pageTabElement = target.closest('.page-tab');
             
             // Route to appropriate handler
-            if (elementElement) {
+            if (targetElement) {
                 // Element context menu
                 const appState = this._getAppState();
-                const pageId = elementElement.dataset.pageId || appState.currentDocumentId;
-                const binId = elementElement.dataset.binId;
-                const elementIndexStr = elementElement.dataset.elementIndex;
+                const pageId = targetElement.dataset.pageId || appState.currentDocumentId;
+                const binId = targetElement.dataset.binId;
+                const elementIndexStr = targetElement.dataset.elementIndex;
                 const elementIndex = elementIndexStr !== undefined && elementIndexStr !== '' ? parseInt(elementIndexStr, 10) : null;
                 const contextMenuHandler = this._getContextMenuHandler();
                 if (contextMenuHandler) {
@@ -704,7 +704,7 @@ export class EventHandler {
                 return;
             }
             
-            if (binElement && !elementElement) {
+            if (binElement && !targetElement) {
                 // Bin context menu
                 const pageId = binElement.dataset.pageId || appState.currentDocumentId;
                 const binId = binElement.dataset.binId;

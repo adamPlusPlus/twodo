@@ -80,13 +80,13 @@ export class AnimationRenderer {
         // Animate items - match by content/text since indices change
         let elementAnimations = 0;
         let movingElementFound = false;
-        document.querySelectorAll('.element').forEach(elementElement => {
-            const pageId = elementElement.dataset.pageId;
-            const elementIndex = elementElement.dataset.elementIndex;
+        document.querySelectorAll('.element').forEach(elementNode => {
+            const pageId = elementNode.dataset.pageId;
+            const elementIndex = elementNode.dataset.elementIndex;
             if (!pageId || elementIndex === undefined) return;
             
             // Try to find matching old position by text content
-            const textElement = elementElement.querySelector('.task-text, .header-text, .audio-status');
+            const textElement = elementNode.querySelector('.task-text, .header-text, .audio-status');
             let oldPos = null;
             let matchMethod = 'none';
             
@@ -114,7 +114,7 @@ export class AnimationRenderer {
                 return; // New item, no animation needed
             }
             
-            const newRect = elementElement.getBoundingClientRect();
+            const newRect = elementNode.getBoundingClientRect();
             let deltaY = oldPos.top - newRect.top;
             let deltaX = oldPos.left - newRect.left;
             
@@ -133,8 +133,8 @@ export class AnimationRenderer {
                 // Use more precise matching: check both new position AND old position
                 let isMovingElement = false;
                 if (this.app.appState.lastMovedElement) {
-                    const currentIsChild = elementElement.dataset.isChild === 'true';
-                    const currentChildIndex = elementElement.dataset.childIndex;
+                    const currentIsChild = elementNode.dataset.isChild === 'true';
+                    const currentChildIndex = elementNode.dataset.childIndex;
                     const trackedWasChild = this.app.appState.lastMovedElement.oldElementIndex !== null && 
                         typeof this.app.appState.lastMovedElement.oldElementIndex === 'string' && 
                         this.app.appState.lastMovedElement.oldElementIndex.includes('-');
@@ -199,34 +199,34 @@ export class AnimationRenderer {
                     console.log(`   🎬 Step 1: Starting at old position, POP-OUT (scale 1.15, z-index 1000)`);
                     console.log(`   🔍 Transform: translate(${deltaX.toFixed(2)}px, ${deltaY.toFixed(2)}px) scale(1.15)`);
                     console.log(`   📊 Old pos: (${oldPos.left.toFixed(2)}, ${oldPos.top.toFixed(2)}), New pos: (${newRect.left.toFixed(2)}, ${newRect.top.toFixed(2)})`);
-                    elementElement.style.transition = 'transform 0s, scale 0.3s ease-out, z-index 0s';
-                    elementElement.style.zIndex = '1000';
+                    elementNode.style.transition = 'transform 0s, scale 0.3s ease-out, z-index 0s';
+                    elementNode.style.zIndex = '1000';
                     // Invert the delta to start at old position, scale up for pop-out
-                    elementElement.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.15)`;
-                    void elementElement.offsetHeight;
+                    elementNode.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1.15)`;
+                    void elementNode.offsetHeight;
                     
                     // Step 2: After pop-out, slide to new position (remove translate, keep scale)
                     setTimeout(() => {
                         console.log(`   🎬 Step 2: POP-OUT complete, SLIDE to new position (scale 1.0)`);
-                        elementElement.style.transition = 'transform 2.5s ease-out, scale 0.3s ease-out';
+                        elementNode.style.transition = 'transform 2.5s ease-out, scale 0.3s ease-out';
                         // Remove translate (goes to natural new position), scale back to 1.0
-                        elementElement.style.transform = 'scale(1.0)';
-                        void elementElement.offsetHeight;
+                        elementNode.style.transform = 'scale(1.0)';
+                        void elementNode.offsetHeight;
                         
                         // Step 3: After slide completes, pop in (slight scale down)
                         setTimeout(() => {
                             console.log(`   🎬 Step 3: SLIDE complete, POP-IN (scale 1.05 -> 1.0)`);
-                            elementElement.style.transition = 'scale 0.2s ease-out, z-index 0s 0.2s';
-                            elementElement.style.transform = 'scale(1.05)';
-                            void elementElement.offsetHeight;
+                            elementNode.style.transition = 'scale 0.2s ease-out, z-index 0s 0.2s';
+                            elementNode.style.transform = 'scale(1.05)';
+                            void elementNode.offsetHeight;
                             
                             requestAnimationFrame(() => {
-                                elementElement.style.transform = 'scale(1.0)';
+                                elementNode.style.transform = 'scale(1.0)';
                                 setTimeout(() => {
                                     console.log(`   ✅ Step 4: POP-IN complete, animation finished`);
-                                    elementElement.style.zIndex = '';
-                                    elementElement.style.transition = '';
-                                    elementElement.style.transform = '';
+                                    elementNode.style.zIndex = '';
+                                    elementNode.style.transition = '';
+                                    elementNode.style.transform = '';
                                     this.app.appState.lastMovedElement = null; // Clear after animation
                                 }, 200);
                             });
@@ -238,22 +238,22 @@ export class AnimationRenderer {
                     // deltaY = oldPos.top - newRect.top, so positive means moved UP
                     // To invert: translate DOWN by deltaY to appear at old position
                     console.log(`   🎬 Starting DISPLACE animation (2.5s slide)`);
-                    elementElement.style.transition = 'transform 2.5s ease-out';
+                    elementNode.style.transition = 'transform 2.5s ease-out';
                     // Invert the delta to start at old position
-                    elementElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                    void elementElement.offsetHeight;
+                    elementNode.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    void elementNode.offsetHeight;
                     
                     // Remove transform to trigger slide to new position
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             console.log(`   🎬 DISPLACE animation triggered (removing transform)`);
-                            elementElement.style.transform = '';
+                            elementNode.style.transform = '';
                             
                             // Clean up after animation
                             setTimeout(() => {
                                 console.log(`   ✅ DISPLACE animation complete`);
-                                elementElement.style.transition = '';
-                                elementElement.style.transform = '';
+                                elementNode.style.transition = '';
+                                elementNode.style.transform = '';
                             }, 2500);
                         });
                     });

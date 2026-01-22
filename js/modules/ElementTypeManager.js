@@ -1,5 +1,5 @@
 // ElementTypeManager - Manages element type registration and rendering
-import { pluginRegistry } from '../core/PluginRegistry.js';
+import { pluginRegistry } from '../core/PluginManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { DOMUtils } from '../utils/dom.js';
 
