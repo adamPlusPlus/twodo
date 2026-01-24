@@ -7,6 +7,10 @@ import { LaTeXFileManager } from '../../utils/LaTeXFileManager.js';
 import { LaTeXErrorChecker } from '../../utils/LaTeXErrorChecker.js';
 import { LaTeXParser } from '../../utils/LaTeXParser.js';
 import { LaTeXRenderer } from '../../utils/LaTeXRenderer.js';
+import { ViewportRenderer } from '../../core/ViewportRenderer.js';
+import { performanceBudgetManager } from '../../core/PerformanceBudgetManager.js';
+import { ViewProjection } from '../../core/ViewProjection.js';
+import { getService, SERVICES } from '../../core/AppServices.js';
 
 export default class LaTeXEditorFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -20,10 +24,157 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
             version: '1.0.0',
             description: 'LaTeX editor with live preview, similar to Document View'
         });
+        
+        // Create ViewProjection for this format
+        this.viewProjection = null;
+        this.currentPageId = null;
+        this._latexCache = null; // Cache last projected LaTeX
+        this._updatePreviewFn = null; // Reference to updatePreview function
     }
     
     async onInit() {
         eventBus.emit('format:registered', { pluginId: this.id });
+    }
+    
+    /**
+     * Project canonical model to LaTeX representation
+     * @param {Object} canonicalModel - AppState instance
+     * @returns {string} LaTeX representation
+     */
+    project(canonicalModel) {
+        if (!canonicalModel || !canonicalModel.documents) {
+            return '';
+        }
+        
+        const page = canonicalModel.documents.find(p => p.id === this.currentPageId);
+        if (!page) {
+            return '';
+        }
+        
+        // Convert page to LaTeX
+        // Use cached LaTeX if available, otherwise generate from page structure
+        if (page._latexContent) {
+            this._latexCache = page._latexContent;
+            return page._latexContent;
+        }
+        
+        // Generate LaTeX from page structure
+        let latex = '';
+        
+        // Page title as section
+        if (page.title) {
+            latex += `\\section{${this._escapeLaTeX(page.title)}}\n\n`;
+        }
+        
+        // Convert groups and items to LaTeX
+        const groups = page.groups || [];
+        for (const bin of groups) {
+            if (bin.title) {
+                latex += `\\subsection{${this._escapeLaTeX(bin.title)}}\n\n`;
+            }
+            
+            const items = bin.items || [];
+            for (const item of items) {
+                latex += this._itemToLaTeX(item);
+            }
+        }
+        
+        this._latexCache = latex;
+        return latex;
+    }
+    
+    /**
+     * Convert item to LaTeX
+     * @private
+     * @param {Object} item - Item object
+     * @returns {string} LaTeX string
+     */
+    _itemToLaTeX(item) {
+        let latex = '';
+        
+        switch (item.type) {
+            case 'note':
+                if (item.text) {
+                    latex += `${this._escapeLaTeX(item.text)}\n\n`;
+                }
+                break;
+            case 'task':
+                const checkbox = item.completed ? '\\checkedbox' : '\\checkbox';
+                latex += `${checkbox} ${this._escapeLaTeX(item.text || 'Untitled')}\n\n`;
+                break;
+            case 'header-checkbox':
+                latex += `\\textbf{${this._escapeLaTeX(item.text || 'Untitled')}}\n\n`;
+                break;
+            default:
+                if (item.text) {
+                    latex += `${this._escapeLaTeX(item.text)}\n\n`;
+                }
+        }
+        
+        return latex;
+    }
+    
+    /**
+     * Escape LaTeX special characters
+     * @private
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text
+     */
+    _escapeLaTeX(text) {
+        if (!text) return '';
+        return text
+            .replace(/\\/g, '\\textbackslash{}')
+            .replace(/{/g, '\\{')
+            .replace(/}/g, '\\}')
+            .replace(/#/g, '\\#')
+            .replace(/\$/g, '\\$')
+            .replace(/%/g, '\\%')
+            .replace(/&/g, '\\&')
+            .replace(/\^/g, '\\textasciicircum{}')
+            .replace(/_/g, '\\_')
+            .replace(/\{/g, '\\{')
+            .replace(/\}/g, '\\}');
+    }
+    
+    /**
+     * Apply operation to view (incremental update)
+     * @param {Object} operation - Operation object
+     * @returns {boolean} True if handled
+     */
+    applyOperation(operation) {
+        if (!this.isOperationRelevant(operation)) {
+            return false;
+        }
+        
+        // For now, fallback to full re-project for most operations
+        // Future: implement incremental LaTeX updates
+        if (operation.op === 'setText' || operation.op === 'move' || operation.op === 'create' || operation.op === 'delete') {
+            // Trigger full update
+            if (this.viewProjection) {
+                this.viewProjection.update();
+            }
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if operation is relevant to this view
+     * @param {Object} operation - Operation object
+     * @returns {boolean}
+     */
+    isOperationRelevant(operation) {
+        if (!this.currentPageId || !operation.itemId) {
+            return false;
+        }
+        
+        // Use ViewProjection's helper if available
+        if (this.viewProjection) {
+            return this.viewProjection.isOperationRelevant(operation);
+        }
+        
+        return false;
     }
     
     /**
@@ -35,6 +186,8 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
     renderPage(container, page, options) {
         const app = options.app;
         if (!app) return container;
+        
+        this.currentPageId = page.id;
         
         // Initialize LaTeX file manager
         if (!app.latexFileManager) {
@@ -325,13 +478,16 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
                 previewArea.innerHTML = '';
                 previewArea.appendChild(rendered);
                 
-                // Save LaTeX content (debounced)
+                // Save LaTeX content (debounced) - store as metadata, not canonical
                 page._latexContent = latex;
             } catch (error) {
                 console.error('Error rendering LaTeX:', error);
                 previewArea.innerHTML = `<p style="color: #ff5555;">Error rendering LaTeX: ${error.message}</p>`;
             }
         };
+        
+        // Store reference to updatePreview for use in _updateLaTeXDisplay
+        this._updatePreviewFn = updatePreview;
         
         // Debounced save function
         let saveTimeout;
@@ -423,31 +579,34 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
         let updateTimeout;
         let errorCheckTimeout;
         editTextarea.addEventListener('input', () => {
-            // Update cursor position
-            lastCursorPosition = editTextarea.selectionStart;
-            
-            // Update preview immediately for real-time rendering
-            if (currentViewMode === 'split' || currentViewMode === 'preview') {
-                clearTimeout(updateTimeout);
-                updateTimeout = setTimeout(() => {
-                    updatePreview().then(() => {
-                        saveLaTeX();
-                        // Update outline when content changes
-                        const outlineContainer = document.querySelector('.latex-outline-container');
-                        if (outlineContainer) {
-                            this.updateOutline(outlineContainer, editTextarea.value);
-                        }
-                    });
-                }, 100); // Short delay for performance
-            } else {
-                // Still save even if not in preview mode
-                saveLaTeX();
-                // Update outline
-                const outlineContainer = document.querySelector('.latex-outline-container');
-                if (outlineContainer) {
-                    this.updateOutline(outlineContainer, editTextarea.value);
+            performanceBudgetManager.measureOperation('TYPING', () => {
+                // Update cursor position
+                lastCursorPosition = editTextarea.selectionStart;
+                
+                // Update preview immediately for real-time rendering
+                if (currentViewMode === 'split' || currentViewMode === 'preview') {
+                    clearTimeout(updateTimeout);
+                    updateTimeout = setTimeout(() => {
+                        updatePreview().then(() => {
+                            saveLaTeX();
+                            // Update outline when content changes
+                            const outlineContainer = document.querySelector('.latex-outline-container');
+                            if (outlineContainer) {
+                                this.updateOutline(outlineContainer, editTextarea.value);
+                            }
+                        });
+                    }, 100); // Short delay for performance
+                } else {
+                    // Still save even if not in preview mode
+                    saveLaTeX();
+                    // Update outline
+                    const outlineContainer = document.querySelector('.latex-outline-container');
+                    if (outlineContainer) {
+                        this.updateOutline(outlineContainer, editTextarea.value);
+                    }
                 }
-            }
+            }, { source: 'LaTeXEditorFormat-editTextarea' });
+        });
             
             // Run error check if enabled (debounced)
             if (errorCheckEnabled) {
@@ -652,6 +811,9 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
             display: flex;
             flex-direction: column;
             gap: 4px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         `;
         panel.appendChild(outlineContainer);
         
@@ -668,9 +830,16 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
      * @param {string} latexContent - LaTeX content
      */
     updateOutline(container, latexContent) {
+        // Clean up existing virtual scroller if any
+        if (container._virtualScroller) {
+            container._virtualScroller.destroy();
+            container._virtualScroller = null;
+        }
+        
         container.innerHTML = '';
         
-            // Parse LaTeX for sections using enhanced parser
+        // Parse LaTeX for sections using enhanced parser
+        const latexParser = new LaTeXParser();
         const structure = latexParser.extractStructure(latexContent);
         const sections = structure;
         
@@ -682,39 +851,62 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
             return;
         }
         
-        sections.forEach((section, index) => {
-            const item = document.createElement('div');
-            item.className = 'outline-item';
-            const indent = section.type === 'section' ? 0 : section.type === 'subsection' ? 20 : 40;
-            item.style.cssText = `
-                padding: 6px 8px;
-                padding-left: ${indent + 8}px;
-                cursor: pointer;
-                border-radius: 4px;
-                font-size: 13px;
-                color: #e0e0e0;
-            `;
-            item.textContent = section.title;
-            
-            item.addEventListener('mouseenter', () => {
-                item.style.background = '#3a3a3a';
-            });
-            item.addEventListener('mouseleave', () => {
-                item.style.background = 'transparent';
-            });
-            
-            item.addEventListener('click', () => {
-                // Scroll to section in editor
-                const textarea = document.querySelector('.latex-edit-textarea');
-                if (textarea) {
-                    textarea.focus();
-                    textarea.setSelectionRange(section.position, section.position);
-                    textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            });
-            
-            container.appendChild(item);
+        // Use viewport rendering for 50+ sections
+        const virtualScroller = ViewportRenderer.renderViewport(
+            container,
+            sections,
+            (section, sectionIndex) => {
+                return this._renderOutlineItem(section, sectionIndex);
+            },
+            {
+                threshold: 50
+            }
+        );
+        
+        // Store virtual scroller reference
+        if (virtualScroller) {
+            container._virtualScroller = virtualScroller;
+        }
+    }
+    
+    /**
+     * Render a single outline item
+     * @param {Object} section - Section data
+     * @param {number} sectionIndex - Section index
+     * @returns {HTMLElement} Outline item element
+     */
+    _renderOutlineItem(section, sectionIndex) {
+        const item = document.createElement('div');
+        item.className = 'outline-item';
+        const indent = section.type === 'section' ? 0 : section.type === 'subsection' ? 20 : 40;
+        item.style.cssText = `
+            padding: 6px 8px;
+            padding-left: ${indent + 8}px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #e0e0e0;
+        `;
+        item.textContent = section.title;
+        
+        item.addEventListener('mouseenter', () => {
+            item.style.background = '#3a3a3a';
         });
+        item.addEventListener('mouseleave', () => {
+            item.style.background = 'transparent';
+        });
+        
+        item.addEventListener('click', () => {
+            // Scroll to section in editor
+            const textarea = document.querySelector('.latex-edit-textarea');
+            if (textarea) {
+                textarea.focus();
+                textarea.setSelectionRange(section.position, section.position);
+                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+        
+        return item;
     }
     
     /**

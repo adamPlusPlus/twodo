@@ -1,6 +1,12 @@
 // AppServices.js - Service name constants and registration helpers
 import { serviceLocator } from './ServiceLocator.js';
 import { eventBus } from './EventBus.js';
+import { performanceBudgetManager } from './PerformanceBudgetManager.js';
+import { activeSetManager } from './ActiveSetManager.js';
+import { asyncIndexer } from './AsyncIndexer.js';
+import { repositoryManager } from './RepositoryManager.js';
+import { semanticOperationManager } from './SemanticOperationManager.js';
+import { viewManager } from './ViewManager.js';
 
 /**
  * Service name constants
@@ -13,6 +19,9 @@ export const SERVICES = {
     SYNC_MANAGER: 'syncManager',
     EVENT_BUS: 'eventBus',
     RENDERER: 'renderer',
+    PERFORMANCE_BUDGET: 'performanceBudget',
+    SEMANTIC_OPERATION_MANAGER: 'semanticOperationManager',
+    VIEW_MANAGER: 'viewManager',
     
     // Manager services
     SETTINGS_MANAGER: 'settingsManager',
@@ -99,6 +108,15 @@ export function registerAllServices(app) {
         registerService(SERVICES.UNDO_REDO_MANAGER, app.undoRedoManager);
     }
     registerService(SERVICES.SYNC_MANAGER, app.syncManager);
+    registerService(SERVICES.PERFORMANCE_BUDGET, performanceBudgetManager);
+    registerService(SERVICES.SEMANTIC_OPERATION_MANAGER, semanticOperationManager);
+    registerService(SERVICES.VIEW_MANAGER, viewManager);
+    
+    // Initialize ViewManager
+    viewManager.init();
+    registerService(SERVICES.ACTIVE_SET_MANAGER, activeSetManager);
+    registerService(SERVICES.ASYNC_INDEXER, asyncIndexer);
+    registerService(SERVICES.REPOSITORY_MANAGER, repositoryManager);
     
     // Manager services
     // These services may already be registered in app.js, check before registering

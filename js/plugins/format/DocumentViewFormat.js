@@ -2,6 +2,9 @@
 import { BaseFormatRenderer } from '../../core/BaseFormatRenderer.js';
 import { eventBus } from '../../core/EventBus.js';
 import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
+import { performanceBudgetManager } from '../../core/PerformanceBudgetManager.js';
+import { ViewProjection } from '../../core/ViewProjection.js';
+import { getService, SERVICES } from '../../core/AppServices.js';
 
 export default class DocumentViewFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -21,6 +24,11 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             },
             ...config
         });
+        
+        // Create ViewProjection for this format
+        this.viewProjection = null;
+        this.currentPageId = null;
+        this._markdownCache = null; // Cache last projected markdown
     }
     
     async onInit() {
@@ -717,6 +725,104 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
     }
     
     /**
+     * Project canonical model to markdown representation
+     * @param {Object} canonicalModel - AppState instance
+     * @returns {string} Markdown representation
+     */
+    project(canonicalModel) {
+        if (!canonicalModel || !canonicalModel.documents) {
+            return '';
+        }
+        
+        const page = canonicalModel.documents.find(p => p.id === this.currentPageId);
+        if (!page) {
+            return '';
+        }
+        
+        // Convert page to markdown
+        let markdown = '';
+        
+        // Page title
+        if (page.title) {
+            markdown += `# ${page.title}\n\n`;
+        }
+        
+        // Convert groups and items to markdown
+        const groups = this._getGroups(page);
+        const itemIndex = this._buildItemIndex(page);
+        
+        for (const bin of groups) {
+            const items = this._getItems(bin);
+            for (let i = 0; i < items.length; i++) {
+                const element = items[i];
+                markdown += this.elementToMarkdown(element, 0, itemIndex);
+            }
+        }
+        
+        this._markdownCache = markdown;
+        return markdown;
+    }
+    
+    /**
+     * Apply operation to view (incremental update)
+     * @param {Object} operation - Operation object
+     * @returns {boolean} True if handled
+     */
+    applyOperation(operation) {
+        if (!this.isOperationRelevant(operation)) {
+            return false;
+        }
+        
+        // For now, fallback to full re-project for most operations
+        // Future: implement incremental markdown updates
+        if (operation.op === 'setText' || operation.op === 'move' || operation.op === 'create' || operation.op === 'delete') {
+            // Trigger full update
+            if (this.viewProjection) {
+                this.viewProjection.update();
+            }
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if operation is relevant to this view
+     * @param {Object} operation - Operation object
+     * @returns {boolean}
+     */
+    isOperationRelevant(operation) {
+        if (!this.currentPageId || !operation.itemId) {
+            return false;
+        }
+        
+        // Use ViewProjection's helper if available
+        if (this.viewProjection) {
+            return this.viewProjection.isOperationRelevant(operation);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Build item index for hierarchy traversal
+     * @private
+     * @param {Object} page - Page object
+     * @returns {Object} Item index
+     */
+    _buildItemIndex(page) {
+        const itemIndex = {};
+        const groups = this._getGroups(page);
+        
+        for (const bin of groups) {
+            const items = bin.items || [];
+            ItemHierarchy.buildIndex(items, itemIndex);
+        }
+        
+        return itemIndex;
+    }
+    
+    /**
      * Render a page in document format
      * @param {HTMLElement} container - Container element
      * @param {Object} page - Page data
@@ -725,8 +831,42 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
     renderPage(container, page, options = {}) {
         this.app = options.app;
         this.currentDocumentId = page.id;
+        this.currentPageId = page.id;
         const app = options.app;
         if (!app) return;
+        
+        // Initialize ViewProjection if not already done
+        if (!this.viewProjection) {
+            const appState = app.appState;
+            if (appState) {
+                this.viewProjection = new ViewProjection({
+                    viewId: `document-view-${page.id}`,
+                    pageId: page.id,
+                    onUpdate: (projectedData) => {
+                        // Update markdown display when projection updates
+                        this._updateMarkdownDisplay(projectedData);
+                    },
+                    filterOperations: (operation) => {
+                        return this.isOperationRelevant(operation);
+                    }
+                });
+                
+                // Initialize projection
+                this.viewProjection.init(appState, container);
+                
+                // Register with ViewManager
+                const viewManager = getService(SERVICES.VIEW_MANAGER);
+                if (viewManager) {
+                    viewManager.registerView(this.viewProjection, page.id);
+                }
+            }
+        } else {
+            // Update page ID if changed
+            if (this.currentPageId !== page.id) {
+                this.currentPageId = page.id;
+                this.viewProjection.setPageId(page.id);
+            }
+        }
         
         // Only clear if not preserving format (allows seamless switching)
         if (!app._preservingFormat) {
@@ -908,6 +1048,10 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             }
             
             // Items in group
+            // NOTE: DocumentViewFormat converts items to markdown first, then renders as HTML.
+            // Virtualization would need to happen at the markdown block level or HTML block level,
+            // which is more complex. For now, all items are rendered. Future enhancement: 
+            // implement block-level virtualization for large documents.
             const itemIndex = ItemHierarchy.buildItemIndex(bin.items || []);
             const items = this._getItems(bin);
             if (items.length > 0) {
@@ -1003,7 +1147,9 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             
             // Update line numbers on input
             textarea.addEventListener('input', () => {
-                updateLineNumbers();
+                performanceBudgetManager.measureOperation('TYPING', () => {
+                    updateLineNumbers();
+                }, { source: 'DocumentViewFormat-lineNumbers' });
             });
             
             // Store update function on textarea for external access
@@ -1168,27 +1314,29 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 // Sync changes back to markdown (debounced)
                 let syncTimeout;
                 targetElement.addEventListener('input', () => {
-                    clearTimeout(syncTimeout);
-                    syncTimeout = setTimeout(() => {
-                        // Convert HTML back to markdown
-                        const html = targetElement.innerHTML;
-                        const markdownFromHtml = this.htmlToMarkdown(html);
-                        // Update textareas
-                        editTextarea.value = markdownFromHtml;
-                        if (editTextarea.updateLineNumbers) editTextarea.updateLineNumbers();
-                        splitEditTextarea.value = markdownFromHtml;
-                        if (splitEditTextarea.updateLineNumbers) splitEditTextarea.updateLineNumbers();
-                        // Update other preview (but don't re-enable editing to avoid recursion)
-                        if (targetElement === previewContent) {
-                            const wasEditable = splitPreviewContent.contentEditable === 'true';
-                            updatePreview(markdownFromHtml, splitPreviewContent, wasEditable);
-                        } else {
-                            const wasEditable = previewContent.contentEditable === 'true';
-                            updatePreview(markdownFromHtml, previewContent, wasEditable);
-                        }
-                        // Save
-                        saveMarkdownToPage(markdownFromHtml);
-                    }, 300);
+                    performanceBudgetManager.measureOperation('TYPING', () => {
+                        clearTimeout(syncTimeout);
+                        syncTimeout = setTimeout(() => {
+                            // Convert HTML back to markdown
+                            const html = targetElement.innerHTML;
+                            const markdownFromHtml = this.htmlToMarkdown(html);
+                            // Update textareas
+                            editTextarea.value = markdownFromHtml;
+                            if (editTextarea.updateLineNumbers) editTextarea.updateLineNumbers();
+                            splitEditTextarea.value = markdownFromHtml;
+                            if (splitEditTextarea.updateLineNumbers) splitEditTextarea.updateLineNumbers();
+                            // Update other preview (but don't re-enable editing to avoid recursion)
+                            if (targetElement === previewContent) {
+                                const wasEditable = splitPreviewContent.contentEditable === 'true';
+                                updatePreview(markdownFromHtml, splitPreviewContent, wasEditable);
+                            } else {
+                                const wasEditable = previewContent.contentEditable === 'true';
+                                updatePreview(markdownFromHtml, previewContent, wasEditable);
+                            }
+                            // Save
+                            saveMarkdownToPage(markdownFromHtml);
+                        }, 300);
+                    }, { source: 'DocumentViewFormat-contentEditable' });
                 });
             }
             
@@ -1356,9 +1504,11 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         };
         
         // Function to save markdown back to page data
+        // Phase 4: Instead of directly modifying AppState, we should parse markdown
+        // and create operations. For now, keep metadata storage but don't modify canonical model directly.
         const saveMarkdownToPage = async (markdownText) => {
-            // Parse markdown back to page structure
-            // This is complex - for now, we'll store the raw markdown in page metadata
+            // Store markdown in page metadata (non-canonical, view-specific)
+            // Future: Parse markdown and create semantic operations to update canonical model
             if (app.appState) {
                 const pages = this._getPages(app);
                 const pageIndex = pages.findIndex(p => p.id === page.id);
@@ -1368,12 +1518,50 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                     }
                     pages[pageIndex]._documentMarkdown.raw = markdownText;
                     pages[pageIndex]._documentMarkdown.lastModified = Date.now();
-                    app.appState.documents = pages;
-                    // Trigger save
+                    // Note: We're storing metadata, not modifying canonical structure
+                    // The canonical model is updated via operations, not direct assignment
+                    // Trigger save (metadata only)
                     if (app.dataManager) {
                         await app.dataManager.saveData();
                     }
                 }
+            }
+        };
+        
+        /**
+         * Update markdown display when projection updates
+         * @private
+         * @param {string} markdown - Markdown text
+         */
+        this._updateMarkdownDisplay = (markdown) => {
+            if (!markdown) return;
+            
+            // Update all markdown textareas and previews if they exist
+            const editTextarea = container.querySelector('.edit-textarea');
+            const splitEditTextarea = container.querySelector('.split-edit-textarea');
+            const previewContent = container.querySelector('.preview-content');
+            const splitPreviewContent = container.querySelector('.split-preview-content');
+            
+            if (editTextarea && editTextarea.value !== markdown) {
+                editTextarea.value = markdown;
+                if (editTextarea.updateLineNumbers) {
+                    editTextarea.updateLineNumbers();
+                }
+            }
+            
+            if (splitEditTextarea && splitEditTextarea.value !== markdown) {
+                splitEditTextarea.value = markdown;
+                if (splitEditTextarea.updateLineNumbers) {
+                    splitEditTextarea.updateLineNumbers();
+                }
+            }
+            
+            // Update previews
+            if (previewContent) {
+                updatePreview(markdown, previewContent);
+            }
+            if (splitPreviewContent) {
+                updatePreview(markdown, splitPreviewContent);
             }
         };
         
@@ -1401,8 +1589,16 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             }, 1000);
         };
         
-        editTextarea.addEventListener('input', () => syncEditChanges(editTextarea, splitEditTextarea));
-        splitEditTextarea.addEventListener('input', () => syncEditChanges(splitEditTextarea, editTextarea));
+        editTextarea.addEventListener('input', () => {
+            performanceBudgetManager.measureOperation('TYPING', () => {
+                syncEditChanges(editTextarea, splitEditTextarea);
+            }, { source: 'DocumentViewFormat-editTextarea' });
+        });
+        splitEditTextarea.addEventListener('input', () => {
+            performanceBudgetManager.measureOperation('TYPING', () => {
+                syncEditChanges(splitEditTextarea, editTextarea);
+            }, { source: 'DocumentViewFormat-splitEditTextarea' });
+        });
         
         // Initial preview render (make preview editable)
         updatePreview(markdown, previewContent, true);

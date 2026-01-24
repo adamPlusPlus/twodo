@@ -124,6 +124,15 @@ export class FormatRendererManager {
         const page = appState.documents.find(p => p.id === pageId);
         if (!page) return false;
         
+        // Clear previous format view if exists
+        const previousFormat = this.getFormat(this.activeFormats.get(pageId));
+        if (previousFormat && previousFormat.viewProjection) {
+            const viewManager = getService(SERVICES.VIEW_MANAGER);
+            if (viewManager) {
+                viewManager.unregisterView(previousFormat.viewProjection.viewId);
+            }
+        }
+        
         // Initialize format if needed
         if (!pluginRegistry.isInitialized(format.id)) {
             await pluginRegistry.initialize(format.id, null);
@@ -135,6 +144,9 @@ export class FormatRendererManager {
         // Set as active format
         page.format = formatName;
         this.activeFormats.set(pageId, formatName);
+        
+        // Register view with ViewManager if format has viewProjection
+        // (Views are registered when renderPage is called, but we can pre-register here)
         
         // Save and re-render
         eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);

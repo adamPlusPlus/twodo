@@ -4,6 +4,9 @@ import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
 import { eventBus } from '../../core/EventBus.js';
 import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
+import { ViewportRenderer } from '../../core/ViewportRenderer.js';
+import { ViewProjection } from '../../core/ViewProjection.js';
+import { getService, SERVICES } from '../../core/AppServices.js';
 
 export default class PageKanbanFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -21,6 +24,11 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             },
             ...config
         });
+        
+        // Create ViewProjection for this format
+        this.viewProjection = null;
+        this.currentPageId = null;
+        this._kanbanStructure = null; // Cache last projected structure
     }
     
     async onInit() {
@@ -47,6 +55,139 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
     }
     
     /**
+     * Project canonical model to Kanban representation
+     * @param {Object} canonicalModel - AppState instance
+     * @returns {Object} Kanban structure { groups: [...], items: {...} }
+     */
+    project(canonicalModel) {
+        if (!canonicalModel || !canonicalModel.documents) {
+            return { groups: [], items: {} };
+        }
+        
+        const page = canonicalModel.documents.find(p => p.id === this.currentPageId);
+        if (!page) {
+            return { groups: [], items: {} };
+        }
+        
+        // Convert page to Kanban structure
+        const groups = this._getGroups(page);
+        const items = {};
+        
+        // Build item map for quick lookup
+        for (const bin of groups) {
+            const binItems = this._getItems(bin);
+            for (const item of binItems) {
+                items[item.id] = item;
+            }
+        }
+        
+        const structure = { groups, items };
+        this._kanbanStructure = structure;
+        return structure;
+    }
+    
+    /**
+     * Apply operation to view (incremental update)
+     * @param {Object} operation - Operation object
+     * @returns {boolean} True if handled
+     */
+    applyOperation(operation) {
+        if (!this.isOperationRelevant(operation)) {
+            return false;
+        }
+        
+        // Incremental updates for Kanban cards
+        if (operation.op === 'setText') {
+            this._updateCardText(operation.itemId, operation.params.text);
+            return true;
+        } else if (operation.op === 'move') {
+            this._moveCard(operation.itemId, operation.params.newParentId);
+            return true;
+        } else if (operation.op === 'create') {
+            // Trigger full update for new cards
+            if (this.viewProjection) {
+                this.viewProjection.update();
+            }
+            return true;
+        } else if (operation.op === 'delete') {
+            this._removeCard(operation.itemId);
+            return true;
+        }
+        
+        // Fallback to full update
+        if (this.viewProjection) {
+            this.viewProjection.update();
+        }
+        return true;
+    }
+    
+    /**
+     * Update card text incrementally
+     * @private
+     * @param {string} itemId - Item ID
+     * @param {string} newText - New text
+     */
+    _updateCardText(itemId, newText) {
+        const container = this.viewProjection?.container;
+        if (!container) return;
+        
+        const card = container.querySelector(`[data-item-id="${itemId}"]`);
+        if (card) {
+            const textElement = card.querySelector('.kanban-card-text');
+            if (textElement) {
+                textElement.textContent = newText || 'Untitled';
+            }
+        }
+    }
+    
+    /**
+     * Move card to new column
+     * @private
+     * @param {string} itemId - Item ID
+     * @param {string} newParentId - New parent (bin) ID
+     */
+    _moveCard(itemId, newParentId) {
+        // For now, trigger full update
+        // Future: implement incremental card movement
+        if (this.viewProjection) {
+            this.viewProjection.update();
+        }
+    }
+    
+    /**
+     * Remove card from view
+     * @private
+     * @param {string} itemId - Item ID
+     */
+    _removeCard(itemId) {
+        const container = this.viewProjection?.container;
+        if (!container) return;
+        
+        const card = container.querySelector(`[data-item-id="${itemId}"]`);
+        if (card) {
+            card.remove();
+        }
+    }
+    
+    /**
+     * Check if operation is relevant to this view
+     * @param {Object} operation - Operation object
+     * @returns {boolean}
+     */
+    isOperationRelevant(operation) {
+        if (!this.currentPageId || !operation.itemId) {
+            return false;
+        }
+        
+        // Use ViewProjection's helper if available
+        if (this.viewProjection) {
+            return this.viewProjection.isOperationRelevant(operation);
+        }
+        
+        return false;
+    }
+    
+    /**
      * Render a page in Kanban format
      * @param {HTMLElement} container - Container element
      * @param {Object} page - Page data
@@ -55,6 +196,41 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
     renderPage(container, page, options = {}) {
         const app = options.app;
         if (!app) return;
+        
+        this.currentPageId = page.id;
+        
+        // Initialize ViewProjection if not already done
+        if (!this.viewProjection) {
+            const appState = app.appState;
+            if (appState) {
+                this.viewProjection = new ViewProjection({
+                    viewId: `kanban-${page.id}`,
+                    pageId: page.id,
+                    onUpdate: (projectedData) => {
+                        // Update Kanban board when projection updates
+                        this._updateKanbanDisplay(projectedData);
+                    },
+                    filterOperations: (operation) => {
+                        return this.isOperationRelevant(operation);
+                    }
+                });
+                
+                // Initialize projection
+                this.viewProjection.init(appState, container);
+                
+                // Register with ViewManager
+                const viewManager = getService(SERVICES.VIEW_MANAGER);
+                if (viewManager) {
+                    viewManager.registerView(this.viewProjection, page.id);
+                }
+            }
+        } else {
+            // Update page ID if changed
+            if (this.currentPageId !== page.id) {
+                this.currentPageId = page.id;
+                this.viewProjection.setPageId(page.id);
+            }
+        }
         
         // Only clear if not preserving format (prevents flicker during drag operations)
         if (!app._preservingFormat) {
@@ -91,13 +267,30 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                     // Update existing column content
                     const content = existingColumn.querySelector('.kanban-column-content');
                     if (content) {
+                        // Clean up existing virtual scroller if any
+                        if (content._virtualScroller) {
+                            content._virtualScroller.destroy();
+                            content._virtualScroller = null;
+                        }
                         content.innerHTML = '';
                         const items = this._getItems(bin);
                         if (items.length > 0) {
-                            items.forEach((element, elementIndex) => {
-                                const card = this.renderCard(element, page.id, bin.id, elementIndex, app);
-                                content.appendChild(card);
-                            });
+                            // Use viewport rendering for 50+ items
+                            const virtualScroller = ViewportRenderer.renderViewport(
+                                content,
+                                items,
+                                (element, elementIndex) => {
+                                    return this.renderCard(element, page.id, bin.id, elementIndex, app);
+                                },
+                                {
+                                    threshold: 50
+                                }
+                            );
+                            
+                            // Store virtual scroller reference
+                            if (virtualScroller) {
+                                content._virtualScroller = virtualScroller;
+                            }
                         } else {
                             const emptyState = DOMUtils.createElement('div', {
                                 style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px); font-family: var(--element-font-family);`
@@ -210,13 +403,25 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
             max-height: calc(100vh - 250px);
         `;
         
-        // Render items as cards
+        // Render items as cards with viewport rendering for large lists
         const items = this._getItems(bin);
         if (items.length > 0) {
-            items.forEach((element, elementIndex) => {
-                const card = this.renderCard(element, pageId, bin.id, elementIndex, app);
-                content.appendChild(card);
-            });
+            // Use viewport rendering for 50+ items
+            const virtualScroller = ViewportRenderer.renderViewport(
+                content,
+                items,
+                (element, elementIndex) => {
+                    return this.renderCard(element, pageId, bin.id, elementIndex, app);
+                },
+                {
+                    threshold: 50
+                }
+            );
+            
+            // Store virtual scroller reference
+            if (virtualScroller) {
+                content._virtualScroller = virtualScroller;
+            }
         } else {
             // Empty state
             const emptyState = DOMUtils.createElement('div', {
@@ -624,9 +829,18 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
 
                 if (dragPayload.type === 'kanban-card') {
                     // Use DragDropHandler for proper element movement (handles children, relationships, etc.)
-                    if (sourceBin && targetBin && sourceItems[dragPayload.elementIndex]) {
+                    // Use itemId if available, fallback to elementIndex
+                    let element = null;
+                    if (dragPayload.itemId) {
+                        element = sourceItems.find(item => item.id === dragPayload.itemId);
+                    }
+                    if (!element && dragPayload.elementIndex !== undefined) {
+                        element = sourceItems[dragPayload.elementIndex];
+                    }
+                    
+                    if (sourceBin && targetBin && element) {
                         // Check if element is a child
-                        const elementIndexStr = String(dragPayload.elementIndex);
+                        const elementIndexStr = String(dragPayload.elementIndex || '');
                         const isChild = elementIndexStr.includes('-');
                         let parentElementIndex = null;
                         let childIndex = null;
@@ -641,15 +855,27 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                         if (app.dragDropHandler) {
                             // Move to end of target bin
                             const targetIndex = targetItems.length;
-                            app.dragDropHandler.moveElement(
-                                dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
-                                pageId, binId, targetIndex,
-                                isChild, parentElementIndex, childIndex
-                            );
+                            
+                            // Use ID-based move if available
+                            if (dragPayload.itemId && element.id && app.dragDropHandler.moveElementById) {
+                                app.dragDropHandler.moveElementById(
+                                    element.id,
+                                    null, // targetItemId
+                                    null, // targetParentId
+                                    targetIndex
+                                );
+                            } else {
+                                // Fallback to index-based
+                                app.dragDropHandler.moveElement(
+                                    dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
+                                    pageId, binId, targetIndex,
+                                    isChild, parentElementIndex, childIndex
+                                );
+                            }
                         } else {
                             // Fallback if DragDropHandler not available
-                            const element = sourceItems[dragPayload.elementIndex];
-                            sourceItems.splice(dragPayload.elementIndex, 1);
+                            const elementIndex = dragPayload.elementIndex !== undefined ? dragPayload.elementIndex : sourceItems.indexOf(element);
+                            sourceItems.splice(elementIndex, 1);
                             targetItems.push(element);
                             app.dataManager.saveData();
                             
@@ -662,11 +888,22 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                     // Handle drag from bin view or other sources
                     if (app.dragDropHandler) {
                         const targetIndex = targetItems.length;
-                        app.dragDropHandler.moveElement(
-                            dragPayload.pageId || dragPayload.sourcePageId, 
-                            dragPayload.binId || dragPayload.sourceBinId, 
-                            dragPayload.elementIndex || dragPayload.sourceElementIndex,
-                            pageId, binId, targetIndex,
+                        
+                        // Use ID-based move if available
+                        if (dragPayload.itemId && app.dragDropHandler.moveElementById) {
+                            app.dragDropHandler.moveElementById(
+                                dragPayload.itemId,
+                                null, // targetItemId
+                                null, // targetParentId
+                                targetIndex
+                            );
+                        } else {
+                            // Fallback to index-based
+                            app.dragDropHandler.moveElement(
+                                dragPayload.pageId || dragPayload.sourcePageId, 
+                                dragPayload.binId || dragPayload.sourceBinId, 
+                                dragPayload.elementIndex || dragPayload.sourceElementIndex,
+                                pageId, binId, targetIndex,
                             dragPayload.isChild || false,
                             dragPayload.parentElementIndex || null,
                             dragPayload.childIndex || null
@@ -677,6 +914,47 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                 console.error('Error handling kanban drop:', err);
             }
         });
+    }
+    
+    /**
+     * Update Kanban display when projection updates
+     * @private
+     * @param {Object} structure - Kanban structure { groups, items }
+     */
+    _updateKanbanDisplay(structure) {
+        if (!structure || !structure.groups) return;
+        
+        // For now, trigger full re-render
+        // Future: implement incremental column/card updates
+        const container = this.viewProjection?.container;
+        if (container && this.app) {
+            // Re-render using existing renderPage logic
+            // Note: This is a simplified approach - full implementation would
+            // update cards incrementally without full re-render
+            const page = this.app.appState?.documents?.find(p => p.id === this.currentPageId);
+            if (page) {
+                // Preserve format flag to prevent flicker
+                this.app._preservingFormat = true;
+                this.renderPage(container, page, { app: this.app });
+                this.app._preservingFormat = false;
+            }
+        }
+    }
+    
+    /**
+     * Destroy view projection when format is deactivated
+     */
+    destroy() {
+        if (this.viewProjection) {
+            const viewManager = getService(SERVICES.VIEW_MANAGER);
+            if (viewManager) {
+                viewManager.unregisterView(this.viewProjection.viewId);
+            }
+            this.viewProjection.destroy();
+            this.viewProjection = null;
+        }
+        this._kanbanStructure = null;
+        this.currentPageId = null;
     }
 }
 
