@@ -4,6 +4,7 @@ import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
 import { SERVICES, registerService } from './AppServices.js';
 import { AppRenderer } from './AppRenderer.js';
+import { performanceBudgetManager } from './PerformanceBudgetManager.js';
 
 /**
  * RenderService - Handles application rendering via EventBus
@@ -35,26 +36,24 @@ export class RenderService {
      * Render the application
      * Delegates to AppRenderer
      */
-    render() {
+    async render() {
         // Prevent multiple simultaneous renders
         if (this.isRendering) {
             return;
         }
         
         this.isRendering = true;
-        performance.mark('render-start');
-        const renderStart = performance.now();
         
         try {
-            // Delegate to AppRenderer
-            this.appRenderer.render();
+            // Delegate to AppRenderer with performance budget monitoring
+            const result = performanceBudgetManager.measureOperation('RENDERING', async () => {
+                await this.appRenderer.render();
+            }, { source: 'RenderService-render' });
             
-            performance.mark('render-end');
-            const renderTime = performance.now() - renderStart;
-            if (renderTime > 100) {
-                console.log(`[PERF] Render took ${renderTime.toFixed(1)}ms`);
+            // If measureOperation returns a Promise (for async operations), await it
+            if (result instanceof Promise) {
+                await result;
             }
-            // console.log(`[DIAG] Render complete: ${renderTime.toFixed(1)}ms`);
             
             // Emit render complete event
             eventBus.emit(EVENTS.APP.RENDERED);

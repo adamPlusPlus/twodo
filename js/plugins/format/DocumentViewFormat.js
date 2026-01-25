@@ -835,26 +835,86 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         const app = options.app;
         if (!app) return;
         
-        // Initialize ViewProjection if not already done
+        // Store references for update callback (will be set after DOM creation)
+        let editTextareaRef = null;
+        let splitEditTextareaRef = null;
+        let previewContentRef = null;
+        let splitPreviewContentRef = null;
+        let updatePreviewRef = null;
+        
+        // Define update callback (will be enhanced after DOM elements are created)
+        this._updateMarkdownDisplay = (markdown) => {
+            if (!markdown) return;
+            
+            // Use stored references if available, otherwise query DOM
+            const editTextarea = editTextareaRef || container.querySelector('.edit-textarea') || container.querySelector('.document-edit-textarea');
+            const splitEditTextarea = splitEditTextareaRef || container.querySelector('.split-edit-textarea');
+            const previewContent = previewContentRef || container.querySelector('.preview-content');
+            const splitPreviewContent = splitPreviewContentRef || container.querySelector('.split-preview-content');
+            
+            if (editTextarea && editTextarea.value !== markdown) {
+                editTextarea.value = markdown;
+                if (editTextarea.updateLineNumbers) {
+                    editTextarea.updateLineNumbers();
+                }
+            }
+            
+            if (splitEditTextarea && splitEditTextarea.value !== markdown) {
+                splitEditTextarea.value = markdown;
+                if (splitEditTextarea.updateLineNumbers) {
+                    splitEditTextarea.updateLineNumbers();
+                }
+            }
+            
+            // Update previews if updatePreview function is available
+            if (updatePreviewRef) {
+                if (previewContent) {
+                    updatePreviewRef(markdown, previewContent);
+                }
+                if (splitPreviewContent) {
+                    updatePreviewRef(markdown, splitPreviewContent);
+                }
+            }
+        };
+        
+        // Initialize ViewProjection if not already done (but don't call init() yet - wait for DOM)
         if (!this.viewProjection) {
             const appState = app.appState;
             if (appState) {
-                this.viewProjection = new ViewProjection({
+                // Create a custom ViewProjection that delegates project() to this format renderer
+                const customProjection = new ViewProjection({
                     viewId: `document-view-${page.id}`,
                     pageId: page.id,
                     onUpdate: (projectedData) => {
                         // Update markdown display when projection updates
-                        this._updateMarkdownDisplay(projectedData);
+                        if (this._updateMarkdownDisplay) {
+                            this._updateMarkdownDisplay(projectedData);
+                        }
                     },
                     filterOperations: (operation) => {
                         return this.isOperationRelevant(operation);
                     }
                 });
                 
-                // Initialize projection
-                this.viewProjection.init(appState, container);
+                // Override project() to call this format renderer's project method
+                // Use arrow function to preserve 'this' context
+                const formatRenderer = this;
+                customProjection.project = (canonicalModel) => {
+                    return formatRenderer.project(canonicalModel);
+                };
                 
-                // Register with ViewManager
+                // Override applyOperation() to call this format renderer's applyOperation method
+                customProjection.applyOperation = (operation) => {
+                    return formatRenderer.applyOperation(operation);
+                };
+                
+                this.viewProjection = customProjection;
+                
+                // Set up ViewProjection but don't initialize yet (wait for DOM)
+                this.viewProjection.canonicalModel = appState;
+                this.viewProjection.container = container;
+                
+                // Register with ViewManager (will initialize after DOM is ready)
                 const viewManager = getService(SERVICES.VIEW_MANAGER);
                 if (viewManager) {
                     viewManager.registerView(this.viewProjection, page.id);
@@ -866,6 +926,8 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                 this.currentPageId = page.id;
                 this.viewProjection.setPageId(page.id);
             }
+            // Update container reference
+            this.viewProjection.container = container;
         }
         
         // Only clear if not preserving format (allows seamless switching)
@@ -1176,6 +1238,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         `;
         
         const editTextarea = createTextareaWithLineNumbers(markdown, editContainer);
+        editTextareaRef = editTextarea; // Store reference for update callback
         
         // Create preview container (rendered HTML)
         const previewContainer = document.createElement('div');
@@ -1193,6 +1256,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             color: #dcddde;
         `;
         previewContainer.appendChild(previewContent);
+        previewContentRef = previewContent; // Store reference
         
         // Create split container (both edit and preview side by side)
         const splitContainer = document.createElement('div');
@@ -1213,6 +1277,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         `;
         
         const splitEditTextarea = createTextareaWithLineNumbers(markdown, splitEdit);
+        splitEditTextareaRef = splitEditTextarea; // Store reference
         
         const splitPreview = document.createElement('div');
         splitPreview.className = 'document-split-preview';
@@ -1229,6 +1294,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             color: #dcddde;
         `;
         splitPreview.appendChild(splitPreviewContent);
+        splitPreviewContentRef = splitPreviewContent; // Store reference
         
         splitContainer.appendChild(splitEdit);
         splitContainer.appendChild(splitPreview);
@@ -1281,6 +1347,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         
         // Function to update preview from markdown
         const updatePreview = (markdownText, targetElement, isEditable = false) => {
+            updatePreviewRef = updatePreview; // Store reference for update callback
             let html = this.markdownToHTML(markdownText);
             
             // Replace element placeholders with interactive components
@@ -1528,42 +1595,7 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             }
         };
         
-        /**
-         * Update markdown display when projection updates
-         * @private
-         * @param {string} markdown - Markdown text
-         */
-        this._updateMarkdownDisplay = (markdown) => {
-            if (!markdown) return;
-            
-            // Update all markdown textareas and previews if they exist
-            const editTextarea = container.querySelector('.edit-textarea');
-            const splitEditTextarea = container.querySelector('.split-edit-textarea');
-            const previewContent = container.querySelector('.preview-content');
-            const splitPreviewContent = container.querySelector('.split-preview-content');
-            
-            if (editTextarea && editTextarea.value !== markdown) {
-                editTextarea.value = markdown;
-                if (editTextarea.updateLineNumbers) {
-                    editTextarea.updateLineNumbers();
-                }
-            }
-            
-            if (splitEditTextarea && splitEditTextarea.value !== markdown) {
-                splitEditTextarea.value = markdown;
-                if (splitEditTextarea.updateLineNumbers) {
-                    splitEditTextarea.updateLineNumbers();
-                }
-            }
-            
-            // Update previews
-            if (previewContent) {
-                updatePreview(markdown, previewContent);
-            }
-            if (splitPreviewContent) {
-                updatePreview(markdown, splitPreviewContent);
-            }
-        };
+        // Note: _updateMarkdownDisplay is now defined at the start of renderPage
         
         // Sync edit textarea changes to split edit textarea and update previews
         const syncEditChanges = (source, target) => {
@@ -1755,6 +1787,18 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         
         // Set initial view mode
         setViewMode('split');
+        
+        // Now that DOM is ready, initialize ViewProjection if it exists
+        try {
+            if (this.viewProjection && !this.viewProjection.isActive) {
+                this.viewProjection.isActive = true;
+                this.viewProjection._subscribeToOperations();
+                // Don't call update() here - let the normal render flow handle initial display
+            }
+        } catch (initError) {
+            console.error('[DocumentViewFormat] Error initializing ViewProjection:', initError);
+            // Continue with normal rendering even if ViewProjection initialization fails
+        }
         
         // Only append if not preserving format (prevents duplicates)
         if (!app._preservingFormat || container.children.length === 0) {

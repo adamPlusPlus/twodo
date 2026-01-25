@@ -2,6 +2,7 @@
 // Provides getters/setters with validation and emits state change events
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
+import { activeSetManager } from './ActiveSetManager.js';
 
 /**
  * AppState - Centralized state management for TodoApp
@@ -77,8 +78,41 @@ export class AppState {
     }
     
     // Documents getter/setter (canonical)
+    // With ActiveSetManager integration: returns metadata for all + full data for active set
     get documents() {
-        return this._documents;
+        // If active-set is disabled, return documents directly
+        if (!activeSetManager.config.isEnabled()) {
+            return this._documents;
+        }
+        
+        // Get all metadata
+        const allMetadata = activeSetManager.getAllMetadata();
+        
+        // Get active documents
+        const activeIds = activeSetManager.getActiveDocumentIds();
+        const activeDocs = activeIds.map(id => {
+            const entry = activeSetManager.activeCache.get(id);
+            return entry ? entry.document : null;
+        }).filter(doc => doc !== null);
+        
+        // Combine: active documents (full) + metadata for others
+        // For now, return active documents + metadata placeholders
+        // This maintains backward compatibility while enabling lazy loading
+        const result = [];
+        
+        // Add active documents first
+        activeDocs.forEach(doc => {
+            result.push(doc);
+        });
+        
+        // Add metadata for non-active documents
+        allMetadata.forEach(metadata => {
+            if (!activeSetManager.isActive(metadata.id)) {
+                result.push(metadata); // Metadata-only entry
+            }
+        });
+        
+        return result.length > 0 ? result : this._documents;
     }
     
     set documents(value) {
@@ -86,8 +120,74 @@ export class AppState {
             console.warn('[AppState] documents must be an array');
             return;
         }
+        
+        // If active-set is disabled, store directly
+        if (!activeSetManager.config.isEnabled()) {
+            this._documents = value;
+            eventBus.emit(EVENTS.DATA.CHANGED, { type: 'documents', value });
+            return;
+        }
+        
+        // Store metadata for all documents
+        activeSetManager.setMetadataBatch(value);
+        
+        // Load current document into active set
+        const currentId = this._currentDocumentId;
+        if (currentId) {
+            const currentDoc = value.find(doc => doc.id === currentId);
+            if (currentDoc) {
+                // Load current document immediately
+                activeSetManager.getDocument(currentId).then(doc => {
+                    if (doc) {
+                        // Update _documents with active set
+                        this._updateDocumentsFromActiveSet();
+                    }
+                }).catch(err => {
+                    console.error('[AppState] Error loading current document:', err);
+                });
+            }
+        }
+        
+        // Store full documents for backward compatibility (will be replaced by active set)
         this._documents = value;
         eventBus.emit(EVENTS.DATA.CHANGED, { type: 'documents', value });
+    }
+    
+    /**
+     * Get document metadata without loading full document
+     * @param {string} documentId - Document ID
+     * @returns {Object|null} - Metadata object or null
+     */
+    getDocumentMetadata(documentId) {
+        return activeSetManager.getMetadata(documentId);
+    }
+    
+    /**
+     * Update _documents array from active set
+     * @private
+     */
+    _updateDocumentsFromActiveSet() {
+        const allMetadata = activeSetManager.getAllMetadata();
+        const activeIds = activeSetManager.getActiveDocumentIds();
+        
+        const result = [];
+        
+        // Add active documents
+        activeIds.forEach(id => {
+            const entry = activeSetManager.activeCache.get(id);
+            if (entry) {
+                result.push(entry.document);
+            }
+        });
+        
+        // Add metadata for non-active
+        allMetadata.forEach(metadata => {
+            if (!activeSetManager.isActive(metadata.id)) {
+                result.push(metadata);
+            }
+        });
+        
+        this._documents = result;
     }
     
     // Current document ID getter/setter (canonical)

@@ -1,6 +1,7 @@
 // InteropSyncManager.js - Bidirectional sync manager for interoperability
 import { DataUtils } from '../utils/data.js';
 import { eventBus } from './EventBus.js';
+import { performanceBudgetManager } from './PerformanceBudgetManager.js';
 
 export class InteropSyncManager {
     constructor(app) {
@@ -118,51 +119,53 @@ export class InteropSyncManager {
      * Sync a specific page
      */
     async syncPage(pageId) {
-        const config = this.syncConfigs[pageId];
-        if (!config || !config.enabled) return;
-        
-        this.syncStatus[pageId] = {
-            status: 'syncing',
-            lastSync: new Date().toISOString()
-        };
-        
-        try {
-            const page = this._getDocument(pageId);
-            if (!page) {
-                throw new Error('Page not found');
-            }
+        return performanceBudgetManager.measureOperation('SYNC', async () => {
+            const config = this.syncConfigs[pageId];
+            if (!config || !config.enabled) return;
             
-            // Get service client
-            const client = this.getServiceClient(config.service);
-            if (!client) {
-                throw new Error(`Service client not available: ${config.service}`);
-            }
-            
-            // Perform sync based on direction
-            if (config.direction === 'export' || config.direction === 'bidirectional') {
-                await this.exportToService(pageId, client, config);
-            }
-            
-            if (config.direction === 'import' || config.direction === 'bidirectional') {
-                await this.importFromService(pageId, client, config);
-            }
-            
-            config.lastSync = new Date().toISOString();
             this.syncStatus[pageId] = {
-                status: 'success',
-                lastSync: config.lastSync
-            };
-            
-            eventBus.emit('sync:completed', { pageId, status: 'success' });
-        } catch (error) {
-            this.syncStatus[pageId] = {
-                status: 'error',
-                error: error.message,
+                status: 'syncing',
                 lastSync: new Date().toISOString()
             };
-            eventBus.emit('sync:failed', { pageId, error: error.message });
-            throw error;
-        }
+            
+            try {
+                const page = this._getDocument(pageId);
+                if (!page) {
+                    throw new Error('Page not found');
+                }
+                
+                // Get service client
+                const client = this.getServiceClient(config.service);
+                if (!client) {
+                    throw new Error(`Service client not available: ${config.service}`);
+                }
+                
+                // Perform sync based on direction
+                if (config.direction === 'export' || config.direction === 'bidirectional') {
+                    await this.exportToService(pageId, client, config);
+                }
+                
+                if (config.direction === 'import' || config.direction === 'bidirectional') {
+                    await this.importFromService(pageId, client, config);
+                }
+                
+                config.lastSync = new Date().toISOString();
+                this.syncStatus[pageId] = {
+                    status: 'success',
+                    lastSync: config.lastSync
+                };
+                
+                eventBus.emit('sync:completed', { pageId, status: 'success' });
+            } catch (error) {
+                this.syncStatus[pageId] = {
+                    status: 'error',
+                    error: error.message,
+                    lastSync: new Date().toISOString()
+                };
+                eventBus.emit('sync:failed', { pageId, error: error.message });
+                throw error;
+            }
+        }, { source: 'InteropSyncManager-syncPage', pageId });
     }
     
     /**

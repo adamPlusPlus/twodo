@@ -1,6 +1,13 @@
 // PluginLoader - Dynamic plugin loading
+// Version: 2026-01-23-v2 - Fixed class name (PluginLoader, not PluginLoaderService)
+// IMPORTANT: If you see "PluginLoaderService is not defined", clear your browser cache!
 import { pluginRegistry } from './PluginManager.js';
 import { eventBus } from './EventBus.js';
+
+// Verify class name is correct (not PluginLoaderService)
+if (typeof PluginLoaderService !== 'undefined') {
+    console.error('[PluginLoaderService] ERROR: Old cached version detected! PluginLoaderService should not exist. Clear browser cache!');
+}
 
 export class PluginLoader {
     constructor() {
@@ -238,5 +245,10 @@ export class PluginLoader {
 }
 
 // Singleton instance
-export const pluginLoader = new PluginLoaderService();
+// Note: Class is PluginLoader, not PluginLoaderService
+if (typeof PluginLoader === 'undefined') {
+    console.error('[PluginLoaderService] CRITICAL: PluginLoader class is not defined!');
+    throw new Error('PluginLoader class is not defined');
+}
+export const pluginLoader = new PluginLoader();
 

@@ -3,6 +3,8 @@ import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
 import { getService, SERVICES } from '../../core/AppServices.js';
+import { ViewportRenderer } from '../../core/ViewportRenderer.js';
+import { performanceBudgetManager } from '../../core/PerformanceBudgetManager.js';
 
 export default class SearchFilter extends BasePlugin {
     constructor(app = null, config = {}) {
@@ -288,23 +290,34 @@ export default class SearchFilter extends BasePlugin {
     }
 
     performSearch() {
-        const searchInput = document.getElementById('global-search-input');
-        const query = searchInput ? searchInput.value.trim() : '';
-        const resultsContainer = document.getElementById('search-results-container');
-        const resultsList = document.getElementById('search-results-list');
+        performanceBudgetManager.measureOperation('SEARCH', () => {
+            const searchInput = document.getElementById('global-search-input');
+            const query = searchInput ? searchInput.value.trim() : '';
+            const resultsContainer = document.getElementById('search-results-container');
+            const resultsList = document.getElementById('search-results-list');
 
-        if (!this.app.searchIndex) {
-            console.warn('SearchIndex not available');
-            return;
-        }
+            if (!this.app.searchIndex) {
+                console.warn('SearchIndex not available');
+                return;
+            }
 
-        this.searchResults = this.app.searchIndex.search(query, this.currentFilters);
+            this.searchResults = this.app.searchIndex.search(query, this.currentFilters);
 
-        if (resultsContainer && resultsList) {
+            if (resultsContainer && resultsList) {
+            // Clean up existing virtual scroller if any
+            if (resultsList._virtualScroller) {
+                resultsList._virtualScroller.destroy();
+                resultsList._virtualScroller = null;
+            }
+            
             if (this.searchResults.length === 0) {
                 resultsList.innerHTML = '<div style="padding: 10px; color: #888; text-align: center;">No results found</div>';
             } else {
-                resultsList.innerHTML = this.searchResults.map(result => {
+                // Clear existing content
+                resultsList.innerHTML = '';
+                
+                // Render function for search results
+                const renderResultItem = (result, index) => {
                     const pageTitle = StringUtils.escapeHtml(result.pageTitle || result.pageId);
                     const binTitle = StringUtils.escapeHtml(result.binTitle || result.binId);
                     const elementText = StringUtils.escapeHtml(result.text || 'Untitled');
@@ -312,25 +325,30 @@ export default class SearchFilter extends BasePlugin {
                         `<span style="background: #4a9eff; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-right: 3px;">${StringUtils.escapeHtml(tag)}</span>`
                     ).join('');
 
-                    return `
-                        <div class="search-result-item" 
-                             data-page-id="${StringUtils.escapeHtml(result.pageId)}"
-                             data-bin-id="${StringUtils.escapeHtml(result.binId)}"
-                             data-element-index="${result.elementIndex}"
-                             style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; cursor: pointer; border-left: 3px solid #4a9eff;"
-                             onmouseover="this.style.background='#3a3a3a'"
-                             onmouseout="this.style.background='#2a2a2a'">
-                            <div style="font-weight: bold; margin-bottom: 3px;">${elementText}</div>
-                            <div style="font-size: 11px; color: #888; margin-bottom: 3px;">
-                                ${pageTitle} → ${binTitle}
-                            </div>
-                            ${tags ? `<div style="margin-top: 3px;">${tags}</div>` : ''}
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.dataset.pageId = result.pageId;
+                    item.dataset.binId = result.binId;
+                    item.dataset.elementIndex = result.elementIndex;
+                    item.style.cssText = 'padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; cursor: pointer; border-left: 3px solid #4a9eff;';
+                    
+                    item.innerHTML = `
+                        <div style="font-weight: bold; margin-bottom: 3px;">${elementText}</div>
+                        <div style="font-size: 11px; color: #888; margin-bottom: 3px;">
+                            ${pageTitle} → ${binTitle}
                         </div>
+                        ${tags ? `<div style="margin-top: 3px;">${tags}</div>` : ''}
                     `;
-                }).join('');
-
-                // Add click handlers
-                resultsList.querySelectorAll('.search-result-item').forEach(item => {
+                    
+                    // Add hover effects
+                    item.addEventListener('mouseover', () => {
+                        item.style.background = '#3a3a3a';
+                    });
+                    item.addEventListener('mouseout', () => {
+                        item.style.background = '#2a2a2a';
+                    });
+                    
+                    // Add click handler
                     item.addEventListener('click', () => {
                         const pageId = item.dataset.pageId;
                         const binId = item.dataset.binId;
@@ -348,18 +366,36 @@ export default class SearchFilter extends BasePlugin {
                             resultsContainer.style.display = 'none';
                         }
                     });
-                });
+                    
+                    return item;
+                };
+                
+                // Use viewport rendering for 50+ results
+                const virtualScroller = ViewportRenderer.renderViewport(
+                    resultsList,
+                    this.searchResults,
+                    renderResultItem,
+                    {
+                        threshold: 50
+                    }
+                );
+                
+                // Store virtual scroller reference
+                if (virtualScroller) {
+                    resultsList._virtualScroller = virtualScroller;
+                }
             }
 
             resultsContainer.style.display = 'block';
         }
 
-        // Save to search history
-        if (query && !this.config.searchHistory.includes(query)) {
-            this.config.searchHistory.unshift(query);
-            this.config.searchHistory = this.config.searchHistory.slice(0, 10); // Keep last 10
-            this.updateConfig({ searchHistory: this.config.searchHistory }, true);
-        }
+            // Save to search history
+            if (query && !this.config.searchHistory.includes(query)) {
+                this.config.searchHistory.unshift(query);
+                this.config.searchHistory = this.config.searchHistory.slice(0, 10); // Keep last 10
+                this.updateConfig({ searchHistory: this.config.searchHistory }, true);
+            }
+        }, { source: 'SearchFilter-performSearch' });
     }
 }
 

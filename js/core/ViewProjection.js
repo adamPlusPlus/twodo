@@ -36,8 +36,9 @@ export class ViewProjection {
      * Initialize view projection
      * @param {Object} canonicalModel - AppState instance
      * @param {HTMLElement} container - DOM container for view
+     * @param {boolean} skipInitialUpdate - If true, don't call update() immediately
      */
-    init(canonicalModel, container) {
+    init(canonicalModel, container, skipInitialUpdate = false) {
         if (!canonicalModel) {
             console.error('[ViewProjection] canonicalModel is required');
             return;
@@ -50,8 +51,10 @@ export class ViewProjection {
         // Subscribe to operation events
         this._subscribeToOperations();
         
-        // Initial projection
-        this.update();
+        // Initial projection (skip if DOM not ready)
+        if (!skipInitialUpdate) {
+            this.update();
+        }
     }
     
     /**

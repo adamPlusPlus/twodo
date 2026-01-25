@@ -2,6 +2,7 @@
 import { BaseFormatRenderer } from '../../core/BaseFormatRenderer.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
+import { ViewportRenderer } from '../../core/ViewportRenderer.js';
 
 export default class TrelloBoardFormat extends BaseFormatRenderer {
     constructor(app = null, config = {}) {
@@ -72,11 +73,75 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
             return;
         }
         
-        // Render each bin as a column
-        groups.forEach(bin => {
-            const column = this.renderColumn(bin, page.id, app);
-            container.appendChild(column);
-        });
+        // If preserving format, update existing columns instead of clearing
+        if (app._preservingFormat && container.children.length > 0) {
+            // Update existing columns - find and update each column
+            groups.forEach((bin, index) => {
+                const existingColumn = container.querySelector(`[data-bin-id="${bin.id}"]`);
+                if (existingColumn) {
+                    // Update existing column content
+                    const content = existingColumn.querySelector('.trello-column-content');
+                    if (content) {
+                        // Clean up existing virtual scroller if any
+                        if (content._virtualScroller) {
+                            content._virtualScroller.destroy();
+                            content._virtualScroller = null;
+                        }
+                        content.innerHTML = '';
+                        const items = this._getItems(bin);
+                        if (items.length > 0) {
+                            // Use viewport rendering for 50+ items
+                            const virtualScroller = ViewportRenderer.renderViewport(
+                                content,
+                                items,
+                                (element, elementIndex) => {
+                                    return this.renderCard(element, page.id, bin.id, elementIndex, app);
+                                },
+                                {
+                                    threshold: 50
+                                }
+                            );
+                            
+                            // Store virtual scroller reference
+                            if (virtualScroller) {
+                                content._virtualScroller = virtualScroller;
+                            }
+                        } else {
+                            const emptyState = DOMUtils.createElement('div', {
+                                style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px); font-family: var(--element-font-family);`
+                            }, 'No items');
+                            content.appendChild(emptyState);
+                        }
+                        
+                        // Update count
+                        const countElement = existingColumn.querySelector('.trello-column-count');
+                        if (countElement) {
+                            countElement.textContent = items.length.toString();
+                        }
+                    }
+                } else {
+                    // New bin - add column
+                    const column = this.renderColumn(bin, page.id, app);
+                    container.appendChild(column);
+                }
+            });
+            
+            // Remove columns for groups that no longer exist
+            const existingColumns = container.querySelectorAll('.trello-column');
+            existingColumns.forEach(col => {
+                const binId = col.dataset.binId;
+                if (!groups.find(b => b.id === binId)) {
+                    col.remove();
+                }
+            });
+        } else {
+            // Full render - clear and rebuild
+            container.innerHTML = '';
+            groups.forEach(bin => {
+                const column = this.renderColumn(bin, page.id, app);
+                container.appendChild(column);
+            });
+        }
         
         // Reset format preservation flag
         app._preservingFormat = false;
@@ -146,10 +211,28 @@ export default class TrelloBoardFormat extends BaseFormatRenderer {
         // Render cards
         const items = this._getItems(bin);
         if (items.length > 0) {
-            items.forEach((element, index) => {
-                const card = this.renderCard(element, pageId, bin.id, index, app);
-                content.appendChild(card);
-            });
+            // Use viewport rendering for 50+ items
+            const virtualScroller = ViewportRenderer.renderViewport(
+                content,
+                items,
+                (element, elementIndex) => {
+                    return this.renderCard(element, pageId, bin.id, elementIndex, app);
+                },
+                {
+                    threshold: 50
+                }
+            );
+            
+            // Store virtual scroller reference
+            if (virtualScroller) {
+                content._virtualScroller = virtualScroller;
+            }
+        } else {
+            // Empty state
+            const emptyState = DOMUtils.createElement('div', {
+                style: `text-align: center; color: var(--header-color, #666); padding: 20px; font-size: var(--element-font-size, 12px); font-family: var(--element-font-family);`
+            }, 'No items');
+            content.appendChild(emptyState);
         }
         
         // Add card button

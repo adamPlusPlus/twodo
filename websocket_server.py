@@ -18,6 +18,8 @@ class SyncServer:
         self.change_history = defaultdict(list)  # {filename: [changes]}
         self.file_data = {}  # {filename: current_data}
         self.client_files = defaultdict(set)  # {client_id: {filenames}}
+        self.operation_logs = defaultdict(list)  # {filename: [operations]}
+        self.operation_sequences = defaultdict(int)  # {filename: last_sequence}
         
     async def register_client(self, websocket, path=None):
         """Register a new client connection"""
@@ -81,6 +83,10 @@ class SyncServer:
                 await self.handle_redo(client_id, data)
             elif msg_type == 'get_history':
                 await self.handle_get_history(client_id, data)
+            elif msg_type == 'operation_sync':
+                await self.handle_operation_sync(client_id, data)
+            elif msg_type == 'request_operations':
+                await self.handle_request_operations(client_id, data)
         except json.JSONDecodeError:
             print(f"Invalid JSON from {client_id}")
         except Exception as e:
@@ -116,8 +122,21 @@ class SyncServer:
             'filename': filename,
             'data': file_data,
             'timestamp': file_timestamp,
-            'history': self.change_history.get(filename, [])[-50:]  # Last 50 changes
+            'history': self.change_history.get(filename, [])[-50:],  # Last 50 changes
+            'lastOperationSequence': self.operation_sequences.get(filename, 0)  # Include last operation sequence
         })
+        
+        # If operation log exists, send recent operations for catch-up
+        if filename in self.operation_logs and len(self.operation_logs[filename]) > 0:
+            # Send last 100 operations (or all if less than 100)
+            recent_operations = self.operation_logs[filename][-100:]
+            if recent_operations:
+                await self.send_to_client(client_id, {
+                    'type': 'operations_response',
+                    'filename': filename,
+                    'operations': recent_operations,
+                    'lastSequence': self.operation_sequences[filename]
+                })
         
         # Notify other clients
         await self.broadcast_to_file(filename, client_id, {

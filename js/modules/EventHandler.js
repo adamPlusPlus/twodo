@@ -3,6 +3,7 @@ import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { EventHelper } from '../utils/EventHelper.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
 
 export class EventHandler {
     constructor(app = null) {
@@ -41,6 +42,7 @@ export class EventHandler {
     }
     
     setupEventListeners() {
+        try {
         // Flush pending autosave before page unload
         window.addEventListener('beforeunload', async (e) => {
             const dataManager = this._getDataManager();
@@ -230,45 +232,51 @@ export class EventHandler {
         }
         
         // Dropdown menu toggle
-        const dropdownToggle = document.querySelector('.dropdown-toggle');
-        const dropdownMenu = document.querySelector('.dropdown-menu');
-        
-        if (dropdownToggle && dropdownMenu) {
-            const toggleMenu = () => {
-                const isActive = dropdownMenu.classList.toggle('active');
-                dropdownToggle.classList.toggle('active', isActive);
-            };
+        try {
+            const dropdownToggle = document.querySelector('.dropdown-toggle');
+            const dropdownMenu = document.querySelector('.dropdown-menu');
             
-            dropdownToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleMenu();
-            });
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.dropdown')) {
-                    dropdownMenu.classList.remove('active');
-                    dropdownToggle.classList.remove('active');
-                }
-            });
-            
-            // Close dropdown when clicking on menu items
-            // Use capture phase to ensure this runs after specific button handlers
-            dropdownMenu.querySelectorAll('button').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    // Only close if this isn't the file-manager button (it has its own handler)
-                    if (button.id !== 'file-manager') {
+            if (dropdownToggle && dropdownMenu) {
+                const toggleMenu = () => {
+                    const isActive = dropdownMenu.classList.toggle('active');
+                    dropdownToggle.classList.toggle('active', isActive);
+                };
+                
+                dropdownToggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMenu();
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.dropdown')) {
                         dropdownMenu.classList.remove('active');
                         dropdownToggle.classList.remove('active');
-                    } else {
-                        // For file-manager, close dropdown after a short delay to allow handler to fire
-                        setTimeout(() => {
+                    }
+                });
+                
+                // Close dropdown when clicking on menu items
+                // Use capture phase to ensure this runs after specific button handlers
+                dropdownMenu.querySelectorAll('button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        // Only close if this isn't the file-manager button (it has its own handler)
+                        if (button.id !== 'file-manager') {
                             dropdownMenu.classList.remove('active');
                             dropdownToggle.classList.remove('active');
-                        }, 100);
-                    }
-                }, true); // Use capture phase
-            });
+                        } else {
+                            // For file-manager, close dropdown after a short delay to allow handler to fire
+                            setTimeout(() => {
+                                dropdownMenu.classList.remove('active');
+                                dropdownToggle.classList.remove('active');
+                            }, 100);
+                        }
+                    }, true); // Use capture phase
+                });
+            } else {
+                console.warn('[EventHandler] Dropdown elements not found:', { dropdownToggle, dropdownMenu });
+            }
+        } catch (dropdownError) {
+            console.error('[EventHandler] Error setting up dropdown:', dropdownError);
         }
         
         // Context menu event listeners
@@ -673,10 +681,12 @@ export class EventHandler {
         
         // Close context menu on left-click anywhere
         document.addEventListener('click', (e) => {
-            const contextMenuHandler = this._getContextMenuHandler();
-            if (contextMenuHandler) {
-                contextMenuHandler.hideContextMenu();
-            }
+            performanceBudgetManager.measureOperation('CLICKING', () => {
+                const contextMenuHandler = this._getContextMenuHandler();
+                if (contextMenuHandler) {
+                    contextMenuHandler.hideContextMenu();
+                }
+            }, { source: 'EventHandler-contextMenuClose' });
         });
 
         // Unified contextmenu handler - routes to appropriate ContextMenuHandler methods
@@ -920,6 +930,10 @@ export class EventHandler {
                 e.preventDefault();
             }
         });
+        } catch (error) {
+            console.error('[EventHandler] Error in setupEventListeners:', error);
+            // Don't throw - allow app to continue even if some listeners fail
+        }
     }
 }
 

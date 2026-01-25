@@ -25,7 +25,17 @@ export class ServiceLocator {
      * @throws {Error} If service name is already registered
      */
     register(name, service) {
+        if (!name) {
+            console.error('[ServiceLocator] Attempted to register service with undefined/null name:', { name, service, stack: new Error().stack });
+            throw new Error(`Service name cannot be undefined or null`);
+        }
         if (this.services.has(name)) {
+            console.error('[ServiceLocator] Service already registered:', { 
+                name, 
+                existingService: this.services.get(name),
+                newService: service,
+                stack: new Error().stack 
+            });
             throw new Error(`Service "${name}" is already registered`);
         }
         this.services.set(name, service);

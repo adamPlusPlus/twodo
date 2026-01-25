@@ -2,6 +2,7 @@
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
+import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 
 export default class ColorCoding extends BasePlugin {
     constructor(app = null, config = {}) {
@@ -29,6 +30,11 @@ export default class ColorCoding extends BasePlugin {
 
     async onDestroy() {
         this.app.eventBus.off('bin:render', this.handleBinRender.bind(this));
+        // Clean up mutation observer
+        if (this._mutationObserver) {
+            this._mutationObserver.disconnect();
+            this._mutationObserver = null;
+        }
     }
 
     handleBinRender({ binElement, pageId, binData }) {
@@ -41,22 +47,105 @@ export default class ColorCoding extends BasePlugin {
         // Apply color coding to items
         const items = binData.items || [];
         binData.items = items;
-        binElement.querySelectorAll('.element').forEach((elementNode, index) => {
-            const element = items[index];
-            if (!element) return;
+        
+        const elementsList = binElement.querySelector('.elements-list');
+        const virtualScroller = elementsList?._virtualScroller;
 
-            // Find matching color rule
-            let color = null;
-            for (const rule of colorRules) {
-                if (this.matchesRule(element, rule.condition)) {
-                    color = rule.color;
-                    break;
+        if (virtualScroller) {
+            // Virtualized: Process visible elements only
+            const range = virtualScroller.getVisibleRange();
+            const rootItems = ItemHierarchy.getRootItems(items);
+            
+            for (let i = range.startIndex; i < range.endIndex && i < rootItems.length; i++) {
+                const elementNode = elementsList.querySelector(`[data-element-index="${i}"]`);
+                if (elementNode) {
+                    const element = rootItems[i];
+                    if (element) {
+                        this._applyColorCoding(elementNode, element, colorRules);
+                    }
                 }
             }
+            
+            // Set up MutationObserver to process new elements as they appear
+            this._setupVirtualizationObserver(elementsList, items, (elementNode, element) => {
+                this._applyColorCoding(elementNode, element, colorRules);
+            });
+        } else {
+            // Non-virtualized: Process all elements
+            binElement.querySelectorAll('.element').forEach((elementNode, index) => {
+                const element = items[index];
+                if (element) {
+                    this._applyColorCoding(elementNode, element, colorRules);
+                }
+            });
+        }
+    }
 
-            if (color) {
-                elementNode.style.borderLeft = `4px solid ${color}`;
+    /**
+     * Apply color coding to an element based on rules
+     * @param {HTMLElement} elementNode - The element DOM node
+     * @param {Object} element - Element data
+     * @param {Array} colorRules - Array of color rules
+     */
+    _applyColorCoding(elementNode, element, colorRules) {
+        if (!element) return;
+
+        // Find matching color rule
+        let color = null;
+        for (const rule of colorRules) {
+            if (this.matchesRule(element, rule.condition)) {
+                color = rule.color;
+                break;
             }
+        }
+
+        if (color) {
+            elementNode.style.borderLeft = `4px solid ${color}`;
+        } else {
+            // Remove color if no rule matches
+            elementNode.style.borderLeft = '';
+        }
+    }
+
+    /**
+     * Set up MutationObserver to process new elements as they appear in virtualized lists
+     * @param {HTMLElement} elementsList - The elements-list container
+     * @param {Array} items - Full items array
+     * @param {Function} processCallback - Callback to process each new element: (elementNode, element) => void
+     */
+    _setupVirtualizationObserver(elementsList, items, processCallback) {
+        // Clean up existing observer if any
+        if (this._mutationObserver) {
+            this._mutationObserver.disconnect();
+        }
+        
+        const rootItems = ItemHierarchy.getRootItems(items);
+        
+        // Create observer to watch for new elements
+        this._mutationObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE && 
+                        node.classList.contains('element') &&
+                        node.dataset.elementIndex !== undefined) {
+                        
+                        const elementIndex = parseInt(node.dataset.elementIndex);
+                        
+                        // Find corresponding element data (elementIndex is root item index in virtualized lists)
+                        const element = rootItems[elementIndex];
+                        
+                        if (element) {
+                            processCallback(node, element);
+                        }
+                    }
+                });
+            });
+        });
+        
+        // Observe the elements-list container
+        this._mutationObserver.observe(elementsList, {
+            childList: true,
+            subtree: true
         });
     }
 

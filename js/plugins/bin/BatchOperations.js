@@ -2,6 +2,7 @@
 import { BasePlugin } from '../../core/BasePlugin.js';
 import { DOMUtils } from '../../utils/dom.js';
 import { StringUtils } from '../../utils/string.js';
+import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 
 export default class BatchOperations extends BasePlugin {
     constructor(app = null, config = {}) {
@@ -29,6 +30,11 @@ export default class BatchOperations extends BasePlugin {
 
     async onDestroy() {
         this.app.eventBus.off('bin:render', this.handleBinRender.bind(this));
+        // Clean up mutation observer
+        if (this._mutationObserver) {
+            this._mutationObserver.disconnect();
+            this._mutationObserver = null;
+        }
     }
 
     handleBinRender({ binElement, pageId, binData }) {
@@ -76,35 +82,133 @@ export default class BatchOperations extends BasePlugin {
     }
 
     addSelectionCheckboxes(binElement, pageId, binId) {
-        const elements = binElement.querySelectorAll('.element');
-        elements.forEach((elementNode, index) => {
-            const checkbox = DOMUtils.createElement('input', {
-                type: 'checkbox',
-                className: 'batch-select-checkbox',
-                dataset: { elementIndex: index },
-                style: 'margin-right: 5px;'
-            });
+        // Get bin data to access items array
+        const page = this.app.documents?.find(p => p.id === pageId);
+        const bin = page?.groups?.find(b => b.id === binId);
+        if (!bin) return;
+        
+        const items = bin.items || [];
+        const elementsList = binElement.querySelector('.elements-list');
+        const virtualScroller = elementsList?._virtualScroller;
 
-            checkbox.addEventListener('change', (e) => {
-                const elementIndex = parseInt(e.target.dataset.elementIndex);
-                const key = `${pageId}-${binId}-${elementIndex}`;
-                
-                if (e.target.checked) {
-                    this.selectedElements.add(key);
-                } else {
-                    this.selectedElements.delete(key);
+        if (virtualScroller) {
+            // Virtualized: Process visible elements only
+            const range = virtualScroller.getVisibleRange();
+            const rootItems = ItemHierarchy.getRootItems(items);
+            
+            // Create mapping from root item index to full items array index
+            const rootItemToFullIndex = new Map();
+            items.forEach((item, idx) => {
+                if (!item.parentId) {
+                    const rootIndex = rootItems.indexOf(item);
+                    if (rootIndex >= 0) {
+                        rootItemToFullIndex.set(rootIndex, idx);
+                    }
                 }
-                
-                this.updateToolbar(pageId, binId);
             });
-
-            // Insert checkbox at the start of element
-            const firstChild = elementNode.firstChild;
-            if (firstChild) {
-                elementNode.insertBefore(checkbox, firstChild);
-            } else {
-                elementNode.appendChild(checkbox);
+            
+            for (let i = range.startIndex; i < range.endIndex && i < rootItems.length; i++) {
+                const elementNode = elementsList.querySelector(`[data-element-index="${i}"]`);
+                if (elementNode && !elementNode.querySelector('.batch-select-checkbox')) {
+                    // Map root item index to full items array index
+                    const fullIndex = rootItemToFullIndex.get(i);
+                    if (fullIndex !== undefined) {
+                        this._addCheckbox(elementNode, pageId, binId, fullIndex);
+                    }
+                }
             }
+            
+            // Set up MutationObserver to process new elements as they appear
+            // Store items and mapping for observer callback
+            this._setupVirtualizationObserver(elementsList, items, pageId, binId, rootItemToFullIndex);
+        } else {
+            // Non-virtualized: Process all elements
+            const elements = binElement.querySelectorAll('.element');
+            elements.forEach((elementNode, index) => {
+                if (!elementNode.querySelector('.batch-select-checkbox')) {
+                    this._addCheckbox(elementNode, pageId, binId, index);
+                }
+            });
+        }
+    }
+
+    /**
+     * Add a selection checkbox to an element
+     * @param {HTMLElement} elementNode - The element DOM node
+     * @param {string} pageId - Page ID
+     * @param {string} binId - Bin ID
+     * @param {number} elementIndex - Full items array index
+     */
+    _addCheckbox(elementNode, pageId, binId, elementIndex) {
+        const checkbox = DOMUtils.createElement('input', {
+            type: 'checkbox',
+            className: 'batch-select-checkbox',
+            dataset: { elementIndex: elementIndex },
+            style: 'margin-right: 5px;'
+        });
+
+        checkbox.addEventListener('change', (e) => {
+            const elementIndex = parseInt(e.target.dataset.elementIndex);
+            const key = `${pageId}-${binId}-${elementIndex}`;
+            
+            if (e.target.checked) {
+                this.selectedElements.add(key);
+            } else {
+                this.selectedElements.delete(key);
+            }
+            
+            this.updateToolbar(pageId, binId);
+        });
+
+        // Insert checkbox at the start of element
+        const firstChild = elementNode.firstChild;
+        if (firstChild) {
+            elementNode.insertBefore(checkbox, firstChild);
+        } else {
+            elementNode.appendChild(checkbox);
+        }
+    }
+
+    /**
+     * Set up MutationObserver to process new elements as they appear in virtualized lists
+     * @param {HTMLElement} elementsList - The elements-list container
+     * @param {Array} items - Full items array
+     * @param {string} pageId - Page ID
+     * @param {string} binId - Bin ID
+     * @param {Map} rootItemToFullIndex - Map from root item index to full items array index
+     */
+    _setupVirtualizationObserver(elementsList, items, pageId, binId, rootItemToFullIndex) {
+        // Clean up existing observer if any
+        if (this._mutationObserver) {
+            this._mutationObserver.disconnect();
+        }
+        
+        // Create observer to watch for new elements
+        this._mutationObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE && 
+                        node.classList.contains('element') &&
+                        node.dataset.elementIndex !== undefined &&
+                        !node.querySelector('.batch-select-checkbox')) {
+                        
+                        const rootItemIndex = parseInt(node.dataset.elementIndex);
+                        
+                        // Map root item index to full items array index
+                        const fullIndex = rootItemToFullIndex.get(rootItemIndex);
+                        
+                        if (fullIndex !== undefined) {
+                            this._addCheckbox(node, pageId, binId, fullIndex);
+                        }
+                    }
+                });
+            });
+        });
+        
+        // Observe the elements-list container
+        this._mutationObserver.observe(elementsList, {
+            childList: true,
+            subtree: true
         });
     }
 

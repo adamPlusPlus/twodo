@@ -84,6 +84,44 @@ export class UndoRedoManager {
     }
     
     /**
+     * Record a semantic operation for undo/redo
+     * @param {BaseOperation|Object} operation - Operation instance or object
+     */
+    recordOperation(operation) {
+        if (this.isApplyingChange) {
+            return; // Don't record operations from undo/redo
+        }
+        
+        // Clear redo stack when new operation is made
+        this.redoStack = [];
+        
+        // Increment change counter
+        this.changeCounter++;
+        
+        // Check if snapshot needed (every N changes)
+        if (this.changeCounter % this.snapshotInterval === 0) {
+            this.createSnapshot();
+        }
+        
+        // Add to undo stack
+        this.undoStack.push(operation);
+        
+        // Limit stack size
+        if (this.undoStack.length > this.maxStackSize) {
+            this.undoStack.shift();
+        }
+        
+        const opType = operation.op || (operation.getType ? operation.getType() : 'unknown');
+        console.log('Operation recorded:', opType, 'itemId:', operation.itemId, 'undoStack length:', this.undoStack.length, 'changeCounter:', this.changeCounter);
+        
+        // Auto-save buffer
+        this._debouncedSaveBuffer();
+        
+        // Operations are automatically synced via operation:applied event listener in SyncManager
+        // No need to manually send to sync manager here
+    }
+    
+    /**
      * Create a change object for a data modification
      */
     createChange(type, path, value, oldValue = null) {
@@ -561,6 +599,71 @@ export class UndoRedoManager {
         console.log(`[UNDO] Before counts - Documents: ${beforeCounts.documents}, Groups: ${beforeCounts.groups}, Items: ${beforeCounts.items}`);
         
         const change = this.undoStack.pop();
+        
+        // Check if this is a semantic operation (has 'op' property or getType method)
+        const isOperation = change.op !== undefined || (change.getType && typeof change.getType === 'function');
+        
+        if (isOperation) {
+            // Handle semantic operation
+            console.log(`[UNDO] Undoing semantic operation: ${change.op || change.getType()}`);
+            
+            // Get inverse operation
+            let inverseOperation;
+            if (change.invert && typeof change.invert === 'function') {
+                inverseOperation = change.invert();
+            } else {
+                // Convert operation object to instance if needed
+                const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+                if (semanticOpManager) {
+                    const opInstance = semanticOpManager.createOperation(
+                        change.op,
+                        change.itemId,
+                        change.params,
+                        change.timestamp
+                    );
+                    inverseOperation = opInstance ? opInstance.invert() : null;
+                }
+            }
+            
+            if (!inverseOperation) {
+                console.error('[UNDO] Failed to create inverse operation');
+                this.undoStack.push(change);
+                return false;
+            }
+            
+            // Apply inverse operation
+            const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+            if (semanticOpManager) {
+                const result = semanticOpManager.applyOperation(inverseOperation);
+                if (result && result.success) {
+                    // Move to redo stack
+                    this.redoStack.push(change);
+                    if (this.redoStack.length > this.maxStackSize) {
+                        this.redoStack.shift();
+                    }
+                    
+                    // Save and re-render
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                    
+                    console.log(`[UNDO] Operation undone successfully: ${change.op || change.getType()}`);
+                    return true;
+                } else {
+                    console.error('[UNDO] Failed to apply inverse operation');
+                    this.undoStack.push(change);
+                    return false;
+                }
+            } else {
+                console.error('[UNDO] SemanticOperationManager not available');
+                this.undoStack.push(change);
+                return false;
+            }
+        }
+        
+        // Handle path-based change (existing logic)
         console.log(`[UNDO] Popped change: ${change.type} at path:`, change.path);
         
         // Check if this change is part of a move operation
@@ -1154,6 +1257,67 @@ export class UndoRedoManager {
         }
         
         const change = this.redoStack.pop();
+        
+        // Check if this is a semantic operation (has 'op' property or getType method)
+        const isOperation = change.op !== undefined || (change.getType && typeof change.getType === 'function');
+        
+        if (isOperation) {
+            // Handle semantic operation
+            console.log(`[REDO] Redoing semantic operation: ${change.op || change.getType()}`);
+            
+            // Convert operation object to instance if needed
+            let operation = change;
+            if (!operation.apply || typeof operation.apply !== 'function') {
+                const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+                if (semanticOpManager) {
+                    operation = semanticOpManager.createOperation(
+                        change.op,
+                        change.itemId,
+                        change.params,
+                        change.timestamp
+                    );
+                }
+            }
+            
+            if (!operation) {
+                console.error('[REDO] Failed to create operation instance');
+                this.redoStack.push(change);
+                return false;
+            }
+            
+            // Apply operation
+            const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+            if (semanticOpManager) {
+                const result = semanticOpManager.applyOperation(operation);
+                if (result && result.success) {
+                    // Move back to undo stack
+                    this.undoStack.push(change);
+                    if (this.undoStack.length > this.maxStackSize) {
+                        this.undoStack.shift();
+                    }
+                    
+                    // Save and re-render
+                    const dataManager = this._getDataManager();
+                    if (dataManager) {
+                        dataManager.saveData();
+                    }
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                    
+                    console.log(`[REDO] Operation redone successfully: ${change.op || change.getType()}`);
+                    return true;
+                } else {
+                    console.error('[REDO] Failed to apply operation');
+                    this.redoStack.push(change);
+                    return false;
+                }
+            } else {
+                console.error('[REDO] SemanticOperationManager not available');
+                this.redoStack.push(change);
+                return false;
+            }
+        }
+        
+        // Handle path-based change (existing logic)
         console.log(`[REDO] Popped change: ${change.type} at path:`, change.path);
         
         // Check if this change is part of a move operation
@@ -1611,6 +1775,32 @@ export class UndoRedoManager {
      * Helper: Record element property change
      */
     recordElementPropertyChange(pageId, binId, elementIndex, property, newValue, oldValue, childIndex = null, itemIndex = null) {
+        // Try to use semantic operation if item has ID and property is 'text'
+        if (property === 'text') {
+            const appState = this._getAppState();
+            const page = appState.documents?.find(p => p.id === pageId);
+            const bin = page?.groups?.find(b => b.id === binId);
+            const item = bin?.items?.[elementIndex];
+            
+            if (item && item.id) {
+                // Use semantic operation
+                const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+                if (semanticOpManager) {
+                    const operation = semanticOpManager.createOperation('setText', item.id, {
+                        text: newValue,
+                        oldText: oldValue
+                    });
+                    if (operation) {
+                        // Note: Operation should already be applied by caller (e.g., InlineEditor)
+                        // Just record it for undo/redo
+                        this.recordOperation(operation);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // Fallback to path-based change for backward compatibility
         const path = this.getElementPath(pageId, binId, elementIndex, childIndex);
         if (!path) {
             console.error('Failed to get element path for:', { pageId, binId, elementIndex, childIndex });
@@ -1639,7 +1829,57 @@ export class UndoRedoManager {
     /**
      * Helper: Record element addition
      */
+    /**
+     * Helper: Record element addition (ID-based, preferred)
+     * @param {string} itemId - Item ID
+     * @param {string|null} parentId - Parent ID (null for root level)
+     * @param {number} index - Insert index
+     * @param {Object} elementData - Element data
+     */
+    recordElementAddById(itemId, parentId, index, elementData) {
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        if (!semanticOpManager) {
+            console.warn('[UndoRedoManager] recordElementAddById: SemanticOperationManager not available, falling back to legacy method');
+            return;
+        }
+        
+        // Create CreateOperation
+        const operation = semanticOpManager.createOperation('create', itemId, {
+            type: elementData.type,
+            parentId: parentId,
+            index: index,
+            itemData: elementData
+        });
+        
+        if (!operation) {
+            console.error('[UndoRedoManager] recordElementAddById: Failed to create CreateOperation');
+            return;
+        }
+        
+        // Record operation (operation should already be applied by caller)
+        this.recordOperation(operation);
+    }
+    
+    /**
+     * Helper: Record element addition (backward-compatible index-based method)
+     * @deprecated Use recordElementAddById() with item ID instead
+     */
     recordElementAdd(pageId, binId, elementIndex, element) {
+        // Try to use ID-based method if element has ID
+        if (element && element.id) {
+            const appState = this._getAppState();
+            const page = appState.documents?.find(p => p.id === pageId);
+            const bin = page?.groups?.find(b => b.id === binId);
+            
+            const parentId = element.parentId || null;
+            const index = elementIndex;
+            
+            // Use ID-based method
+            this.recordElementAddById(element.id, parentId, index, element);
+            return;
+        }
+        
+        // Fallback to path-based method for backward compatibility
         const path = this.getElementPath(pageId, binId, elementIndex);
         if (!path) return;
         
@@ -1653,9 +1893,52 @@ export class UndoRedoManager {
     }
     
     /**
-     * Helper: Record element deletion
+     * Helper: Record element deletion (ID-based, preferred)
+     * @param {string} itemId - Item ID to delete
+     */
+    recordElementDeleteById(itemId) {
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        if (!semanticOpManager) {
+            console.warn('[UndoRedoManager] recordElementDeleteById: SemanticOperationManager not available, falling back to legacy method');
+            return;
+        }
+        
+        // Find item to get its data for deletion
+        const location = this.findElementById(itemId);
+        if (!location) {
+            console.error('[UndoRedoManager] recordElementDeleteById: Item not found:', itemId);
+            return;
+        }
+        
+        // Store deleted item data
+        const deletedItem = JSON.parse(JSON.stringify(location.element));
+        
+        // Create DeleteOperation
+        const operation = semanticOpManager.createOperation('delete', itemId, {
+            deletedItem: deletedItem
+        });
+        
+        if (!operation) {
+            console.error('[UndoRedoManager] recordElementDeleteById: Failed to create DeleteOperation');
+            return;
+        }
+        
+        // Record operation (operation should already be applied by caller)
+        this.recordOperation(operation);
+    }
+    
+    /**
+     * Helper: Record element deletion (backward-compatible index-based method)
+     * @deprecated Use recordElementDeleteById() with item ID instead
      */
     recordElementDelete(pageId, binId, elementIndex, element) {
+        // Try to use ID-based method if element has ID
+        if (element && element.id) {
+            this.recordElementDeleteById(element.id);
+            return;
+        }
+        
+        // Fallback to path-based method for backward compatibility
         const path = this.getElementPath(pageId, binId, elementIndex);
         if (!path) return;
         
@@ -1669,11 +1952,71 @@ export class UndoRedoManager {
     }
     
     /**
-     * Helper: Record element move
+     * Helper: Record element move (ID-based, preferred)
+     * @param {string} sourceItemId - Source item ID
+     * @param {string|null} targetItemId - Target item ID (null to append)
+     * @param {string|null} targetParentId - Target parent ID (null for root level)
+     * @param {number} targetIndex - Target index position
+     */
+    recordElementMoveById(sourceItemId, targetItemId, targetParentId, targetIndex) {
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        if (!semanticOpManager) {
+            console.warn('[UndoRedoManager] recordElementMoveById: SemanticOperationManager not available, falling back to legacy method');
+            return;
+        }
+        
+        // Find source location to get oldParentId and oldIndex
+        const sourceLocation = this.findElementById(sourceItemId);
+        if (!sourceLocation) {
+            console.error('[UndoRedoManager] recordElementMoveById: Source item not found:', sourceItemId);
+            return;
+        }
+        
+        const oldParentId = sourceLocation.element.parentId || null;
+        const oldIndex = sourceLocation.elementIndex;
+        
+        // Create MoveOperation
+        const operation = semanticOpManager.createOperation('move', sourceItemId, {
+            newParentId: targetParentId,
+            newIndex: targetIndex,
+            oldParentId: oldParentId,
+            oldIndex: oldIndex
+        });
+        
+        if (!operation) {
+            console.error('[UndoRedoManager] recordElementMoveById: Failed to create MoveOperation');
+            return;
+        }
+        
+        // Record operation (operation should already be applied by caller)
+        this.recordOperation(operation);
+    }
+    
+    /**
+     * Helper: Record element move (backward-compatible index-based method)
+     * @deprecated Use recordElementMoveById() with item IDs instead
      */
     recordElementMove(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, element) {
-        // Record as delete from source and insert at target
-        // These are recorded as separate changes but should be undone together
+        // Try to use ID-based method if element has ID
+        if (element && element.id) {
+            // Find target location
+            const appState = this._getAppState();
+            const targetPage = appState.documents?.find(p => p.id === targetPageId);
+            const targetBin = targetPage?.groups?.find(b => b.id === targetBinId);
+            const targetItems = targetBin?.items || [];
+            const targetRootItems = ItemHierarchy.getRootItems(targetItems);
+            const targetItem = targetRootItems[targetElementIndex];
+            
+            // Calculate targetParentId and targetIndex
+            let targetParentId = null;
+            let targetIndex = targetElementIndex;
+            
+            // Use ID-based method
+            this.recordElementMoveById(element.id, targetItem?.id || null, targetParentId, targetIndex);
+            return;
+        }
+        
+        // Fallback to path-based method for backward compatibility
         const sourcePath = this.getElementPath(sourcePageId, sourceBinId, sourceElementIndex);
         const targetPath = this.getElementPath(targetPageId, targetBinId, targetElementIndex);
         

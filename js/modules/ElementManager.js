@@ -44,6 +44,59 @@ export class ElementManager {
         if (!newElement.id) {
             newElement.id = `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         }
+        
+        // Use CreateOperation if available
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        
+        if (semanticOpManager) {
+            const index = group.items ? group.items.length : 0;
+            const operation = semanticOpManager.createOperation('create', newElement.id, {
+                type: elementType,
+                parentId: null,
+                index: index,
+                itemData: newElement
+            });
+            
+            if (operation) {
+                const result = semanticOpManager.applyOperation(operation);
+                if (result && result.success) {
+                    // Record for undo/redo
+                    if (this.undoRedoManager) {
+                        this.undoRedoManager.recordOperation(operation);
+                    }
+                    
+                    const newElementIndex = group.items ? group.items.length - 1 : 0;
+                    
+                    // Request data save via EventBus
+                    eventBus.emit(EVENTS.DATA.SAVE_REQUESTED);
+                    
+                    // Emit element created event for automation
+                    eventBus.emit(EVENTS.ELEMENT.CREATED, {
+                        pageId,
+                        binId,
+                        documentId: pageId,
+                        groupId: binId,
+                        elementIndex: newElementIndex,
+                        element: newElement
+                    });
+                    
+                    // Request render via EventBus
+                    eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                    
+                    // Automatically open edit modal for the newly created element via event
+                    eventBus.emit(EVENTS.ELEMENT.EDIT_REQUESTED, {
+                        pageId,
+                        binId,
+                        elementIndex: newElementIndex,
+                        element: newElement
+                    });
+                    
+                    return;
+                }
+            }
+        }
+        
+        // Fallback to direct array push if operation system not available
         if (!group.items) group.items = [];
         const newElementIndex = group.items.length;
         group.items.push(newElement);

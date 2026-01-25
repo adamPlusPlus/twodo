@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Storm Control Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #252526;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1177bb;
+        }
+        .output {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e3e;
+            border-radius: 3px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log {
+            margin: 2px 0;
+            padding: 2px 5px;
+        }
+        .log.info { color: #4ec9b0; }
+        .log.success { color: #4ec9b0; }
+        .log.error { color: #f48771; }
+        .log.warn { color: #dcdcaa; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Event Storm Control Test Suite</h1>
+    
+    <div class="test-section">
+        <h2>Quick Tests</h2>
+        <button onclick="runQuickTest()">Run Quick Test</button>
+        <button onclick="testRateLimiting()">Test Rate Limiting</button>
+        <button onclick="testCoalescing()">Test Coalescing</button>
+        <button onclick="testBatching()">Test Batching</button>
+        <button onclick="showMetrics()">Show Metrics</button>
+        <button onclick="clearOutput()">Clear Output</button>
+        <div id="output" class="output"></div>
+    </div>
+
+    <script type="module">
+        import { eventBus } from './js/core/EventBus.js';
+        import { eventStormConfig } from './js/core/EventStormConfig.js';
+        
+        window.eventBus = eventBus;
+        window.eventStormConfig = eventStormConfig;
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const logEl = document.createElement('div');
+            logEl.className = `log ${type}`;
+            logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            output.appendChild(logEl);
+            output.scrollTop = output.scrollHeight;
+            console.log(message);
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+        
+        window.clearOutput = clearOutput;
+        
+        async function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        async function testRateLimiting() {
+            log('📊 Testing Rate Limiting...', 'info');
+            clearOutput();
+            
+            let eventCount = 0;
+            const rateLimit = 5; // 5 per second
+            
+            eventStormConfig.updateConfig({
+                rateLimits: {
+                    'test:rate-limit': rateLimit
+                }
+            });
+            
+            const listener = () => {
+                eventCount++;
+                log(`Event processed: ${eventCount}`, 'success');
+            };
+            
+            eventBus.on('test:rate-limit', listener);
+            
+            log(`Emitting 20 events with rate limit of ${rateLimit}/second...`, 'info');
+            
+            for (let i = 0; i < 20; i++) {
+                eventBus.emit('test:rate-limit', i);
+            }
+            
+            await sleep(2500);
+            
+            const expectedMax = rateLimit * 2.5; // 2.5 seconds
+            const passed = eventCount <= expectedMax + 2; // Allow some burst
+            
+            log(`Result: ${eventCount} events processed (expected max ~${Math.ceil(expectedMax)})`, 
+                passed ? 'success' : 'error');
+            
+            eventBus.off('test:rate-limit', listener);
+        }
+        
+        async function testCoalescing() {
+            log('🔄 Testing Coalescing...', 'info');
+            clearOutput();
+            
+            let eventCount = 0;
+            const coalescingWindow = 50; // 50ms
+            
+            eventStormConfig.updateConfig({
+                coalescing: {
+                    'test:coalesce': coalescingWindow
+                }
+            });
+            
+            const listener = () => {
+                eventCount++;
+                log(`Event processed: ${eventCount}`, 'success');
+            };
+            
+            eventBus.on('test:coalesce', listener);
+            
+            log(`Emitting 20 events rapidly (within ${coalescingWindow}ms window)...`, 'info');
+            
+            for (let i = 0; i < 20; i++) {
+                eventBus.emit('test:coalesce', i);
+                await sleep(5); // 5ms between events
+            }
+            
+            await sleep(coalescingWindow + 100);
+            
+            const passed = eventCount < 20;
+            
+            log(`Result: ${eventCount} events processed (${20 - eventCount} coalesced)`, 
+                passed ? 'success' : 'error');
+            
+            eventBus.off('test:coalesce', listener);
+        }
+        
+        async function testBatching() {
+            log('📦 Testing Batching...', 'info');
+            clearOutput();
+            
+            let eventCount = 0;
+            const batchWindow = 100; // 100ms
+            
+            eventStormConfig.updateConfig({
+                batching: {
+                    'test:batch': true
+                },
+                batchWindows: {
+                    'test:batch': batchWindow
+                }
+            });
+            
+            const listener = () => {
+                eventCount++;
+                log(`Batch processed: ${eventCount}`, 'success');
+            };
+            
+            eventBus.on('test:batch', listener);
+            
+            log(`Emitting 15 events rapidly (batch window: ${batchWindow}ms)...`, 'info');
+            
+            for (let i = 0; i < 15; i++) {
+                eventBus.emit('test:batch', i);
+                await sleep(10); // 10ms between events
+            }
+            
+            await sleep(batchWindow + 100);
+            
+            log(`Result: ${eventCount} batches processed`, 'success');
+            
+            eventBus.off('test:batch', listener);
+        }
+        
+        async function runQuickTest() {
+            log('🧪 Running Quick Test Suite...', 'info');
+            clearOutput();
+            
+            await testRateLimiting();
+            await sleep(500);
+            await testCoalescing();
+            await sleep(500);
+            await testBatching();
+            
+            log('✅ Quick test suite completed!', 'success');
+            showMetrics();
+        }
+        
+        function showMetrics() {
+            const metrics = eventBus.getMetrics();
+            log('📊 Event Bus Metrics:', 'info');
+            log(`  Total Emitted: ${metrics.totalEventsEmitted}`, 'info');
+            log(`  Total Processed: ${metrics.totalEventsProcessed}`, 'info');
+            log(`  Coalesced: ${metrics.coalescedEvents}`, 'info');
+            log(`  Rate Limited: ${metrics.rateLimitedEvents}`, 'info');
+            log(`  Batched: ${metrics.batchedEvents}`, 'info');
+            log(`  Backpressure: ${metrics.backpressureEvents}`, 'info');
+            log(`  Queue Size: ${metrics.backpressure.queueSize}`, 'info');
+            log(`  Backpressure Active: ${metrics.backpressure.backpressureActive}`, 'info');
+        }
+        
+        window.testRateLimiting = testRateLimiting;
+        window.testCoalescing = testCoalescing;
+        window.testBatching = testBatching;
+        window.runQuickTest = runQuickTest;
+        window.showMetrics = showMetrics;
+        
+        log('✅ Test suite loaded! Click buttons to run tests.', 'success');
+    </script>
+</body>
+</html>

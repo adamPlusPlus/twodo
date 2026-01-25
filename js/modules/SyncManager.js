@@ -2,6 +2,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
 
 export class SyncManager {
     constructor() {
@@ -14,6 +15,14 @@ export class SyncManager {
         this.isConnected = false;
         this.pendingChanges = [];
         this.pendingFileJoin = null; // File to join once connected
+        this.syncedFiles = new Set(); // Track files that have been synced (for initial sync detection)
+        this._applyingRemoteOperation = false; // Flag to prevent echo when applying remote operations
+        this.lastSyncedSequence = 0; // Track last synced sequence number
+        
+        // Listen to operation:applied events for operation-based sync
+        eventBus.on('operation:applied', (event) => {
+            this._handleOperationApplied(event);
+        });
     }
     
     /**
@@ -166,7 +175,263 @@ export class SyncManager {
             case 'client_left':
                 console.log(`Client ${message.clientId} left ${message.filename}`);
                 break;
+            case 'operation_sync':
+                this.handleOperationSync(message);
+                break;
+            case 'operations_response':
+                this.handleOperationsResponse(message);
+                break;
         }
+    }
+    
+    /**
+     * Handle operation:applied event (send operation to server)
+     * @private
+     */
+    _handleOperationApplied(event) {
+        // Don't send if applying remote operation (prevent echo)
+        if (this._applyingRemoteOperation) {
+            return;
+        }
+        
+        // Don't send if not connected or no current file
+        if (!this.isConnected || !this.currentFilename) {
+            return;
+        }
+        
+        const operation = event.operation;
+        
+        // Only send if operation has sequence (was logged)
+        if (operation.sequence) {
+            this.sendOperation(operation);
+        }
+    }
+    
+    /**
+     * Send operation to server
+     * @param {Object} operation - Operation object with sequence
+     */
+    sendOperation(operation) {
+        if (!this.isConnected || !this.clientId || !this.currentFilename) {
+            return;
+        }
+        
+        this.send({
+            type: 'operation_sync',
+            filename: this.currentFilename,
+            operation: {
+                sequence: operation.sequence,
+                op: operation.op,
+                itemId: operation.itemId,
+                params: operation.params,
+                timestamp: operation.timestamp,
+                clientId: this.clientId
+            }
+        });
+        
+        // Update last synced sequence
+        if (operation.sequence > this.lastSyncedSequence) {
+            this.lastSyncedSequence = operation.sequence;
+        }
+    }
+    
+    /**
+     * Handle incoming operation sync message
+     * @param {Object} message - Message from server
+     */
+    handleOperationSync(message) {
+        performanceBudgetManager.measureOperation('SYNC', () => {
+            if (message.filename !== this.currentFilename) return;
+            if (message.clientId === this.clientId) return; // Ignore own operations
+            
+            const operation = message.operation;
+            if (!operation) return;
+            
+            // Apply remote operation
+            const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+            if (!semanticOpManager) {
+                console.error('[SyncManager] SemanticOperationManager not available');
+                return;
+            }
+            
+            // Create operation instance
+            const opInstance = semanticOpManager.createOperation(
+                operation.op,
+                operation.itemId,
+                operation.params,
+                operation.timestamp
+            );
+            
+            if (!opInstance) {
+                console.error('[SyncManager] Failed to create operation instance');
+                return;
+            }
+            
+            // Set client ID and sequence
+            opInstance.clientId = operation.clientId;
+            opInstance.sequence = operation.sequence;
+            opInstance._skipLogging = true; // Don't log remote operations (already logged on server)
+            
+            // Apply operation (will emit operation:applied, but we skip sync)
+            this._applyingRemoteOperation = true;
+            const result = semanticOpManager.applyOperation(opInstance);
+            this._applyingRemoteOperation = false;
+            
+            if (result && result.success) {
+                // Update last synced sequence
+                if (operation.sequence > this.lastSyncedSequence) {
+                    this.lastSyncedSequence = operation.sequence;
+                }
+                
+                // Also append to local operation log (for consistency)
+                import('../core/OperationLog.js').then(({ getOperationLog }) => {
+                    const fileManager = this._getFileManager();
+                    if (fileManager && fileManager.currentFilename) {
+                        const operationLog = getOperationLog(fileManager.currentFilename);
+                        if (operationLog) {
+                            // Check if operation already exists (by sequence)
+                            const existing = operationLog.getOperations(operation.sequence - 1)
+                                .find(op => op.sequence === operation.sequence);
+                            if (!existing) {
+                                // Append with existing sequence (don't assign new one)
+                                operationLog.operations.push({
+                                    sequence: operation.sequence,
+                                    op: operation.op,
+                                    itemId: operation.itemId,
+                                    params: operation.params,
+                                    timestamp: operation.timestamp,
+                                    clientId: operation.clientId,
+                                    filename: this.currentFilename
+                                });
+                                operationLog.save();
+                            }
+                        }
+                    }
+                }).catch(error => {
+                    console.error('[SyncManager] Failed to import OperationLog:', error);
+                });
+            }
+        }, { source: 'SyncManager-handleOperationSync' });
+    }
+    
+    /**
+     * Request operations since sequence (for catch-up sync)
+     * @param {number} sinceSequence - Sequence number to start from
+     */
+    requestOperations(sinceSequence = 0) {
+        if (!this.isConnected || !this.currentFilename) {
+            return;
+        }
+        
+        this.send({
+            type: 'request_operations',
+            filename: this.currentFilename,
+            sinceSequence: sinceSequence
+        });
+    }
+    
+    /**
+     * Handle operations response (catch-up sync)
+     * @param {Object} message - Message from server
+     */
+    handleOperationsResponse(message) {
+        if (message.filename !== this.currentFilename) return;
+        
+        const operations = message.operations || [];
+        if (operations.length === 0) return;
+        
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        if (!semanticOpManager) {
+            console.error('[SyncManager] SemanticOperationManager not available');
+            return;
+        }
+        
+        // Apply operations in order
+        this._applyingRemoteOperation = true;
+        
+        // Also append to local operation log (for consistency)
+        import('../core/OperationLog.js').then(({ getOperationLog }) => {
+            const fileManager = this._getFileManager();
+            if (fileManager && fileManager.currentFilename) {
+                const operationLog = getOperationLog(fileManager.currentFilename);
+                if (operationLog) {
+                    for (const opData of operations) {
+                        // Skip own operations
+                        if (opData.clientId === this.clientId) {
+                            continue;
+                        }
+                        
+                        // Check if operation already exists (by sequence)
+                        const existing = operationLog.getOperations(opData.sequence - 1)
+                            .find(op => op.sequence === opData.sequence);
+                        if (!existing) {
+                            // Append with existing sequence (don't assign new one)
+                            operationLog.operations.push({
+                                sequence: opData.sequence,
+                                op: opData.op,
+                                itemId: opData.itemId,
+                                params: opData.params,
+                                timestamp: opData.timestamp,
+                                clientId: opData.clientId,
+                                filename: this.currentFilename
+                            });
+                        }
+                    }
+                    // Sort by sequence and save
+                    operationLog.operations.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+                    operationLog.save();
+                }
+            }
+        }).catch(error => {
+            console.error('[SyncManager] Failed to import OperationLog:', error);
+        });
+        
+        for (const opData of operations) {
+            // Skip own operations
+            if (opData.clientId === this.clientId) {
+                continue;
+            }
+            
+            const opInstance = semanticOpManager.createOperation(
+                opData.op,
+                opData.itemId,
+                opData.params,
+                opData.timestamp
+            );
+            
+            if (opInstance) {
+                opInstance.clientId = opData.clientId;
+                opInstance.sequence = opData.sequence;
+                opInstance._skipLogging = true; // Don't log (already logged)
+                
+                semanticOpManager.applyOperation(opInstance);
+                
+                // Update last synced sequence
+                if (opData.sequence > this.lastSyncedSequence) {
+                    this.lastSyncedSequence = opData.sequence;
+                }
+            }
+        }
+        this._applyingRemoteOperation = false;
+        
+        console.log(`[SyncManager] Applied ${operations.length} operations for catch-up sync`);
+    }
+    
+    /**
+     * Check if file has been synced (for initial sync detection)
+     * @param {string} filename - File name
+     * @returns {boolean}
+     */
+    _hasSyncedFile(filename) {
+        return this.syncedFiles.has(filename);
+    }
+    
+    /**
+     * Mark file as synced
+     * @param {string} filename - File name
+     */
+    _markFileSynced(filename) {
+        this.syncedFiles.add(filename);
     }
     
     handleFileJoined(message) {
@@ -236,19 +501,24 @@ export class SyncManager {
                         settingsManager.saveSettings(message.data.settings);
                     }
                 }
+                
+                // Mark file as synced (initial sync complete)
+                this._markFileSynced(message.filename);
+                
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             }
         }
     }
     
     handleFullSync(message) {
-        // Handle full data sync from another device
-        // Don't apply if it's from ourselves (prevent echo)
-        if (message.clientId && message.clientId === this.clientId) {
-            return;
-        }
-        
-        if (message.filename === this.currentFilename) {
+        performanceBudgetManager.measureOperation('SYNC', () => {
+            // Handle full data sync from another device
+            // Don't apply if it's from ourselves (prevent echo)
+            if (message.clientId && message.clientId === this.clientId) {
+                return;
+            }
+            
+            if (message.filename === this.currentFilename) {
             const appState = this._getAppState();
             const dataManager = this._getDataManager();
             
@@ -287,6 +557,9 @@ export class SyncManager {
                     }
                 }
                 
+                // Mark file as synced (if not already)
+                this._markFileSynced(message.filename);
+                
                 // Save to localStorage but don't trigger sync (we're already synced)
                 // Request data save with skipSync flag via EventBus
                 eventBus.emit(EVENTS.DATA.SAVE_REQUESTED, true);
@@ -298,14 +571,17 @@ export class SyncManager {
                     this.isConnected = wasConnected;
                 }, 100);
             }
-        }
+            }
+        }, { source: 'SyncManager-handleFullSync' });
     }
     
     handleRemoteChange(message) {
-        // Apply remote change
-        if (message.filename === this.currentFilename && this.app && this.app.undoRedoManager) {
-            this.app.undoRedoManager.applyRemoteChange(message.change);
-        }
+        performanceBudgetManager.measureOperation('SYNC', () => {
+            // Apply remote change
+            if (message.filename === this.currentFilename && this.app && this.app.undoRedoManager) {
+                this.app.undoRedoManager.applyRemoteChange(message.change);
+            }
+        }, { source: 'SyncManager-handleRemoteChange' });
     }
     
     handleRemoteUndo(message) {

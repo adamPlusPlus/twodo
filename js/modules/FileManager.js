@@ -2,6 +2,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { activeSetManager } from '../core/ActiveSetManager.js';
 
 export class FileManager {
     constructor() {
@@ -405,11 +406,26 @@ export class FileManager {
     }
     
     showFileManager() {
+        // Wait a bit to ensure DOM is ready (in case called during render)
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
         
         if (!modal || !modalBody) {
-            console.error('[FileManager] Modal elements not found!');
+            console.error('[FileManager] Modal elements not found!', { 
+                hasModal: !!modal, 
+                hasModalBody: !!modalBody,
+                modalHTML: document.querySelector('#modal')?.outerHTML?.substring(0, 100)
+            });
+            // Try again after a short delay in case DOM isn't ready
+            setTimeout(() => {
+                const retryModal = document.getElementById('modal');
+                const retryModalBody = document.getElementById('modal-body');
+                if (retryModal && retryModalBody) {
+                    this.showFileManager();
+                } else {
+                    console.error('[FileManager] Modal elements still not found after retry');
+                }
+            }, 100);
             return;
         }
         
@@ -473,24 +489,24 @@ export class FileManager {
             const sizeKB = (file.size / 1024).toFixed(1);
             
             html += `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: ${isCurrent ? '#2a4a6a' : '#2a2a2a'}; border-radius: 4px; border: 1px solid #444;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: ${isCurrent ? 'bold' : 'normal'}; color: ${isCurrent ? '#4a9eff' : '#e0e0e0'};">
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: ${isCurrent ? '#2a4a6a' : '#2a2a2a'}; border-radius: 4px; border: 1px solid #444; gap: 10px;">
+                    <div style="flex: 1; min-width: 0; overflow: hidden;">
+                        <div style="font-weight: ${isCurrent ? 'bold' : 'normal'}; color: ${isCurrent ? '#4a9eff' : '#e0e0e0'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             ${file.filename} ${isCurrent ? '(current)' : ''}
                         </div>
-                        <div style="font-size: 12px; color: #888; margin-top: 4px;">
+                        <div style="font-size: 12px; color: #888; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             ${sizeKB} KB • ${modifiedDate}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button onclick="window.app.fileManager.handleLoad('${file.filename}')" 
-                                style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📂 Load</button>
-                        <button onclick="window.app.fileManager.handleLoadBackup('${file.filename}')" 
-                                style="padding: 6px 12px; background: #6a8eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">💾 Load .bak</button>
-                        <button onclick="window.app.fileManager.handleRename('${file.filename}')" 
-                                style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Rename</button>
-                        <button onclick="window.app.fileManager.handleDelete('${file.filename}')" 
-                                style="padding: 6px 12px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                    <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                        <button onclick="window.app.fileManager.handleLoad('${file.filename.replace(/'/g, "\\'")}')" 
+                                style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">📂 Load</button>
+                        <button onclick="window.app.fileManager.handleLoadBackup('${file.filename.replace(/'/g, "\\'")}')" 
+                                style="padding: 6px 12px; background: #6a8eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">💾 Load .bak</button>
+                        <button onclick="window.app.fileManager.handleRename('${file.filename.replace(/'/g, "\\'")}')" 
+                                style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">✏️ Rename</button>
+                        <button onclick="window.app.fileManager.handleDelete('${file.filename.replace(/'/g, "\\'")}')" 
+                                style="padding: 6px 12px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">🗑️ Delete</button>
                     </div>
                 </div>
             `;
@@ -1135,6 +1151,82 @@ export class FileManager {
                 structure
             };
         }
+    }
+    
+    /**
+     * Load document on demand (for active-set memory management)
+     * @param {string} documentId - Document ID
+     * @returns {Promise<Object|null>} - Loaded document or null
+     */
+    async loadDocument(documentId) {
+        try {
+            // Get document from current file data
+            const appState = this._getAppState();
+            if (appState) {
+                // Try to get from active set first
+                const doc = await activeSetManager.getDocument(documentId);
+                if (doc) {
+                    return doc;
+                }
+                
+                // If not in active set, try loading from current file
+                if (this.currentFilename) {
+                    const fileData = await this.loadFile(this.currentFilename, false);
+                    if (fileData && fileData.documents) {
+                        const document = fileData.documents.find(doc => doc.id === documentId);
+                        if (document) {
+                            // Add to active set
+                            await activeSetManager.getDocument(documentId);
+                            return document;
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`[FileManager] Error loading document ${documentId}:`, error);
+            return null;
+        }
+    }
+    
+    /**
+     * Unload document from memory (for active-set memory management)
+     * @param {string} documentId - Document ID
+     * @returns {boolean} - True if unloaded
+     */
+    unloadDocument(documentId) {
+        return activeSetManager.unloadDocument(documentId);
+    }
+    
+    /**
+     * Get document metadata without loading full document
+     * @param {string} documentId - Document ID
+     * @returns {Object|null} - Metadata object or null
+     */
+    getDocumentMetadata(documentId) {
+        // Try active set manager first
+        const metadata = activeSetManager.getMetadata(documentId);
+        if (metadata) {
+            return metadata;
+        }
+        
+        // Fallback: try to get from appState documents
+        const appState = this._getAppState();
+        if (appState && appState.documents) {
+            const doc = appState.documents.find(doc => doc.id === documentId);
+            if (doc) {
+                // Extract metadata
+                return {
+                    id: doc.id,
+                    title: doc.title || '',
+                    lastModified: doc.lastModified || Date.now(),
+                    size: JSON.stringify(doc).length
+                };
+            }
+        }
+        
+        return null;
     }
 }
 

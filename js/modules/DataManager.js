@@ -3,6 +3,8 @@ import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
 import { ItemHierarchy } from '../utils/ItemHierarchy.js';
+import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
+import { activeSetManager } from '../core/ActiveSetManager.js';
 
 export class DataManager {
     constructor() {
@@ -329,7 +331,8 @@ export class DataManager {
         const normalized = this._normalizeDataModel(this.loadFromStorage());
         const appState = this._getAppState();
         
-        const documents = (normalized.documents || []).map((document) => {
+        // Normalize all documents (for metadata extraction)
+        const allDocuments = (normalized.documents || []).map((document) => {
             const groups = document.groups || [];
             if (groups.length === 0) {
                 return {
@@ -349,26 +352,69 @@ export class DataManager {
             };
         });
         
-        if (documents.length > 0) {
-            appState.documents = documents;
+        // If active-set is enabled, load metadata only initially
+        if (activeSetManager.config.isEnabled() && allDocuments.length > 0) {
+            // Set up load function for ActiveSetManager
+            activeSetManager.setLoadFunction(async (documentId) => {
+                // Find document in normalized data
+                const document = allDocuments.find(doc => doc.id === documentId);
+                if (document) {
+                    // Return normalized document
+                    return document;
+                }
+                // If not found, try loading from storage
+                const stored = this.loadFromStorage();
+                const normalizedStored = this._normalizeDataModel(stored);
+                return (normalizedStored.documents || []).find(doc => doc.id === documentId) || null;
+            });
+            
+            // Store metadata for all documents
+            activeSetManager.setMetadataBatch(allDocuments);
+            
+            // Determine current document ID
+            const storedCurrentId = normalized.currentDocumentId;
+            const currentId = storedCurrentId || (allDocuments.length > 0 ? allDocuments[0].id : 'document-1');
+            appState.currentDocumentId = currentId;
+            
+            // Load current document immediately
+            if (currentId) {
+                const currentDoc = allDocuments.find(doc => doc.id === currentId);
+                if (currentDoc) {
+                    // Load current document into active set
+                    activeSetManager.getDocument(currentId).then(() => {
+                        // Update appState documents after loading
+                        appState._updateDocumentsFromActiveSet();
+                    }).catch(err => {
+                        console.error('[DataManager] Error loading current document:', err);
+                    });
+                }
+            }
+            
+            // Set documents to metadata initially (will be updated when current doc loads)
+            appState.documents = allDocuments; // This will trigger metadata storage via setter
         } else {
-            appState.documents = [{
-                id: 'document-1',
-                groups: [{
-                    id: 'group-0',
-                    title: 'Group 1',
-                    items: [],
-                    level: 0,
-                    parentGroupId: null
-                }]
-            }];
-        }
-        
-        const storedCurrentId = normalized.currentDocumentId;
-        if (storedCurrentId) {
-            appState.currentDocumentId = storedCurrentId;
-        } else if (appState.documents.length > 0) {
-            appState.currentDocumentId = appState.documents[0].id;
+            // Active-set disabled: load all documents as before
+            if (allDocuments.length > 0) {
+                appState.documents = allDocuments;
+            } else {
+                appState.documents = [{
+                    id: 'document-1',
+                    groups: [{
+                        id: 'group-0',
+                        title: 'Group 1',
+                        items: [],
+                        level: 0,
+                        parentGroupId: null
+                    }]
+                }];
+            }
+            
+            const storedCurrentId = normalized.currentDocumentId;
+            if (storedCurrentId) {
+                appState.currentDocumentId = storedCurrentId;
+            } else if (appState.documents.length > 0) {
+                appState.currentDocumentId = appState.documents[0].id;
+            }
         }
         
         if (normalized.documentStates) {
@@ -449,43 +495,58 @@ export class DataManager {
     
     /**
      * Sync data to WebSocket for real-time updates
+     * Phase 3: Uses full_sync only for initial sync, operations for subsequent changes
      */
     _syncDataToWebSocket() {
-        const syncManager = this._getSyncManager();
-        const fileManager = this._getFileManager();
-        
-        if (!syncManager || !syncManager.isConnected) {
-            return;
-        }
-        
-        if (!fileManager || !fileManager.currentFilename) {
-            return;
-        }
-        
-        // Update last sync timestamp
-        this._lastSyncTimestamp = Date.now();
-        
-        // Send full data state for sync
-        const appState = this._getAppState();
-        const settingsManager = this._getSettingsManager();
-        const documents = appState.documents;
-        const syncPayload = {
-            documents,
-            currentDocumentId: appState.currentDocumentId,
-            groupStates: appState.groupStates || {},
-            subtaskStates: appState.subtaskStates || {},
-            allSubtasksExpanded: appState.allSubtasksExpanded,
-            settings: settingsManager ? settingsManager.loadSettings() : {},
-            timestamp: this._lastSyncTimestamp
-        };
-        
-        // Send as a "full sync" change
-        syncManager.send({
-            type: 'full_sync',
-            filename: fileManager.currentFilename,
-            data: syncPayload,
-            timestamp: this._lastSyncTimestamp
-        });
+        performanceBudgetManager.measureOperation('SYNC', () => {
+            const syncManager = this._getSyncManager();
+            const fileManager = this._getFileManager();
+            
+            if (!syncManager || !syncManager.isConnected) {
+                return;
+            }
+            
+            if (!fileManager || !fileManager.currentFilename) {
+                return;
+            }
+            
+            // Check if this is initial sync (first time syncing this file)
+            const isInitialSync = !syncManager._hasSyncedFile(fileManager.currentFilename);
+            
+            if (isInitialSync) {
+                // Send full state for initial sync
+                this._lastSyncTimestamp = Date.now();
+                
+                const appState = this._getAppState();
+                const settingsManager = this._getSettingsManager();
+                const documents = appState.documents;
+                const syncPayload = {
+                    documents,
+                    currentDocumentId: appState.currentDocumentId,
+                    groupStates: appState.groupStates || {},
+                    subtaskStates: appState.subtaskStates || {},
+                    allSubtasksExpanded: appState.allSubtasksExpanded,
+                    settings: settingsManager ? settingsManager.loadSettings() : {},
+                    timestamp: this._lastSyncTimestamp
+                };
+                
+                // Send as a "full sync" change
+                syncManager.send({
+                    type: 'full_sync',
+                    filename: fileManager.currentFilename,
+                    data: syncPayload,
+                    timestamp: this._lastSyncTimestamp
+                });
+                
+                // Mark file as synced
+                syncManager._markFileSynced(fileManager.currentFilename);
+            } else {
+                // After initial sync, operations are sent via operation:applied events
+                // No need to send full state here
+                // Update timestamp for tracking
+                this._lastSyncTimestamp = Date.now();
+            }
+        }, { source: 'DataManager-_syncDataToWebSocket' });
     }
     
     /**

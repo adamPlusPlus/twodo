@@ -50,7 +50,7 @@ export class PaneManager {
                 const format = this.app.formatRendererManager?.getPageFormat(pageId) || null;
                 activeTab.pageId = pageId;
                 activeTab.format = format;
-                this.renderPane(pane);
+                this.renderPane(pane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
             }
         } else if (allPanes.length > 1) {
             // Multiple panes - find the first pane or create tab in first pane
@@ -183,7 +183,7 @@ export class PaneManager {
             this.splitPane(parentPaneId, paneId, direction);
         } else {
             // Create new root pane
-            this.renderPane(pane);
+            this.renderPane(pane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         }
         
         // Emit event
@@ -218,7 +218,7 @@ export class PaneManager {
         pane.activeTabIndex = pane.tabs.length - 1; // Activate new tab
         
         // Re-render pane to show new tab
-        this.renderPane(pane);
+        this.renderPane(pane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         
         // Emit event
         eventBus.emit('tab:opened', { paneId, tabId: tab.id, pageId, format });
@@ -248,7 +248,7 @@ export class PaneManager {
         }
         
         // Re-render pane
-        this.renderPane(pane);
+        this.renderPane(pane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         
         // Emit event
         eventBus.emit('tab:closed', { paneId, tabId });
@@ -365,8 +365,10 @@ export class PaneManager {
         newPane.parent = splitContainer;
         
         // Render both panes
-        this.renderPane(existingPane);
-        this.renderPane(newPane);
+        Promise.all([
+            this.renderPane(existingPane),
+            this.renderPane(newPane)
+        ]).catch(err => console.error('[PaneManager] Error rendering panes:', err));
         
         // Add resize handle (only if one doesn't already exist)
         const existingHandle = splitContainer.querySelector('.pane-resize-handle');
@@ -494,7 +496,7 @@ export class PaneManager {
     /**
      * Render a pane
      */
-    renderPane(pane) {
+    async renderPane(pane) {
         if (!pane.container) {
             // Create container if it doesn't exist
             const container = document.createElement('div');
@@ -578,10 +580,10 @@ export class PaneManager {
                     const binRenderer = this.appRenderer?.binRenderer || 
                                        this.app.renderService?.getRenderer()?.binRenderer;
                     if (binRenderer) {
-                        page.groups.forEach((bin) => {
-                            const binElement = binRenderer.renderBin(page.id, bin);
+                        for (const bin of page.groups) {
+                            const binElement = await binRenderer.renderBin(page.id, bin);
                             content.appendChild(binElement);
-                        });
+                        }
                     } else {
                         console.warn('binRenderer not available');
                     }
@@ -1074,7 +1076,7 @@ export class PaneManager {
                             if (newPane && newPane.tabs.length > 0) {
                                 // Replace the default tab with our moved tab
                                 newPane.tabs[0] = sourceTab;
-                                this.renderPane(newPane);
+                                this.renderPane(newPane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
                                 
                                 // Remove tab from source pane
                                 const sourceTabIndex = sourcePane.tabs.findIndex(t => t.id === dragData.tabId);
@@ -1088,7 +1090,7 @@ export class PaneManager {
                                         if (sourcePane.activeTabIndex >= sourcePane.tabs.length) {
                                             sourcePane.activeTabIndex = Math.max(0, sourcePane.tabs.length - 1);
                                         }
-                                        this.renderPane(sourcePane);
+                                        this.renderPane(sourcePane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
                                     }
                                 }
                             }
@@ -1252,7 +1254,7 @@ export class PaneManager {
             const newIndex = targetIndex < tabIndex ? targetIndex : targetIndex + 1;
             sourcePane.tabs.splice(newIndex, 0, tab);
             sourcePane.activeTabIndex = newIndex;
-            this.renderPane(sourcePane);
+            this.renderPane(sourcePane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         } else {
             // Move to different pane
             sourcePane.tabs.splice(tabIndex, 1);
@@ -1264,14 +1266,14 @@ export class PaneManager {
                 if (sourcePane.activeTabIndex >= sourcePane.tabs.length) {
                     sourcePane.activeTabIndex = Math.max(0, sourcePane.tabs.length - 1);
                 }
-                this.renderPane(sourcePane);
+                this.renderPane(sourcePane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
             }
             
             const targetTabIndex = targetPane.tabs.findIndex(t => t.id === targetTabId);
             const insertIndex = targetTabIndex !== -1 ? targetTabIndex : targetIndex;
             targetPane.tabs.splice(insertIndex, 0, tab);
             targetPane.activeTabIndex = insertIndex;
-            this.renderPane(targetPane);
+            this.renderPane(targetPane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         }
     }
     
@@ -1297,14 +1299,14 @@ export class PaneManager {
                 sourcePane.activeTabIndex = Math.max(0, sourcePane.tabs.length - 1);
             }
             // Re-render source pane
-            this.renderPane(sourcePane);
+            this.renderPane(sourcePane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
         }
         
         targetPane.tabs.push(tab);
         targetPane.activeTabIndex = targetPane.tabs.length - 1;
         
         // Re-render target pane
-        this.renderPane(targetPane);
+        this.renderPane(targetPane).catch(err => console.error('[PaneManager] Error rendering pane:', err));
     }
     
     /**

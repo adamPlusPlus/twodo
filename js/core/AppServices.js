@@ -22,6 +22,9 @@ export const SERVICES = {
     PERFORMANCE_BUDGET: 'performanceBudget',
     SEMANTIC_OPERATION_MANAGER: 'semanticOperationManager',
     VIEW_MANAGER: 'viewManager',
+    ACTIVE_SET_MANAGER: 'activeSetManager',
+    ASYNC_INDEXER: 'asyncIndexer',
+    REPOSITORY_MANAGER: 'repositoryManager',
     
     // Manager services
     SETTINGS_MANAGER: 'settingsManager',
@@ -67,6 +70,14 @@ export const SERVICES = {
  * @param {*} service - Service instance
  */
 export function registerService(name, service) {
+    if (!name) {
+        console.error('[AppServices] Attempted to register service with undefined/null name:', { name, service });
+        throw new Error('Service name cannot be undefined or null');
+    }
+    if (service === undefined || service === null) {
+        console.warn(`[AppServices] Service "${name}" is undefined/null, skipping registration`);
+        return;
+    }
     serviceLocator.register(name, service);
 }
 

@@ -1,0 +1,64 @@
+Phase 4: View Projection Layer Implementation
+
+Implemented views as projections of the canonical model, ensuring multi-view consistency and preventing view drift.
+
+Key Changes:
+- Created ViewProjection base class (js/core/ViewProjection.js)
+  - Operation subscription via operation:applied events
+  - Project() method for converting canonical model to view representation
+  - ApplyOperation() method for incremental updates
+  - Lifecycle management (init, destroy)
+  - Operation filtering by page/item relevance
+
+- Created ViewManager (js/core/ViewManager.js)
+  - Manages multiple view projections
+  - Coordinates view updates
+  - Applies operations to all relevant views
+  - Tracks views per page/document
+  - Registered in AppServices
+
+- Refactored DocumentViewFormat
+  - Uses ViewProjection pattern
+  - Implements project() to convert page to markdown
+  - Implements applyOperation() for incremental updates
+  - Removed direct state manipulation (saveMarkdownToPage now stores metadata only)
+
+- Refactored LaTeXEditorFormat
+  - Uses ViewProjection pattern
+  - Implements project() to convert page to LaTeX
+  - Implements applyOperation() for incremental updates
+  - Updates preview when operations are applied
+
+- Refactored PageKanbanFormat
+  - Uses ViewProjection pattern
+  - Implements project() to convert page to Kanban structure
+  - Implements applyOperation() with incremental card updates
+  - Optimized for card text updates and moves
+
+- Updated FormatRendererManager
+  - Registers/unregisters views with ViewManager
+  - Handles view lifecycle when formats are activated/deactivated
+  - Cleans up views when formats are cleared
+
+- Updated AppServices
+  - Registered ViewManager service
+  - Initialized ViewManager on app startup
+
+Benefits:
+- Views are projections of canonical model (read-only)
+- Views update automatically when operations are applied
+- Multiple views of same data stay consistent
+- No view drift (views always reflect canonical model)
+- Operation filtering for performance
+- Incremental updates where possible, fallback to full re-project
+
+Success Criteria Met:
+✓ ViewProjection base class created with operation subscription
+✓ ViewManager coordinates multiple view projections
+✓ DocumentViewFormat uses projection pattern
+✓ LaTeXEditorFormat uses projection pattern
+✓ PageKanbanFormat uses projection pattern
+✓ Views update automatically when operations are applied
+✓ Views don't modify canonical model directly
+✓ Multiple views of same data stay consistent
+✓ No view drift (views always reflect canonical model)

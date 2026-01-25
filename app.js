@@ -87,10 +87,6 @@ class TodoApp {
         this.modalHandler = new ModalHandler();
         this.fileManager = new FileManager();
         
-        // Register remaining services (including ElementManager and others)
-        // Must be called AFTER all services are created
-        registerAllServices(this);
-        
         // Initialize relationship manager
         this.relationshipManager = new RelationshipManager();
         
@@ -147,6 +143,10 @@ class TodoApp {
         this.binPluginManager = new BinPluginManager();
         this.elementTypeManager = new ElementTypeManager();
         this.formatRendererManager = new FormatRendererManager();
+        
+        // Register remaining services (including ElementManager and others)
+        // Must be called AFTER all services are created
+        registerAllServices(this);
         
         // Expose plugin system to window for debugging
         this.pluginRegistry = pluginRegistry;

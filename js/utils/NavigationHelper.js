@@ -4,6 +4,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { ElementFinder } from './ElementFinder.js';
+import { ItemHierarchy } from './ItemHierarchy.js';
 
 export class NavigationHelper {
     /**
@@ -37,9 +38,83 @@ export class NavigationHelper {
         eventBus.emit(EVENTS.PAGE.SWITCHED, { pageId });
         eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
         
-        // Scroll to element after render
-        setTimeout(() => {
+        // Helper function to find and scroll to element
+        const findAndScrollToElement = () => {
             const element = ElementFinder.findElement(pageId, binId, elementIndex);
+            if (element) {
+                this.scrollToElement(element, scrollOptions);
+                if (highlight) {
+                    this.highlightElement(element, highlightDuration, highlightColor);
+                }
+                return true;
+            }
+            return false;
+        };
+        
+        // First, try immediate find (element might already be visible)
+        let element = ElementFinder.findElement(pageId, binId, elementIndex);
+        
+        // If not found, check for virtualization
+        if (!element) {
+            const bin = this.findBin(pageId, binId);
+            const elementsList = bin?.querySelector('.elements-list');
+            const virtualScroller = elementsList?._virtualScroller;
+            
+            if (virtualScroller) {
+                // Get root items to find correct index
+                const document = app?.appState?.documents?.find(d => d.id === pageId);
+                const group = document?.groups?.find(b => b.id === binId);
+                
+                if (group && group.items) {
+                    const rootItems = ItemHierarchy.getRootItems(group.items);
+                    
+                    // Find root item index for this elementIndex
+                    let rootItemIndex = -1;
+                    const targetItem = group.items[elementIndex];
+                    
+                    if (targetItem) {
+                        if (!targetItem.parentId) {
+                            // It's a root item - find its index in root items
+                            rootItemIndex = rootItems.findIndex(item => item === targetItem);
+                        } else {
+                            // It's a child - find parent root item
+                            let currentItem = targetItem;
+                            while (currentItem && currentItem.parentId) {
+                                currentItem = group.items.find(item => item.id === currentItem.parentId);
+                            }
+                            if (currentItem) {
+                                rootItemIndex = rootItems.findIndex(item => item === currentItem);
+                            }
+                        }
+                    }
+                    
+                    if (rootItemIndex >= 0) {
+                        // Scroll to root item to make it (and its children) visible
+                        virtualScroller.scrollToIndex(rootItemIndex);
+                        
+                        // Wait for render and retry finding element
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                if (findAndScrollToElement()) {
+                                    return; // Success
+                                }
+                                // If still not found, try one more time after a short delay
+                                setTimeout(() => {
+                                    findAndScrollToElement();
+                                }, 100);
+                            });
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // Existing logic for non-virtualized or if element found
+        setTimeout(() => {
+            if (!element) {
+                element = ElementFinder.findElement(pageId, binId, elementIndex);
+            }
             if (element) {
                 this.scrollToElement(element, scrollOptions);
                 if (highlight) {

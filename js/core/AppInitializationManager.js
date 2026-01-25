@@ -19,6 +19,9 @@ export class AppInitializationManager {
      * This is the main initialization method called from app.js
      */
     async init() {
+        // Initialize repositories first
+        await this._initializeRepositories();
+        
         // Load settings first
         const settings = this.app.settingsManager.loadSettings();
         this.app.settingsManager.applySettings(settings);
@@ -102,14 +105,49 @@ export class AppInitializationManager {
         // Initialize global search in background
         this.app.initializeGlobalSearch().catch(err => console.error('Global search initialization error:', err));
         
-        // Rebuild search index in background (non-blocking)
+        // Rebuild search index in background (non-blocking, async incremental)
         if (this.app.searchIndex) {
+            // rebuildIndex() is now async and uses AsyncIndexer for incremental indexing
             // Use requestIdleCallback if available, otherwise setTimeout
+            const startIndexing = async () => {
+                try {
+                    await this.app.searchIndex.rebuildIndex();
+                } catch (error) {
+                    console.error('[AppInitializationManager] Error rebuilding search index:', error);
+                }
+            };
+            
             if (window.requestIdleCallback) {
-                requestIdleCallback(() => this.app.searchIndex.rebuildIndex());
+                requestIdleCallback(() => startIndexing());
             } else {
-                setTimeout(() => this.app.searchIndex.rebuildIndex(), 0);
+                setTimeout(() => startIndexing(), 0);
             }
+        }
+    }
+    
+    /**
+     * Initialize repositories
+     * @private
+     */
+    async _initializeRepositories() {
+        const { repositoryManager } = await import('./RepositoryManager.js');
+        const { VaultRepository } = await import('./repositories/VaultRepository.js');
+        const { SettingsRepository } = await import('./repositories/SettingsRepository.js');
+        const { UIUXRepository } = await import('./repositories/UIUXRepository.js');
+        const { TemplatesRepository } = await import('./repositories/TemplatesRepository.js');
+        
+        // Register repositories if not already registered
+        if (!repositoryManager.hasRepository('vault')) {
+            repositoryManager.registerRepository('vault', new VaultRepository());
+        }
+        if (!repositoryManager.hasRepository('settings')) {
+            repositoryManager.registerRepository('settings', new SettingsRepository());
+        }
+        if (!repositoryManager.hasRepository('uiux')) {
+            repositoryManager.registerRepository('uiux', new UIUXRepository());
+        }
+        if (!repositoryManager.hasRepository('templates')) {
+            repositoryManager.registerRepository('templates', new TemplatesRepository());
         }
     }
     

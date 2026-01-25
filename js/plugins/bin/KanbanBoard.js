@@ -686,13 +686,23 @@ export default class KanbanBoard extends BasePlugin {
             const page = this._getPages(appInstance).find(p => p.id === pageId);
             const bin = page ? page.groups?.find(b => b.id === binId) : null;
             const items = bin ? this._getItems(bin) : [];
-            if (!bin || !items[dragPayload.elementIndex]) return;
             
-            const element = items[dragPayload.elementIndex];
+            // Use itemId if available, fallback to elementIndex
+            let element = null;
+            if (dragPayload.itemId) {
+                element = items.find(item => item.id === dragPayload.itemId);
+            }
+            if (!element && dragPayload.elementIndex !== undefined) {
+                element = items[dragPayload.elementIndex];
+            }
+            if (!bin || !element) return;
+            
             if (element.type === 'header-checkbox') return;
             
             if (appInstance.dragDropHandler) {
-                const currentIndex = parseInt(dragPayload.elementIndex);
+                // Calculate currentIndex from element position
+                const rootItems = items.filter(item => !item.parentId);
+                const currentIndex = rootItems.findIndex(item => item.id === element.id);
                 let targetIndex = parseInt(targetElementIndex);
                 
                 // Check if using custom columns or status columns
@@ -736,10 +746,34 @@ export default class KanbanBoard extends BasePlugin {
                     // Use requestAnimationFrame to prevent flash
                     e.preventDefault();
                     requestAnimationFrame(() => {
-                        appInstance.dragDropHandler.moveElement(
-                            pageId, binId, currentIndex,
-                            pageId, binId, targetIndex
-                        );
+                        // Use ID-based move if available
+                        if (dragPayload.itemId && element.id) {
+                            // Find target item ID
+                            const targetRootItems = items.filter(item => !item.parentId);
+                            const targetItem = targetRootItems[targetIndex];
+                            const targetItemId = targetItem?.id || null;
+                            
+                            // Use moveElementById if available, otherwise fallback to index-based
+                            if (appInstance.dragDropHandler.moveElementById) {
+                                appInstance.dragDropHandler.moveElementById(
+                                    element.id,
+                                    targetItemId,
+                                    null, // targetParentId
+                                    targetIndex
+                                );
+                            } else {
+                                appInstance.dragDropHandler.moveElement(
+                                    pageId, binId, currentIndex,
+                                    pageId, binId, targetIndex
+                                );
+                            }
+                        } else {
+                            // Fallback to index-based
+                            appInstance.dragDropHandler.moveElement(
+                                pageId, binId, currentIndex,
+                                pageId, binId, targetIndex
+                            );
+                        }
                     });
                 }
             }

@@ -13,7 +13,25 @@ export class AnimationRenderer {
         this.app = app;
     }
     
+    /**
+     * Check if any lists are virtualized
+     * @returns {boolean} - True if any elements-list has a virtual scroller
+     */
+    _hasVirtualizedLists() {
+        const elementsLists = document.querySelectorAll('.elements-list');
+        if (elementsLists.length === 0) {
+            return false;
+        }
+        return Array.from(elementsLists).some(list => list._virtualScroller);
+    }
+    
     animateMovements(oldPositions) {
+        // Check if any lists are virtualized
+        if (this._hasVirtualizedLists()) {
+            console.log('⚠️  Virtualized lists detected - skipping animations to prevent incomplete/jumpy behavior');
+            return; // Skip animations when virtualization is active
+        }
+        
         console.log('═══════════════════════════════════════════════════════════');
         console.log('🎬 ANIMATION SEQUENCE STARTING');
         console.log('═══════════════════════════════════════════════════════════');

@@ -82,8 +82,68 @@ export class InlineEditor {
                     bin.items = items;
                 }
                 const el = items[elementIndex];
-                if (el) {
-                    // Record undo/redo change
+                if (el && el.id) {
+                    // Use semantic operation if item has ID
+                    const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+                    if (semanticOpManager) {
+                        // Create and apply setText operation
+                        const operation = semanticOpManager.createOperation('setText', el.id, {
+                            text: newText,
+                            oldText: originalText
+                        });
+                        
+                        if (operation) {
+                            const result = semanticOpManager.applyOperation(operation);
+                            
+                            if (result && result.success) {
+                                // Record operation for undo/redo
+                                const undoRedoManager = this._getUndoRedoManager();
+                                if (undoRedoManager) {
+                                    undoRedoManager.recordOperation(operation);
+                                }
+                                
+                                // Save data
+                                const dataManager = this._getDataManager();
+                                if (dataManager) {
+                                    dataManager.saveData();
+                                }
+                                
+                                // Re-render (operation:applied event already emitted)
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                            } else {
+                                console.error('[InlineEditor] Failed to apply setText operation');
+                                // Fallback to direct manipulation
+                                el.text = newText;
+                                const dataManager = this._getDataManager();
+                                if (dataManager) {
+                                    dataManager.saveData();
+                                }
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                            }
+                        } else {
+                            // Fallback if operation creation failed
+                            el.text = newText;
+                            const dataManager = this._getDataManager();
+                            if (dataManager) {
+                                dataManager.saveData();
+                            }
+                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                        }
+                    } else {
+                        // Fallback to direct manipulation if manager not available
+                        const undoRedoManager = this._getUndoRedoManager();
+                        if (undoRedoManager) {
+                            undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, originalText);
+                        }
+                        el.text = newText;
+                        const dataManager = this._getDataManager();
+                        if (dataManager) {
+                            dataManager.saveData();
+                        }
+                        eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                    }
+                } else if (el) {
+                    // Fallback for items without ID (backward compatibility)
                     const undoRedoManager = this._getUndoRedoManager();
                     if (undoRedoManager) {
                         undoRedoManager.recordElementPropertyChange(pageId, binId, elementIndex, 'text', newText, originalText);
@@ -93,7 +153,6 @@ export class InlineEditor {
                     if (dataManager) {
                         dataManager.saveData();
                     }
-                    // Re-render to update links and formatting
                     eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
                 }
             } else {

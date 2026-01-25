@@ -158,7 +158,7 @@ export class AppRenderer {
      * Main render method
      * Renders the entire application UI
      */
-    render() {
+    async render() {
         // Preserve active modals (like visual customization modal) during render
         const activeModals = [];
         const modals = document.querySelectorAll('.modal');
@@ -199,9 +199,7 @@ export class AppRenderer {
             
             // Render all panes
             const allPanes = this.paneManager.getAllPanes();
-            allPanes.forEach(pane => {
-                this.paneManager.renderPane(pane);
-            });
+            await Promise.all(allPanes.map(pane => this.paneManager.renderPane(pane)));
             
             // If no panes, create one with current page
             if (allPanes.length === 0) {
@@ -303,10 +301,11 @@ export class AppRenderer {
         
         if (activePage && activePage.groups && activePage.groups.length > 0) {
             console.log('[SCROLL DEBUG] Default render - before appending bins', { scrollBeforeAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
-            activePage.groups.forEach((bin, binIndex) => {
-                const binElement = this.binRenderer.renderBin(activePage.id, bin);
+            // Render bins (handle async lazy loading)
+            for (const bin of activePage.groups) {
+                const binElement = await this.binRenderer.renderBin(activePage.id, bin);
                 container.appendChild(binElement);
-            });
+            }
             console.log('[SCROLL DEBUG] Default render - after appending bins', { scrollAfterAppend: { scrollTop: container.scrollTop, scrollLeft: container.scrollLeft, scrollHeight: container.scrollHeight } });
             
             // Restore scroll position and emit events after rendering
@@ -387,6 +386,16 @@ export class AppRenderer {
      * Get current positions of bins and elements for animation
      */
     getCurrentPositions() {
+        // Check if any lists are virtualized
+        const elementsLists = document.querySelectorAll('.elements-list');
+        const hasVirtualizedLists = elementsLists.length > 0 && 
+            Array.from(elementsLists).some(list => list._virtualScroller);
+        
+        if (hasVirtualizedLists) {
+            // Return empty positions to prevent animation attempts with incomplete data
+            return { groups: {}, items: {} };
+        }
+        
         const positions = {
             groups: {},
             items: {}
@@ -444,8 +453,8 @@ export class AppRenderer {
     /**
      * Render a bin - delegates to BinRenderer
      */
-    renderBin(pageId, bin) {
-        return this.binRenderer.renderBin(pageId, bin);
+    async renderBin(pageId, bin) {
+        return await this.binRenderer.renderBin(pageId, bin);
     }
     
     renderElement(pageId, binId, element, elementIndex, childIndex = null, depth = 0) {

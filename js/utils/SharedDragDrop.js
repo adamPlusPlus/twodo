@@ -24,23 +24,25 @@ export class SharedDragDrop {
             return; // Don't make non-text/checkbox elements draggable
         }
         
-        const elementId = `${pageId}-${binId}-${elementIndex}`;
+        // Store itemId as primary identifier (use element.id if available)
+        const itemId = element.id || `${pageId}-${binId}-${elementIndex}`;
         elementNode.draggable = true;
         elementNode.dataset.dragType = 'element';
         elementNode.dataset.pageId = pageId;
         elementNode.dataset.binId = binId;
-        elementNode.dataset.elementIndex = elementIndex;
-        elementNode.dataset.elementId = elementId;
-        elementNode.setAttribute('data-element-id', elementId);
+        elementNode.dataset.elementIndex = elementIndex; // Keep for backward compatibility
+        elementNode.dataset.elementId = itemId; // Primary identifier
+        elementNode.setAttribute('data-element-id', itemId);
         
         // Drag start
         elementNode.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', JSON.stringify({
                 type: 'element',
+                itemId: itemId, // Primary identifier
                 pageId,
                 binId,
-                elementIndex
+                elementIndex // Keep for backward compatibility
             }));
             elementNode.style.opacity = '0.5';
         });
@@ -96,7 +98,9 @@ export class SharedDragDrop {
             if (!sourceTypes.includes(sourceElement.type)) return;
             
             // Prevent nesting into self or descendants
-            if (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex) {
+            const isSelf = (dragPayload.itemId && dragPayload.itemId === itemId) ||
+                         (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex);
+            if (isSelf) {
                 return;
             }
             
@@ -135,16 +139,30 @@ export class SharedDragDrop {
             if (!hasTitleOrText) return;
             
             // Prevent nesting into self
-            if (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex) {
+            const isSelf = (dragPayload.itemId && dragPayload.itemId === itemId) ||
+                         (dragPayload.pageId === pageId && dragPayload.binId === binId && dragPayload.elementIndex === elementIndex);
+            if (isSelf) {
                 return;
             }
             
             // Use DragDropHandler to nest the element
+            // Use itemId if available, otherwise fallback to elementIndex
             if (this.app.dragDropHandler) {
-                this.app.dragDropHandler.nestElement(
-                    dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
-                    pageId, binId, elementIndex
-                );
+                if (dragPayload.itemId && itemId) {
+                    // Use ID-based approach (preferred)
+                    // For nesting, we need to use ReparentOperation or nestElement with IDs
+                    // For now, keep using nestElement with indices (will be updated in future)
+                    this.app.dragDropHandler.nestElement(
+                        dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
+                        pageId, binId, elementIndex
+                    );
+                } else {
+                    // Fallback to index-based
+                    this.app.dragDropHandler.nestElement(
+                        dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
+                        pageId, binId, elementIndex
+                    );
+                }
             }
             
             this.clearNestIndicator();

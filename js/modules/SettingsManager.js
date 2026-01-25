@@ -4,6 +4,7 @@ import { EVENTS } from '../core/AppEvents.js';
 import { ThemePresets } from './ThemePresets.js';
 import { StringUtils } from '../utils/string.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
+import { repositoryManager } from '../core/RepositoryManager.js';
 
 export class SettingsManager {
     constructor() {
@@ -41,14 +42,28 @@ export class SettingsManager {
         return !!this._getThemeManager();
     }
     
-    loadSettings() {
+    async loadSettings() {
         // If ThemeManager is available, use it for global theme
         const themeManager = this._getThemeManager();
         if (this.useThemes && themeManager) {
             return themeManager.themes.global;
         }
         
-        // Legacy: load from localStorage
+        // Use SettingsRepository if available
+        const settingsRepo = repositoryManager.getRepository('settings');
+        if (settingsRepo) {
+            try {
+                const settings = await settingsRepo.getItem('default');
+                if (settings) {
+                    const defaults = this.getDefaultSettings();
+                    return this.mergeSettings(settings, defaults);
+                }
+            } catch (e) {
+                console.error('Failed to load settings from repository:', e);
+            }
+        }
+        
+        // Fallback: load from localStorage
         const stored = localStorage.getItem(this.storageKey);
         if (stored) {
             try {
@@ -162,7 +177,7 @@ export class SettingsManager {
         };
     }
     
-    saveSettings(settings, themeType = 'global', viewFormat = null, pageId = null) {
+    async saveSettings(settings, themeType = 'global', viewFormat = null, pageId = null) {
         // If ThemeManager is available, use it
         const themeManager = this._getThemeManager();
         if (this.useThemes && themeManager) {
@@ -182,6 +197,16 @@ export class SettingsManager {
             eventBus.emit('theme:updated', { type: themeType, settings });
         }
         
+        // Save to SettingsRepository if available
+        const settingsRepo = repositoryManager.getRepository('settings');
+        if (settingsRepo) {
+            try {
+                await settingsRepo.saveItem('default', settings);
+            } catch (e) {
+                console.error('Failed to save settings to repository:', e);
+            }
+        }
+        
         // Also update the main data structure to include settings
         const appState = this._getAppState();
         if (appState?.documents && appState.documents.length > 0) {
@@ -190,40 +215,60 @@ export class SettingsManager {
     }
     
     applySettings(settings) {
+        if (!settings) {
+            console.warn('[SettingsManager] applySettings called with null/undefined settings');
+            return;
+        }
+        
         const root = document.documentElement;
-        root.style.setProperty('--bg-color', settings.background);
-        root.style.setProperty('--page-bg', settings.page.background);
-        root.style.setProperty('--page-margin', settings.page.margin);
-        root.style.setProperty('--page-padding', settings.page.padding);
-        root.style.setProperty('--page-border-radius', settings.page.borderRadius);
-        root.style.setProperty('--page-font-family', settings.page.fontFamily);
-        root.style.setProperty('--page-font-size', settings.page.fontSize);
-        root.style.setProperty('--page-opacity', settings.page.opacity);
-        root.style.setProperty('--page-color', settings.page.color);
-        root.style.setProperty('--page-title-font-size', settings.page.title.fontSize);
-        root.style.setProperty('--page-title-color', settings.page.title.color);
-        root.style.setProperty('--page-title-margin-bottom', settings.page.title.marginBottom);
-        root.style.setProperty('--element-bg', settings.element.background);
-        root.style.setProperty('--element-margin', settings.element.margin);
-        root.style.setProperty('--element-padding', settings.element.padding);
-        root.style.setProperty('--element-padding-vertical', settings.element.paddingVertical || settings.element.padding);
-        root.style.setProperty('--element-padding-horizontal', settings.element.paddingHorizontal || settings.element.padding);
-        root.style.setProperty('--element-gap', settings.element.gap || '8px');
-        root.style.setProperty('--element-font-family', settings.element.fontFamily);
-        root.style.setProperty('--element-font-size', settings.element.fontSize);
-        root.style.setProperty('--element-opacity', settings.element.opacity);
-        root.style.setProperty('--element-color', settings.element.color);
-        root.style.setProperty('--element-hover-bg', settings.element.hoverBackground);
-        root.style.setProperty('--header-font-size', settings.header.fontSize);
-        root.style.setProperty('--header-color', settings.header.color);
-        root.style.setProperty('--header-margin', settings.header.margin);
-        root.style.setProperty('--checkbox-size', (settings.checkbox && settings.checkbox.size) || '18px');
+        if (settings.background) {
+            root.style.setProperty('--bg-color', settings.background);
+        }
+        
+        // Safely access nested properties with defaults
+        const pageSettings = settings.page || {};
+        if (pageSettings.background) root.style.setProperty('--page-bg', pageSettings.background);
+        if (pageSettings.margin !== undefined) root.style.setProperty('--page-margin', pageSettings.margin);
+        if (pageSettings.padding !== undefined) root.style.setProperty('--page-padding', pageSettings.padding);
+        if (pageSettings.borderRadius !== undefined) root.style.setProperty('--page-border-radius', pageSettings.borderRadius);
+        if (pageSettings.fontFamily) root.style.setProperty('--page-font-family', pageSettings.fontFamily);
+        if (pageSettings.fontSize !== undefined) root.style.setProperty('--page-font-size', pageSettings.fontSize);
+        if (pageSettings.opacity !== undefined) root.style.setProperty('--page-opacity', pageSettings.opacity);
+        if (pageSettings.color) root.style.setProperty('--page-color', pageSettings.color);
+        
+        const titleSettings = pageSettings.title || {};
+        if (titleSettings.fontSize !== undefined) root.style.setProperty('--page-title-font-size', titleSettings.fontSize);
+        if (titleSettings.color) root.style.setProperty('--page-title-color', titleSettings.color);
+        if (titleSettings.marginBottom !== undefined) root.style.setProperty('--page-title-margin-bottom', titleSettings.marginBottom);
+        
+        const elementSettings = settings.element || {};
+        if (elementSettings.background !== undefined) root.style.setProperty('--element-bg', elementSettings.background);
+        if (elementSettings.margin !== undefined) root.style.setProperty('--element-margin', elementSettings.margin);
+        if (elementSettings.padding !== undefined) {
+            root.style.setProperty('--element-padding', elementSettings.padding);
+            root.style.setProperty('--element-padding-vertical', elementSettings.paddingVertical || elementSettings.padding);
+            root.style.setProperty('--element-padding-horizontal', elementSettings.paddingHorizontal || elementSettings.padding);
+        }
+        if (elementSettings.gap !== undefined) root.style.setProperty('--element-gap', elementSettings.gap);
+        if (elementSettings.fontFamily) root.style.setProperty('--element-font-family', elementSettings.fontFamily);
+        if (elementSettings.fontSize !== undefined) root.style.setProperty('--element-font-size', elementSettings.fontSize);
+        if (elementSettings.opacity !== undefined) root.style.setProperty('--element-opacity', elementSettings.opacity);
+        if (elementSettings.color) root.style.setProperty('--element-color', elementSettings.color);
+        if (elementSettings.hoverBackground) root.style.setProperty('--element-hover-bg', elementSettings.hoverBackground);
+        
+        const headerSettings = settings.header || {};
+        if (headerSettings.fontSize !== undefined) root.style.setProperty('--header-font-size', headerSettings.fontSize);
+        if (headerSettings.color) root.style.setProperty('--header-color', headerSettings.color);
+        if (headerSettings.margin !== undefined) root.style.setProperty('--header-margin', headerSettings.margin);
+        
+        const checkboxSettings = settings.checkbox || {};
+        if (checkboxSettings.size !== undefined) root.style.setProperty('--checkbox-size', checkboxSettings.size);
     }
     
-    showSettingsModal() {
+    async showSettingsModal() {
         const modal = document.getElementById('settings-modal');
         const settingsBody = document.getElementById('settings-body');
-        const settings = this.loadSettings();
+        const settings = await this.loadSettings();
         
         // Generate QR code for current file at the top
         let qrCodeHtml = '';

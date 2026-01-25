@@ -79,14 +79,19 @@ export class ElementInteraction {
         elementNode.draggable = true;
         elementNode.dataset.dragType = 'element';
         
+        // Store itemId as primary identifier
+        const itemId = element.id || `${pageId}-${binId}-${elementIndex}`;
+        elementNode.dataset.elementId = itemId;
+        
         elementNode.addEventListener('dragstart', (e) => {
             e.stopPropagation();
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', JSON.stringify({
                 type: 'element',
+                itemId: itemId, // Primary identifier
                 pageId,
                 binId,
-                elementIndex
+                elementIndex // Keep for backward compatibility
             }));
             elementNode.style.opacity = '0.5';
         });
@@ -114,10 +119,21 @@ export class ElementInteraction {
                 if (dragPayload.type === 'element' && this.app.dragDropHandler) {
                     // Handle element reordering
                     if (dragPayload.pageId === pageId && dragPayload.binId === binId) {
-                        this.app.dragDropHandler.moveElement(
-                            dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
-                            pageId, binId, elementIndex
-                        );
+                        // Use ID-based move if both items have IDs
+                        if (dragPayload.itemId && itemId) {
+                            // Calculate target index from elementIndex
+                            // For now, use the index-based method (will be fully ID-based in future)
+                            this.app.dragDropHandler.moveElement(
+                                dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
+                                pageId, binId, elementIndex
+                            );
+                        } else {
+                            // Fallback to index-based
+                            this.app.dragDropHandler.moveElement(
+                                dragPayload.pageId, dragPayload.binId, dragPayload.elementIndex,
+                                pageId, binId, elementIndex
+                            );
+                        }
                     }
                 }
             } catch (err) {

@@ -100,6 +100,152 @@ export class DragDropHandler {
         return (items || []).filter(item => idSet.has(item.id));
     }
     
+    /**
+     * Find an item by its ID across all documents and groups
+     * Returns location info similar to UndoRedoManager.findElementById()
+     * @param {string} itemId - Item ID to find
+     * @returns {Object|null} Location info: { item, documentId, groupId, itemIndex, isChild, parentItem, group }
+     */
+    _findItemById(itemId) {
+        const appState = this._getAppState();
+        if (!appState || !itemId) return null;
+        
+        const documents = appState.documents || [];
+        for (const document of documents) {
+            if (!document.groups) continue;
+            
+            for (const group of document.groups) {
+                if (!group.items) continue;
+                
+                const itemIndex = ItemHierarchy.buildItemIndex(group.items);
+                
+                // Check root items
+                for (let i = 0; i < group.items.length; i++) {
+                    const item = group.items[i];
+                    if (item && item.id === itemId) {
+                        return {
+                            item,
+                            documentId: document.id,
+                            groupId: group.id,
+                            itemIndex: i,
+                            isChild: false,
+                            group
+                        };
+                    }
+                    
+                    // Check child items
+                    if (item) {
+                        const children = ItemHierarchy.getChildItems(item, itemIndex);
+                        for (let j = 0; j < children.length; j++) {
+                            const child = children[j];
+                            if (child && child.id === itemId) {
+                                return {
+                                    item: child,
+                                    documentId: document.id,
+                                    groupId: group.id,
+                                    itemIndex: i,
+                                    childIndex: j,
+                                    isChild: true,
+                                    parentItem: item,
+                                    group
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get itemId at given index in a group (for backward compatibility)
+     * @param {Object} group - Group object
+     * @param {number} index - Root item index
+     * @returns {string|null} Item ID or null
+     */
+    _getItemIdAtIndex(group, index) {
+        if (!group || !group.items) return null;
+        const rootItems = this._getRootItems(group.items);
+        const item = rootItems[index];
+        return item?.id || null;
+    }
+    
+    /**
+     * Move element using stable IDs (new ID-based method)
+     * @param {string} sourceItemId - Source item ID
+     * @param {string|null} targetItemId - Target item ID (null to append to end)
+     * @param {string|null} targetParentId - Target parent ID (null for root level)
+     * @param {number} targetIndex - Target index position
+     */
+    moveElementById(sourceItemId, targetItemId, targetParentId, targetIndex) {
+        if (!sourceItemId) {
+            console.error('[DragDropHandler] moveElementById: sourceItemId is required');
+            return;
+        }
+        
+        // Find source item
+        const sourceLocation = this._findItemById(sourceItemId);
+        if (!sourceLocation) {
+            console.error('[DragDropHandler] moveElementById: Source item not found:', sourceItemId);
+            return;
+        }
+        
+        // Get semantic operation manager
+        const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+        if (!semanticOpManager) {
+            console.error('[DragDropHandler] moveElementById: SemanticOperationManager not available');
+            return;
+        }
+        
+        // Calculate old location info
+        const oldParentId = sourceLocation.item.parentId || null;
+        const oldIndex = sourceLocation.itemIndex;
+        
+        // Create MoveOperation
+        const operation = semanticOpManager.createOperation('move', sourceItemId, {
+            newParentId: targetParentId,
+            newIndex: targetIndex,
+            oldParentId: oldParentId,
+            oldIndex: oldIndex
+        });
+        
+        if (!operation) {
+            console.error('[DragDropHandler] moveElementById: Failed to create MoveOperation');
+            return;
+        }
+        
+        // Apply operation
+        const result = semanticOpManager.applyOperation(operation);
+        if (!result || !result.success) {
+            console.error('[DragDropHandler] moveElementById: Failed to apply MoveOperation');
+            return;
+        }
+        
+        // Record for undo/redo
+        const undoRedoManager = this._getUndoRedoManager();
+        if (undoRedoManager) {
+            undoRedoManager.recordOperation(operation);
+        }
+        
+        // Save data
+        const dataManager = this._getDataManager();
+        if (dataManager) {
+            dataManager.saveData();
+        }
+        
+        // Request render
+        requestAnimationFrame(() => {
+            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+        });
+    }
+    
+    /**
+     * Move element (backward-compatible index-based method)
+     * Converts indices to IDs internally and calls moveElementById()
+     * @deprecated Use moveElementById() with item IDs instead
+     */
     moveElement(sourcePageId, sourceBinId, sourceElementIndex, targetPageId, targetBinId, targetElementIndex, isChild = false, parentElementIndex = null, childIndex = null) {
         const appState = this._getAppState();
         const sourcePage = appState.documents.find(p => p.id === sourcePageId);
@@ -119,6 +265,7 @@ export class DragDropHandler {
         const sourceItemIndex = ItemHierarchy.buildItemIndex(sourceItems);
         
         let element;
+        let sourceItemId = null;
         
         // Handle children being moved
         if (isChild && parentElementIndex !== null && childIndex !== null) {
@@ -129,11 +276,7 @@ export class DragDropHandler {
                 return;
             }
             element = childItems[childIndex];
-            if (!Array.isArray(parentElement.childIds)) {
-                parentElement.childIds = [];
-            }
-            parentElement.childIds.splice(childIndex, 1);
-            element.parentId = null;
+            sourceItemId = element.id;
         } else {
             // Regular element move
             if (!sourceRootItems[sourceElementIndex]) {
@@ -141,6 +284,12 @@ export class DragDropHandler {
                 return;
             }
             element = sourceRootItems[sourceElementIndex];
+            sourceItemId = element.id;
+        }
+        
+        if (!sourceItemId) {
+            console.error('[DragDropHandler] moveElement: Could not determine sourceItemId');
+            return;
         }
 
         const descendantIds = this._getDescendantIds(element, sourceItemIndex);

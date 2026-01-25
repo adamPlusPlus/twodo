@@ -1,5 +1,6 @@
 // EventHelper.js - Centralized event handling utilities
 // Provides common event patterns to reduce code duplication
+import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
 
 export class EventHelper {
     /**
@@ -17,37 +18,39 @@ export class EventHelper {
         const { filter, singleClickHandler } = options;
         
         const clickHandler = (e) => {
-            // Apply filter if provided
-            if (filter && !filter(e)) {
-                return;
-            }
-            
-            // Don't trigger on interactive elements (checkboxes, buttons, inputs)
-            if (e.target.closest('input') || e.target.closest('button') || e.target.closest('textarea')) {
-                return;
-            }
-            
-            const now = Date.now();
-            const timeSinceLastClick = now - lastClickTime;
-            
-            if (timeSinceLastClick < delay && timeSinceLastClick > 0) {
-                // Double click detected
-                e.preventDefault();
-                e.stopPropagation();
-                lastClickTime = 0; // Reset to prevent triple-click
-                handler(e);
-            } else {
-                // Single click - wait to see if another click comes
-                lastClickTime = now;
-                if (singleClickHandler) {
-                    // Delay single click handler to allow for potential double-click
-                    setTimeout(() => {
-                        if (lastClickTime === now) {
-                            singleClickHandler(e);
-                        }
-                    }, delay);
+            performanceBudgetManager.measureOperation('CLICKING', () => {
+                // Apply filter if provided
+                if (filter && !filter(e)) {
+                    return;
                 }
-            }
+                
+                // Don't trigger on interactive elements (checkboxes, buttons, inputs)
+                if (e.target.closest('input') || e.target.closest('button') || e.target.closest('textarea')) {
+                    return;
+                }
+                
+                const now = Date.now();
+                const timeSinceLastClick = now - lastClickTime;
+                
+                if (timeSinceLastClick < delay && timeSinceLastClick > 0) {
+                    // Double click detected
+                    e.preventDefault();
+                    e.stopPropagation();
+                    lastClickTime = 0; // Reset to prevent triple-click
+                    handler(e);
+                } else {
+                    // Single click - wait to see if another click comes
+                    lastClickTime = now;
+                    if (singleClickHandler) {
+                        // Delay single click handler to allow for potential double-click
+                        setTimeout(() => {
+                            if (lastClickTime === now) {
+                                singleClickHandler(e);
+                            }
+                        }, delay);
+                    }
+                }
+            }, { source: 'EventHelper-setupDoubleClick' });
         };
         
         element.addEventListener('click', clickHandler);

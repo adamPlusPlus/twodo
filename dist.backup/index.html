@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSP is set via HTTP header in server.py - meta tag removed to avoid conflicts -->
+    <title>Daily Todo Tracker</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    
+    <!-- Module preload hints - tell browser to fetch critical modules in parallel -->
+    <link rel="modulepreload" href="data:text/javascript;base64,Ly8gRXZlbnRCdXMgLSBHbG9iYWwgZXZlbnQgYnVzIGZvciBhcHAtd2lkZSBldmVudCBjb21tdW5pY2F0aW9uDQppbXBvcnQgeyBFdmVudEVtaXR0ZXIgfSBmcm9tICcuLi91dGlscy9ldmVudHMuanMnOw0KDQpleHBvcnQgY2xhc3MgRXZlbnRCdXMgZXh0ZW5kcyBFdmVudEVtaXR0ZXIgew0KICAgIGNvbnN0cnVjdG9yKCkgew0KICAgICAgICBzdXBlcigpOw0KICAgICAgICB0aGlzLmV2ZW50SGlzdG9yeSA9IFtdOw0KICAgICAgICB0aGlzLm1heEhpc3RvcnlTaXplID0gMTAwOw0KICAgIH0NCiAgICANCiAgICAvKioNCiAgICAgKiBFbWl0IGV2ZW50IHdpdGggaGlzdG9yeSB0cmFja2luZw0KICAgICAqIEBwYXJhbSB7c3RyaW5nfSBldmVudCAtIEV2ZW50IG5hbWUNCiAgICAgKiBAcGFyYW0gey4uLip9IGFyZ3MgLSBFdmVudCBhcmd1bWVudHMNCiAgICAgKi8NCiAgICBlbWl0KGV2ZW50LCAuLi5hcmdzKSB7DQogICAgICAgIC8vIEFkZCB0byBoaXN0b3J5DQogICAgICAgIHRoaXMuZXZlbnRIaXN0b3J5LnB1c2goew0KICAgICAgICAgICAgZXZlbnQsDQogICAgICAgICAgICBhcmdzLA0KICAgICAgICAgICAgdGltZXN0YW1wOiBEYXRlLm5vdygpDQogICAgICAgIH0pOw0KICAgICAgICANCiAgICAgICAgLy8gTGltaXQgaGlzdG9yeSBzaXplDQogICAgICAgIGlmICh0aGlzLmV2ZW50SGlzdG9yeS5sZW5ndGggPiB0aGlzLm1heEhpc3RvcnlTaXplKSB7DQogICAgICAgICAgICB0aGlzLmV2ZW50SGlzdG9yeS5zaGlmdCgpOw0KICAgICAgICB9DQogICAgICAgIA0KICAgICAgICAvLyBFbWl0IHRvIGxpc3RlbmVycw0KICAgICAgICBzdXBlci5lbWl0KGV2ZW50LCAuLi5hcmdzKTsNCiAgICB9DQogICAgDQogICAgLyoqDQogICAgICogR2V0IGV2ZW50IGhpc3RvcnkNCiAgICAgKiBAcGFyYW0ge3N0cmluZ30gZXZlbnROYW1lIC0gT3B0aW9uYWwgZXZlbnQgbmFtZSB0byBmaWx0ZXINCiAgICAgKiBAcGFyYW0ge251bWJlcn0gbGltaXQgLSBMaW1pdCBudW1iZXIgb2YgcmVzdWx0cw0KICAgICAqIEByZXR1cm5zIHtBcnJheX0NCiAgICAgKi8NCiAgICBnZXRIaXN0b3J5KGV2ZW50TmFtZSA9IG51bGwsIGxpbWl0ID0gbnVsbCkgew0KICAgICAgICBsZXQgaGlzdG9yeSA9IHRoaXMuZXZlbnRIaXN0b3J5Ow0KICAgICAgICANCiAgICAgICAgaWYgKGV2ZW50TmFtZSkgew0KICAgICAgICAgICAgaGlzdG9yeSA9IGhpc3RvcnkuZmlsdGVyKGl0ZW0gPT4gaXRlbS5ldmVudCA9PT0gZXZlbnROYW1lKTsNCiAgICAgICAgfQ0KICAgICAgICANCiAgICAgICAgaWYgKGxpbWl0KSB7DQogICAgICAgICAgICBoaXN0b3J5ID0gaGlzdG9yeS5zbGljZSgtbGltaXQpOw0KICAgICAgICB9DQogICAgICAgIA0KICAgICAgICByZXR1cm4gaGlzdG9yeTsNCiAgICB9DQogICAgDQogICAgLyoqDQogICAgICogQ2xlYXIgZXZlbnQgaGlzdG9yeQ0KICAgICAqLw0KICAgIGNsZWFySGlzdG9yeSgpIHsNCiAgICAgICAgdGhpcy5ldmVudEhpc3RvcnkgPSBbXTsNCiAgICB9DQp9DQoNCi8vIFNpbmdsZXRvbiBpbnN0YW5jZQ0KZXhwb3J0IGNvbnN0IGV2ZW50QnVzID0gbmV3IEV2ZW50QnVzKCk7DQoNCg==">
+    <link rel="modulepreload" href="/assets/AppState-CAeq0AsG.js">
+    <link rel="modulepreload" href="/assets/AppEvents-d3H2C-E3.js">
+    <link rel="modulepreload" href="/assets/AppServices-L5S3hafp.js">
+    <link rel="modulepreload" href="/assets/DataManager-CXV2IdVd.js">
+    <link rel="modulepreload" href="/assets/FileManager-CcQmD2Cp.js">
+    <link rel="modulepreload" href="js/core/AppInitializationManager.js">
+    <link rel="modulepreload" href="data:text/javascript;base64,Ly8gUmVuZGVyU2VydmljZS5qcyAtIFNlcnZpY2UgdGhhdCBoYW5kbGVzIGFwcGxpY2F0aW9uIHJlbmRlcmluZwovLyBMaXN0ZW5zIHRvIHJlbmRlciByZXF1ZXN0cyB2aWEgRXZlbnRCdXMgYW5kIGRlbGVnYXRlcyB0byBBcHBSZW5kZXJlcgppbXBvcnQgeyBldmVudEJ1cyB9IGZyb20gJy4vRXZlbnRCdXMuanMnOwppbXBvcnQgeyBFVkVOVFMgfSBmcm9tICcuL0FwcEV2ZW50cy5qcyc7CmltcG9ydCB7IFNFUlZJQ0VTLCByZWdpc3RlclNlcnZpY2UgfSBmcm9tICcuL0FwcFNlcnZpY2VzLmpzJzsKaW1wb3J0IHsgQXBwUmVuZGVyZXIgfSBmcm9tICcuL0FwcFJlbmRlcmVyLmpzJzsKCi8qKgogKiBSZW5kZXJTZXJ2aWNlIC0gSGFuZGxlcyBhcHBsaWNhdGlvbiByZW5kZXJpbmcgdmlhIEV2ZW50QnVzCiAqIAogKiBUaGlzIHNlcnZpY2UgbGlzdGVucyBmb3IgcmVuZGVyIHJlcXVlc3RzIGFuZCBkZWxlZ2F0ZXMgdG8gQXBwUmVuZGVyZXIuCiAqLwpleHBvcnQgY2xhc3MgUmVuZGVyU2VydmljZSB7CiAgICBjb25zdHJ1Y3RvcihhcHApIHsKICAgICAgICB0aGlzLmFwcCA9IGFwcDsKICAgICAgICB0aGlzLmFwcFJlbmRlcmVyID0gbmV3IEFwcFJlbmRlcmVyKGFwcCk7CiAgICAgICAgdGhpcy5pc1JlbmRlcmluZyA9IGZhbHNlOwogICAgICAgIHRoaXMucmVuZGVyUXVldWUgPSBbXTsKICAgICAgICB0aGlzLnNldHVwRXZlbnRMaXN0ZW5lcnMoKTsKICAgICAgICAKICAgICAgICAvLyBSZWdpc3RlciBhcyBzZXJ2aWNlCiAgICAgICAgcmVnaXN0ZXJTZXJ2aWNlKFNFUlZJQ0VTLlJFTkRFUkVSLCB0aGlzKTsKICAgIH0KICAgIAogICAgLyoqCiAgICAgKiBTZXR1cCBFdmVudEJ1cyBsaXN0ZW5lcnMgZm9yIHJlbmRlciByZXF1ZXN0cwogICAgICovCiAgICBzZXR1cEV2ZW50TGlzdGVuZXJzKCkgewogICAgICAgIGV2ZW50QnVzLm9uKEVWRU5UUy5BUFAuUkVOREVSX1JFUVVFU1RFRCwgKCkgPT4gewogICAgICAgICAgICB0aGlzLnJlbmRlcigpOwogICAgICAgIH0pOwogICAgfQogICAgCiAgICAvKioKICAgICAqIFJlbmRlciB0aGUgYXBwbGljYXRpb24KICAgICAqIERlbGVnYXRlcyB0byBBcHBSZW5kZXJlcgogICAgICovCiAgICByZW5kZXIoKSB7CiAgICAgICAgLy8gUHJldmVudCBtdWx0aXBsZSBzaW11bHRhbmVvdXMgcmVuZGVycwogICAgICAgIGlmICh0aGlzLmlzUmVuZGVyaW5nKSB7CiAgICAgICAgICAgIHJldHVybjsKICAgICAgICB9CiAgICAgICAgCiAgICAgICAgdGhpcy5pc1JlbmRlcmluZyA9IHRydWU7CiAgICAgICAgcGVyZm9ybWFuY2UubWFyaygncmVuZGVyLXN0YXJ0Jyk7CiAgICAgICAgY29uc3QgcmVuZGVyU3RhcnQgPSBwZXJmb3JtYW5jZS5ub3coKTsKICAgICAgICAKICAgICAgICB0cnkgewogICAgICAgICAgICAvLyBEZWxlZ2F0ZSB0byBBcHBSZW5kZXJlcgogICAgICAgICAgICB0aGlzLmFwcFJlbmRlcmVyLnJlbmRlcigpOwogICAgICAgICAgICAKICAgICAgICAgICAgcGVyZm9ybWFuY2UubWFyaygncmVuZGVyLWVuZCcpOwogICAgICAgICAgICBjb25zdCByZW5kZXJUaW1lID0gcGVyZm9ybWFuY2Uubm93KCkgLSByZW5kZXJTdGFydDsKICAgICAgICAgICAgaWYgKHJlbmRlclRpbWUgPiAxMDApIHsKICAgICAgICAgICAgICAgIGNvbnNvbGUubG9nKGBbUEVSRl0gUmVuZGVyIHRvb2sgJHtyZW5kZXJUaW1lLnRvRml4ZWQoMSl9bXNgKTsKICAgICAgICAgICAgfQogICAgICAgICAgICAvLyBjb25zb2xlLmxvZyhgW0RJQUddIFJlbmRlciBjb21wbGV0ZTogJHtyZW5kZXJUaW1lLnRvRml4ZWQoMSl9bXNgKTsKICAgICAgICAgICAgCiAgICAgICAgICAgIC8vIEVtaXQgcmVuZGVyIGNvbXBsZXRlIGV2ZW50CiAgICAgICAgICAgIGV2ZW50QnVzLmVtaXQoRVZFTlRTLkFQUC5SRU5ERVJFRCk7CiAgICAgICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICAgICAgY29uc29sZS5lcnJvcignW1JlbmRlclNlcnZpY2VdIFJlbmRlciBlcnJvcjonLCBlcnJvcik7CiAgICAgICAgfSBmaW5hbGx5IHsKICAgICAgICAgICAgdGhpcy5pc1JlbmRlcmluZyA9IGZhbHNlOwogICAgICAgIH0KICAgIH0KICAgIAogICAgLyoqCiAgICAgKiBSZXF1ZXN0IGEgcmVuZGVyIChwdWJsaWMgQVBJKQogICAgICovCiAgICByZXF1ZXN0UmVuZGVyKCkgewogICAgICAgIGV2ZW50QnVzLmVtaXQoRVZFTlRTLkFQUC5SRU5ERVJfUkVRVUVTVEVEKTsKICAgIH0KICAgIAogICAgLyoqCiAgICAgKiBHZXQgdGhlIEFwcFJlbmRlcmVyIGluc3RhbmNlCiAgICAgKi8KICAgIGdldFJlbmRlcmVyKCkgewogICAgICAgIHJldHVybiB0aGlzLmFwcFJlbmRlcmVyOwogICAgfQp9Cgo=">
+    <link rel="modulepreload" href="/assets/AppRenderer-CY3rA8H9.js">
+  <script type="module" crossorigin src="/assets/index-XsTijtuR.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CNYkqtwx.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="controls">
+                <div class="dropdown">
+                    <button class="dropdown-toggle">
+                        <span>File</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button id="file-manager">📂 File Manager</button>
+                        <div style="border-top: 1px solid #444; margin: 8px 0;"></div>
+                        <button id="load-default">📄 Load default.json</button>
+                        <button id="save-default">💾 Save as default.json</button>
+                        <div style="border-top: 1px solid #444; margin: 8px 0;"></div>
+                        <button id="open-files">📎 Open Files (Images/JSON)</button>
+                        <button id="record-audio">🎤 Record Audio</button>
+                    </div>
+                </div>
+                <div id="page-tabs" class="page-tabs">
+                    <!-- Page tabs will be dynamically created here -->
+                </div>
+                <input type="file" id="file-input" accept=".json" style="display: none;">
+                <input type="file" id="file-input-images-json" accept="image/*,.json" multiple style="display: none;">
+                <button id="undo-btn" class="settings-btn" title="Undo (Ctrl+Z)" style="margin-right: 5px;">↶</button>
+                <button id="redo-btn" class="settings-btn" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" style="margin-right: 5px;">↷</button>
+                <button id="header-pin-btn" class="settings-btn" title="Pin header to top of window" style="margin-right: 5px;">📌</button>
+                <button id="search-btn" class="settings-btn" title="Search" style="margin-right: 5px;">🔍</button>
+                <button id="settings-btn" class="settings-btn" title="Settings">⚙️</button>
+            </div>
+            <div id="trash-icon" class="trash-icon" style="display: none; position: fixed; top: 10px; right: 10px; width: 60px; height: 60px; background: rgba(220, 53, 69, 0.9); border-radius: 50%; align-items: center; justify-content: center; font-size: 30px; cursor: not-allowed; z-index: 10000; border: 3px solid #dc3545; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: all 0.2s;">
+                🗑️
+            </div>
+        </header>
+        
+        <div class="bins-container" id="bins-container">
+            <!-- Bins will be dynamically created here -->
+        </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" id="context-edit">Edit</div>
+        <div class="context-menu-item" id="context-customize-visuals">Customize Visuals</div>
+        <div class="context-menu-item" id="context-view-data">View Data</div>
+        <div class="context-menu-item" id="context-add-element">Add Element</div>
+        <div class="context-menu-item" id="context-add-child-element">Add Child Element</div>
+        <div class="context-menu-item" id="context-delete-element">Delete</div>
+        <div class="context-menu-item" id="context-collapse-page">Collapse Page</div>
+        <div class="context-menu-item" id="context-add-page">Add Page</div>
+        <div class="context-menu-item" id="context-add-element-page">Add Element</div>
+        <div class="context-menu-item" id="context-add-bin">Add Bin</div>
+        <div class="context-menu-item" id="context-delete-bin">Delete Bin</div>
+        <div class="context-menu-item" id="context-delete-page">Delete Page</div>
+        <div class="context-menu-item" id="context-toggle-subtasks">Toggle All Subtasks</div>
+        <div class="context-menu-item" id="context-collapse-all-pages">Collapse All Pages</div>
+        <div class="context-menu-item" id="context-reset-day">Reset Today</div>
+    </div>
+    
+    <!-- Modal for editing/viewing -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+    
+    <!-- Global tooltip -->
+    <div id="global-tooltip" class="tooltip"></div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content settings-modal-content">
+            <span class="modal-close" id="settings-close">&times;</span>
+            <div id="settings-body"></div>
+        </div>
+    </div>
+    
+    <!-- Audio Recording Modal -->
+    <div id="audio-recording-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="modal-close" id="audio-recording-close">&times;</span>
+            <h3 style="margin-bottom: 20px; color: #ffffff;">Audio Recording</h3>
+            <div id="audio-recording-body">
+                <div id="audio-recording-status" style="margin-bottom: 15px; color: #e0e0e0;">Ready to record</div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="audio-start-btn" style="flex: 1; padding: 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Start Recording</button>
+                    <button id="audio-stop-btn" style="flex: 1; padding: 10px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Stop Recording</button>
+                </div>
+                <div id="audio-recording-time" style="text-align: center; font-size: 24px; color: #4a9eff; margin-bottom: 15px; display: none;">00:00</div>
+                <audio id="audio-preview" controls style="width: 100%; margin-bottom: 15px; display: none;"></audio>
+                <div id="audio-save-controls" style="display: none;">
+                    <input type="text" id="audio-filename" placeholder="Enter filename (optional)" style="width: 100%; padding: 8px; margin-bottom: 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #555555; border-radius: 4px;">
+                    <button id="audio-save-btn" style="width: 100%; padding: 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Recording</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Use bundled version in production, unbundled in development -->
+</body>
+</html>
+

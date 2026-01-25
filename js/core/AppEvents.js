@@ -6,6 +6,15 @@
  * 
  * All events emitted through the EventBus should use these constants.
  * This ensures consistency and makes it easier to track event usage.
+ * 
+ * EVENT STORM CONTROL:
+ * All events emitted through EventBus are automatically processed through event storm control:
+ * - Rate Limiting: Events are rate-limited per type (e.g., 60 renders/sec, 10 saves/sec)
+ * - Coalescing: Similar events are merged within time windows (e.g., multiple renders → single render)
+ * - Batching: Events are batched for efficient processing (e.g., multiple saves → single save)
+ * - Backpressure: When listeners are slow, events are queued to prevent overflow
+ * 
+ * For critical events that must bypass storm control, use eventBus.emitImmediate()
  */
 export const EVENTS = {
     /**
@@ -16,6 +25,11 @@ export const EVENTS = {
          * @event app:render-requested
          * @type {void}
          * Emitted when any module needs the UI to be re-rendered
+         * 
+         * Event Storm Control:
+         * - Rate limited to 60/second (60fps)
+         * - Coalesced within 16ms window (multiple requests → single render)
+         * - Batched for efficient processing
          */
         RENDER_REQUESTED: 'app:render-requested',
         
@@ -40,8 +54,13 @@ export const EVENTS = {
     DATA: {
         /** Request data save
          * @event data:save-requested
-         * @type {void}
+         * @type {boolean} - Optional skipSync flag
          * Emitted when data should be saved
+         * 
+         * Event Storm Control:
+         * - Rate limited to 10/second
+         * - Coalesced within 500ms window (multiple requests → single save)
+         * - Batched for efficient processing
          */
         SAVE_REQUESTED: 'data:save-requested',
         
@@ -68,18 +87,137 @@ export const EVENTS = {
     },
     
     /**
+     * Active-set memory management events
+     */
+    ACTIVE_SET: {
+        /** Document loaded into active set
+         * @event active-set:document-loaded
+         * @type {{documentId: string, duration: number, activeCount: number}}
+         * Emitted when a document is loaded into the active set
+         */
+        DOCUMENT_LOADED: 'active-set:document-loaded',
+        
+        /** Document unloaded from active set
+         * @event active-set:document-unloaded
+         * @type {{documentId: string, activeCount: number}}
+         * Emitted when a document is evicted from the active set
+         */
+        DOCUMENT_UNLOADED: 'active-set:document-unloaded',
+    },
+    
+    /**
+     * Indexing events
+     */
+    INDEXING: {
+        /** Indexing started
+         * @event indexing:started
+         * @type {{totalCount: number}}
+         * Emitted when indexing begins
+         */
+        STARTED: 'indexing:started',
+        
+        /** Indexing progress
+         * @event indexing:progress
+         * @type {{processedCount: number, totalCount: number, percentage: number}}
+         * Emitted during incremental indexing to report progress
+         */
+        PROGRESS: 'indexing:progress',
+        
+        /** Indexing complete
+         * @event indexing:complete
+         * @type {{processedCount: number, totalCount: number}}
+         * Emitted when indexing completes successfully
+         */
+        COMPLETE: 'indexing:complete',
+        
+        /** Indexing cancelled
+         * @event indexing:cancelled
+         * @type {{processedCount: number, totalCount: number}}
+         * Emitted when indexing is cancelled
+         */
+        CANCELLED: 'indexing:cancelled',
+        
+        /** Indexing error
+         * @event indexing:error
+         * @type {{error: string, processedCount: number, totalCount: number}}
+         * Emitted when indexing encounters an error
+         */
+        ERROR: 'indexing:error',
+    },
+    
+    /**
+     * Semantic operation events
+     */
+    OPERATION: {
+        /** Operation applied to canonical model
+         * @event operation:applied
+         * @type {{operation: Object, result: Object}}
+         * Emitted when a semantic operation is applied
+         * 
+         * Event Storm Control:
+         * - Rate limited to 100/second
+         * - Coalesced within 50ms window
+         * - Batched for efficient processing
+         */
+        APPLIED: 'operation:applied',
+        
+        /** Operation logged (for sync)
+         * @event operation:logged
+         * @type {{operation: Object}}
+         * Emitted when operation is logged (for future sync)
+         */
+        LOGGED: 'operation:logged'
+    },
+    
+    /**
+     * Operation sync events (for debugging/monitoring)
+     */
+    OPERATION_SYNC: {
+        /** Operation sent to server
+         * @event operation:sync:sent
+         * @type {{operation: Object, filename: string}}
+         * Emitted when operation is sent to server for sync
+         */
+        SENT: 'operation:sync:sent',
+        
+        /** Operation received from server
+         * @event operation:sync:received
+         * @type {{operation: Object, filename: string}}
+         * Emitted when operation is received from server
+         */
+        RECEIVED: 'operation:sync:received',
+        
+        /** Operation sync error
+         * @event operation:sync:error
+         * @type {{error: string, operation: Object, filename: string}}
+         * Emitted when operation sync encounters an error
+         */
+        ERROR: 'operation:sync:error'
+    },
+    
+    /**
      * Element events
      */
     ELEMENT: {
         /** Element created
          * @event element:created
          * @type {{pageId: string, binId: string, elementIndex: number, element: Object}}
+         * 
+         * Event Storm Control:
+         * - Rate limited to 50/second
+         * - Coalesced within 100ms window
+         * - Batched for efficient processing
          */
         CREATED: 'element:created',
         
         /** Element updated
          * @event element:updated
          * @type {{pageId: string, binId: string, elementIndex: number, element: Object}}
+         * 
+         * Event Storm Control:
+         * - Rate limited to 100/second
+         * - Coalesced within 50ms window (multiple updates to same element → latest update)
+         * - Batched for efficient processing
          */
         UPDATED: 'element:updated',
         
@@ -92,6 +230,11 @@ export const EVENTS = {
         /** Element deleted
          * @event element:deleted
          * @type {{pageId: string, binId: string, elementIndex: number}}
+         * 
+         * Event Storm Control:
+         * - Rate limited to 50/second
+         * - Coalesced within 100ms window
+         * - Batched for efficient processing
          */
         DELETED: 'element:deleted',
         

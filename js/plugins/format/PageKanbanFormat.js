@@ -203,7 +203,7 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
         if (!this.viewProjection) {
             const appState = app.appState;
             if (appState) {
-                this.viewProjection = new ViewProjection({
+                const customProjection = new ViewProjection({
                     viewId: `kanban-${page.id}`,
                     pageId: page.id,
                     onUpdate: (projectedData) => {
@@ -215,8 +215,23 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                     }
                 });
                 
-                // Initialize projection
-                this.viewProjection.init(appState, container);
+                // Override project() to call this format renderer's project method
+                // Use arrow function to preserve 'this' context
+                const formatRenderer = this;
+                customProjection.project = (canonicalModel) => {
+                    return formatRenderer.project(canonicalModel);
+                };
+                
+                // Override applyOperation() to call this format renderer's applyOperation method
+                customProjection.applyOperation = (operation) => {
+                    return formatRenderer.applyOperation(operation);
+                };
+                
+                this.viewProjection = customProjection;
+                
+                // Set up ViewProjection but don't call init() yet (wait for DOM)
+                this.viewProjection.canonicalModel = appState;
+                this.viewProjection.container = container;
                 
                 // Register with ViewManager
                 const viewManager = getService(SERVICES.VIEW_MANAGER);
@@ -230,6 +245,8 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                 this.currentPageId = page.id;
                 this.viewProjection.setPageId(page.id);
             }
+            // Update container reference
+            this.viewProjection.container = container;
         }
         
         // Only clear if not preserving format (prevents flicker during drag operations)
@@ -904,16 +921,24 @@ export default class PageKanbanFormat extends BaseFormatRenderer {
                                 dragPayload.binId || dragPayload.sourceBinId, 
                                 dragPayload.elementIndex || dragPayload.sourceElementIndex,
                                 pageId, binId, targetIndex,
-                            dragPayload.isChild || false,
-                            dragPayload.parentElementIndex || null,
-                            dragPayload.childIndex || null
-                        );
+                                dragPayload.isChild || false,
+                                dragPayload.parentElementIndex || null,
+                                dragPayload.childIndex || null
+                            );
+                        }
                     }
                 }
             } catch (err) {
                 console.error('Error handling kanban drop:', err);
             }
         });
+        
+        // Now that DOM is ready, initialize ViewProjection if it exists
+        if (this.viewProjection && !this.viewProjection.isActive) {
+            this.viewProjection.isActive = true;
+            this.viewProjection._subscribeToOperations();
+            // Don't call update() here - let the normal render flow handle initial display
+        }
     }
     
     /**

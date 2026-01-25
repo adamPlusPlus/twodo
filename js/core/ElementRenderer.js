@@ -6,6 +6,9 @@ import { ElementTypeRegistry } from './elements/ElementTypeRegistry.js';
 import { SharedDragDrop } from '../utils/SharedDragDrop.js';
 import { EventHelper } from '../utils/EventHelper.js';
 import { ItemHierarchy } from '../utils/ItemHierarchy.js';
+import { ViewportRenderer } from './ViewportRenderer.js';
+import { viewportConfig } from './ViewportConfig.js';
+import { performanceBudgetManager } from './PerformanceBudgetManager.js';
 
 /**
  * ElementRenderer - Handles rendering of elements and their children
@@ -40,6 +43,122 @@ export class ElementRenderer {
 
     _getItemIndexForGroup(group) {
         return ItemHierarchy.buildItemIndex(group?.items || []);
+    }
+    
+    /**
+     * Calculate drop position for drag-drop operations
+     * Works with both virtualized and non-virtualized lists
+     * @param {HTMLElement} elementsList - The elements list container
+     * @param {number} mouseY - Mouse Y position (clientY)
+     * @param {Array} items - Items array (group.items)
+     * @param {Object} group - Group data object
+     * @returns {Object} - { insertIndex, targetElement }
+     */
+    _calculateDropPosition(elementsList, mouseY, items, group) {
+        const virtualScroller = elementsList._virtualScroller;
+        const elementsListRect = elementsList.getBoundingClientRect();
+        const relativeY = mouseY - elementsListRect.top;
+        
+        let insertIndex = items.length; // Default to end
+        let targetElement = null;
+        
+        if (virtualScroller) {
+            // Virtualized calculation: use scroll position + item heights
+            const scrollTop = elementsList.scrollTop;
+            const absoluteY = relativeY + scrollTop;
+            const defaultHeight = viewportConfig.getDefaultHeight();
+            
+            // Calculate accumulated heights to find insert index
+            let accumulatedHeight = 0;
+            
+            for (let i = 0; i < items.length; i++) {
+                const height = virtualScroller.heightCache.get(i) || defaultHeight;
+                const itemTop = accumulatedHeight;
+                const itemBottom = accumulatedHeight + height;
+                const itemMiddle = (itemTop + itemBottom) / 2;
+                
+                // Check if mouse is within this item's bounds
+                if (absoluteY >= itemTop && absoluteY < itemBottom) {
+                    // Determine if above or below middle
+                    if (absoluteY < itemMiddle) {
+                        insertIndex = i;
+                    } else {
+                        insertIndex = i + 1;
+                    }
+                    break;
+                }
+                
+                // If past this item, continue
+                if (absoluteY >= itemBottom) {
+                    insertIndex = i + 1;
+                }
+                
+                accumulatedHeight = itemBottom;
+            }
+            
+            // Clamp to valid range
+            insertIndex = Math.max(0, Math.min(insertIndex, items.length));
+            
+            // Try to find the target element in the visible range
+            const range = virtualScroller.getVisibleRange();
+            for (let i = range.startIndex; i < range.endIndex && i < items.length; i++) {
+                const element = elementsList.querySelector(`[data-element-index="${i}"]`);
+                if (element && !element.classList.contains('child-element')) {
+                    // Check if this is the target element
+                    const elementRect = element.getBoundingClientRect();
+                    const elementTop = elementRect.top - elementsListRect.top;
+                    const elementBottom = elementRect.bottom - elementsListRect.top;
+                    
+                    if (relativeY >= elementTop && relativeY < elementBottom) {
+                        targetElement = element;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Non-virtualized calculation: use existing DOM-based approach
+            const allElements = Array.from(elementsList.querySelectorAll('.element:not(.child-element)'));
+            
+            for (let i = 0; i < allElements.length; i++) {
+                const elementRect = allElements[i].getBoundingClientRect();
+                const elementTop = elementRect.top - elementsListRect.top;
+                const elementBottom = elementRect.bottom - elementsListRect.top;
+                const elementMiddle = (elementTop + elementBottom) / 2;
+                
+                // If mouse is above the middle of this element, insert before it
+                if (relativeY < elementMiddle) {
+                    const elementIndexStr = allElements[i].dataset.elementIndex;
+                    if (elementIndexStr) {
+                        if (typeof elementIndexStr === 'string' && elementIndexStr.includes('-')) {
+                            const parentIndex = parseInt(elementIndexStr.split('-')[0]);
+                            if (!isNaN(parentIndex)) {
+                                insertIndex = parentIndex;
+                                targetElement = allElements[i];
+                            }
+                        } else {
+                            const elementIndex = parseInt(elementIndexStr);
+                            if (!isNaN(elementIndex)) {
+                                insertIndex = elementIndex;
+                                targetElement = allElements[i];
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        
+        // If we didn't find a target element, check if we should append at the end
+        if (targetElement === null) {
+            if (group && insertIndex >= (group.items?.length || 0)) {
+                const addButton = elementsList.querySelector('.add-element-btn');
+                if (addButton) {
+                    targetElement = addButton;
+                }
+            }
+        }
+        
+        return { insertIndex, targetElement };
     }
 
     _getRootItemByIndex(group, elementIndex) {
@@ -264,16 +383,30 @@ export class ElementRenderer {
             content._dropTargetIndex = null;
         });
         
-        childItems.forEach((child, childIndex) => {
-            // For nested children, we use a special identifier: parentIndex-childIndex
-            // But for rendering purposes, we still need to track the parent
-            const childElement = this.renderElement(pageId, binId, child, `${parentElementIndex}-${childIndex}`, childIndex, depth + 1);
-            if (childElement) {
-                // Mark as child element for styling
-                childElement.classList.add('child-element');
-                content.appendChild(childElement);
+        // Use viewport rendering for large child lists (50+ items)
+        const virtualScroller = ViewportRenderer.renderViewport(
+            content,
+            childItems,
+            (child, childIndex) => {
+                // For nested children, we use a special identifier: parentIndex-childIndex
+                // But for rendering purposes, we still need to track the parent
+                const childElement = this.renderElement(pageId, binId, child, `${parentElementIndex}-${childIndex}`, childIndex, depth + 1);
+                if (childElement) {
+                    // Mark as child element for styling
+                    childElement.classList.add('child-element');
+                    return childElement;
+                }
+                return null;
+            },
+            {
+                threshold: 50
             }
-        });
+        );
+        
+        // Store virtual scroller reference
+        if (virtualScroller) {
+            content._virtualScroller = virtualScroller;
+        }
         
         container.appendChild(content);
         return container;
@@ -320,12 +453,16 @@ export class ElementRenderer {
         
         div.className = classes.join(' ');
         
-        const elementId = `${pageId}-${binId}-${elementIndex}`;
+        // Use element.id as primary identifier, fallback to composite ID
+        const itemId = element.id || `${pageId}-${binId}-${elementIndex}`;
+        const elementId = itemId; // Keep for backward compatibility with visual settings
         
         // Set data attributes early for ID-first lookups
         div.dataset.pageId = pageId;
         div.dataset.binId = binId;
-        div.setAttribute('data-element-id', elementId);
+        div.dataset.elementIndex = elementIndex; // Keep for backward compatibility
+        div.dataset.elementId = itemId; // Primary identifier
+        div.setAttribute('data-element-id', itemId);
         
         // Apply visual settings for this element (includes tag-based settings)
         if (this.app.visualSettingsManager) {
@@ -353,7 +490,20 @@ export class ElementRenderer {
             div.dataset.dragType = 'element';
             div.dataset.pageId = pageId;
             div.dataset.binId = binId;
-            div.dataset.elementIndex = elementIndex;
+            div.dataset.elementIndex = elementIndex; // Keep for backward compatibility
+            div.dataset.elementId = itemId; // Primary identifier
+            
+            // Setup drag start to include itemId
+            div.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', JSON.stringify({
+                    type: 'element',
+                    itemId: itemId, // Primary identifier
+                    pageId,
+                    binId,
+                    elementIndex // Keep for backward compatibility
+                }));
+            });
         }
         
         // Add progress bar plugin if enabled
@@ -776,55 +926,17 @@ export class ElementRenderer {
                 // Update main elements list drop indicator for regular elements
                 const elementsList = div.closest('.elements-list');
                 if (elementsList && dragData.type === 'element') {
-                    // Calculate drop position based on mouse Y
-                    const mouseY = e.clientY;
-                    const elementsListRect = elementsList.getBoundingClientRect();
-                    const relativeY = mouseY - elementsListRect.top;
+                    // Get group data for items array
+                    const { group } = this._getGroupByIds(pageId, binId);
+                    const items = group?.items || [];
                     
-                    // Get all regular elements (not nested children) in the list
-                    const allElements = Array.from(elementsList.querySelectorAll('.element:not(.child-element)'));
-                    let insertIndex = allElements.length; // Default to end
-                    let targetElement = null;
-                    
-                    // Find which position we're hovering over
-                    for (let i = 0; i < allElements.length; i++) {
-                        const elementRect = allElements[i].getBoundingClientRect();
-                        const elementTop = elementRect.top - elementsListRect.top;
-                        const elementBottom = elementRect.bottom - elementsListRect.top;
-                        const elementMiddle = (elementTop + elementBottom) / 2;
-                        
-                        // If mouse is above the middle of this element, insert before it
-                        if (relativeY < elementMiddle) {
-                            const elementIndexStr = allElements[i].dataset.elementIndex;
-                            if (elementIndexStr) {
-                                if (typeof elementIndexStr === 'string' && elementIndexStr.includes('-')) {
-                                    const parentIndex = parseInt(elementIndexStr.split('-')[0]);
-                                    if (!isNaN(parentIndex)) {
-                                        insertIndex = parentIndex;
-                                        targetElement = allElements[i];
-                                    }
-                                } else {
-                                    const elementIndex = parseInt(elementIndexStr);
-                                    if (!isNaN(elementIndex)) {
-                                        insertIndex = elementIndex;
-                                        targetElement = allElements[i];
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    
-                    // If we didn't find a target element, check if we should append at the end
-                    if (targetElement === null) {
-                        const { group } = this._getGroupByIds(pageId, binId);
-                        if (group && insertIndex >= (group.items?.length || 0)) {
-                            const addButton = elementsList.querySelector('.add-element-btn');
-                            if (addButton) {
-                                targetElement = addButton;
-                            }
-                        }
-                    }
+                    // Calculate drop position using helper (works for both virtualized and non-virtualized)
+                    const { insertIndex, targetElement } = this._calculateDropPosition(
+                        elementsList,
+                        e.clientY,
+                        items,
+                        group
+                    );
                     
                     // Update drop indicator
                     let dropIndicator = elementsList._dropIndicator;
@@ -874,12 +986,43 @@ export class ElementRenderer {
                         elementsList._dropIndicator = dropIndicator;
                         elementsList._dropTargetIndex = insertIndex;
                         
-                        // Insert indicator at the correct position
-                        if (targetElement && elementsList.contains(targetElement) && targetElement.parentElement === elementsList) {
-                            elementsList.insertBefore(dropIndicator, targetElement);
-                        } else {
-                            // Fallback: append to end
+                        // Position indicator based on virtualization status
+                        const virtualScroller = elementsList._virtualScroller;
+                        if (virtualScroller && targetElement === null) {
+                            // For virtualized lists without a target element, calculate position from heights
+                            const scrollTop = elementsList.scrollTop;
+                            const defaultHeight = viewportConfig.getDefaultHeight();
+                            let accumulatedHeight = 0;
+                            
+                            for (let i = 0; i < insertIndex && i < items.length; i++) {
+                                accumulatedHeight += virtualScroller.heightCache.get(i) || defaultHeight;
+                            }
+                            
+                            // Calculate relative position (subtract scroll to get viewport-relative)
+                            const indicatorY = accumulatedHeight - scrollTop;
+                            const elementsListRect = elementsList.getBoundingClientRect();
+                            
+                            // Position absolutely within the container
+                            dropIndicator.style.position = 'absolute';
+                            dropIndicator.style.top = `${indicatorY}px`;
+                            dropIndicator.style.left = '0';
+                            dropIndicator.style.right = '0';
+                            dropIndicator.style.width = '100%';
+                            
+                            // Ensure container has relative positioning
+                            if (getComputedStyle(elementsList).position === 'static') {
+                                elementsList.style.position = 'relative';
+                            }
+                            
                             elementsList.appendChild(dropIndicator);
+                        } else {
+                            // Non-virtualized or has target element: use existing logic
+                            if (targetElement && elementsList.contains(targetElement) && targetElement.parentElement === elementsList) {
+                                elementsList.insertBefore(dropIndicator, targetElement);
+                            } else {
+                                // Fallback: append to end
+                                elementsList.appendChild(dropIndicator);
+                            }
                         }
                     }
                 }
@@ -1657,10 +1800,11 @@ export class ElementRenderer {
                 relationshipIndicator.title = 'Has relationships - click to manage';
                 relationshipIndicator.style.cssText = 'margin-left: 8px; cursor: pointer; font-size: 14px; opacity: 0.7;';
                 relationshipIndicator.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const elementId = this.app.relationshipManager.getElementId(pageId, binId, elementIndex);
-                    const relationships = this.app.relationshipManager.getRelationships(elementId);
-                    const inverseRelationships = this.app.relationshipManager.getInverseRelationships(elementId);
+                    performanceBudgetManager.measureOperation('CLICKING', () => {
+                        e.stopPropagation();
+                        const elementId = this.app.relationshipManager.getElementId(pageId, binId, elementIndex);
+                        const relationships = this.app.relationshipManager.getRelationships(elementId);
+                        const inverseRelationships = this.app.relationshipManager.getInverseRelationships(elementId);
                     
                     // Show relationships modal
                     const modal = document.getElementById('modal');
@@ -1757,34 +1901,39 @@ export class ElementRenderer {
                     
                     // Add event listeners
                     document.getElementById('add-relationship-btn').addEventListener('click', () => {
-                        const type = document.getElementById('relationship-type').value;
-                        const targetId = document.getElementById('relationship-target').value;
-                        
-                        if (!targetId) {
-                            alert('Please select a target element');
-                            return;
-                        }
-                        
-                        const success = this.app.relationshipManager.addRelationship(elementId, targetId, type);
-                        if (success) {
-                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
-                            this.app.modalHandler.closeModal();
-                        } else {
-                            alert('Failed to add relationship. Check console for details.');
-                        }
+                        performanceBudgetManager.measureOperation('CLICKING', () => {
+                            const type = document.getElementById('relationship-type').value;
+                            const targetId = document.getElementById('relationship-target').value;
+                            
+                            if (!targetId) {
+                                alert('Please select a target element');
+                                return;
+                            }
+                            
+                            const success = this.app.relationshipManager.addRelationship(elementId, targetId, type);
+                            if (success) {
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                                this.app.modalHandler.closeModal();
+                            } else {
+                                alert('Failed to add relationship. Check console for details.');
+                            }
+                        }, { source: 'ElementRenderer-addRelationship' });
                     });
                     
                     // Remove relationship buttons
                     document.querySelectorAll('.remove-relationship').forEach(btn => {
                         btn.addEventListener('click', () => {
-                            const toId = btn.dataset.to;
-                            const type = btn.dataset.type;
-                            this.app.relationshipManager.removeRelationship(elementId, toId, type);
-                            eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
-                            this.app.modalHandler.closeModal();
+                            performanceBudgetManager.measureOperation('CLICKING', () => {
+                                const toId = btn.dataset.to;
+                                const type = btn.dataset.type;
+                                this.app.relationshipManager.removeRelationship(elementId, toId, type);
+                                eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
+                                this.app.modalHandler.closeModal();
+                            }, { source: 'ElementRenderer-removeRelationship' });
                         });
                     });
-                });
+                }, { source: 'ElementRenderer-relationshipIndicator' });
+            });
                 
                 // Add to task header if it exists, otherwise add to div
                 const taskHeader = div.querySelector('.task-header');

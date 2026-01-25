@@ -2,10 +2,17 @@
 import { DataUtils } from '../utils/data.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
 import { ItemHierarchy } from '../utils/ItemHierarchy.js';
+import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
+import { asyncIndexer } from '../core/AsyncIndexer.js';
 
 export class SearchIndex {
     constructor() {
         this.index = new Map(); // elementId -> searchable data
+        
+        // Set up async indexer
+        asyncIndexer.setIndexFunction((documentId) => this.indexDocument(documentId));
+        
+        // Start async rebuild (non-blocking)
         this.rebuildIndex();
     }
     
@@ -17,9 +24,10 @@ export class SearchIndex {
     }
     
     /**
-     * Rebuild the entire search index
+     * Rebuild the entire search index (async, incremental)
      */
-    rebuildIndex() {
+    async rebuildIndex() {
+        // Clear existing index
         this.index.clear();
         
         const appState = this._getAppState();
@@ -28,21 +36,83 @@ export class SearchIndex {
             return;
         }
         
-        appState.documents.forEach(page => {
-            if (page && page.groups) {
-                page.groups.forEach(bin => {
-                    const items = bin.items || [];
-                    bin.items = items;
-                    if (items.length > 0) {
-                        const itemIndex = ItemHierarchy.buildItemIndex(items);
-                        items.forEach((element, elementIndex) => {
-                            const elementId = this.getElementId(page.id, bin.id, elementIndex);
-                            this.index.set(elementId, this.extractSearchableData(page, bin, element, elementIndex, itemIndex));
-                        });
-                    }
-                });
+        // Get all document IDs
+        const documentIds = appState.documents
+            .filter(page => page && page.id)
+            .map(page => page.id);
+        
+        if (documentIds.length === 0) {
+            return;
+        }
+        
+        // Start async incremental indexing
+        await asyncIndexer.indexDocuments(documentIds, {
+            priority: 'low',
+            onProgress: (processed, total) => {
+                if (asyncIndexer.config.shouldLogProgress()) {
+                    console.log(`[SearchIndex] Indexing progress: ${processed}/${total}`);
+                }
+            },
+            onComplete: (processed, total) => {
+                if (asyncIndexer.config.shouldLogCompletion()) {
+                    console.log(`[SearchIndex] Indexing complete: ${processed}/${total} documents`);
+                }
             }
         });
+    }
+    
+    /**
+     * Index a single document incrementally
+     * @param {string} documentId - Document ID
+     * @returns {Promise<void>}
+     */
+    async indexDocument(documentId) {
+        const appState = this._getAppState();
+        if (!appState || !appState.documents) {
+            return;
+        }
+        
+        // Find document (may need to load from active set)
+        let page = appState.documents.find(p => p.id === documentId);
+        
+        // If document not found or is metadata-only, try to load it
+        if (!page || !page.groups) {
+            // Document might be in active set or needs loading
+            // For now, skip metadata-only documents
+            return;
+        }
+        
+        // Index all elements in this document
+        if (page.groups) {
+            page.groups.forEach(bin => {
+                const items = bin.items || [];
+                if (items.length > 0) {
+                    const itemIndex = ItemHierarchy.buildItemIndex(items);
+                    items.forEach((element, elementIndex) => {
+                        const elementId = this.getElementId(page.id, bin.id, elementIndex);
+                        this.index.set(elementId, this.extractSearchableData(page, bin, element, elementIndex, itemIndex));
+                    });
+                }
+            });
+        }
+    }
+    
+    /**
+     * Index multiple documents in batch
+     * @param {Array<string>} documentIds - Array of document IDs
+     * @returns {Promise<void>}
+     */
+    async indexDocuments(documentIds) {
+        await asyncIndexer.indexDocuments(documentIds, {
+            priority: 'normal'
+        });
+    }
+    
+    /**
+     * Cancel in-progress indexing
+     */
+    cancelIndexing() {
+        asyncIndexer.cancelIndexing();
     }
     
     /**
@@ -87,10 +157,11 @@ export class SearchIndex {
      * @returns {Array} - Array of matching element data
      */
     search(query, filters = {}) {
-        const normalizedQuery = query ? query.toLowerCase().trim() : '';
-        const results = [];
-        
-        for (const [elementId, elementData] of this.index.entries()) {
+        return performanceBudgetManager.measureOperation('SEARCH', () => {
+            const normalizedQuery = query ? query.toLowerCase().trim() : '';
+            const results = [];
+            
+            for (const [elementId, elementData] of this.index.entries()) {
             let matches = true;
             
             // Text search
@@ -152,15 +223,16 @@ export class SearchIndex {
                 }
             }
             
-            if (matches) {
-                results.push({
-                    ...elementData,
-                    elementId
-                });
+                if (matches) {
+                    results.push({
+                        ...elementData,
+                        elementId
+                    });
+                }
             }
-        }
-        
-        return results;
+            
+            return results;
+        }, { source: 'SearchIndex-search' });
     }
     
     /**

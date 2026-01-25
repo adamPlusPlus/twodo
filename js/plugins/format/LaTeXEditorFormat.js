@@ -199,6 +199,56 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
             app.latexErrorChecker = new LaTeXErrorChecker(app);
         }
         
+        // Initialize ViewProjection if not already done
+        if (!this.viewProjection) {
+            const appState = app.appState;
+            if (appState) {
+                const customProjection = new ViewProjection({
+                    viewId: `latex-editor-${page.id}`,
+                    pageId: page.id,
+                    onUpdate: (projectedData) => {
+                        // Update LaTeX editor when projection updates
+                        this._updateLaTeXDisplay(projectedData);
+                    },
+                    filterOperations: (operation) => {
+                        return this.isOperationRelevant(operation);
+                    }
+                });
+                
+                // Override project() to call this format renderer's project method
+                // Use arrow function to preserve 'this' context
+                const formatRenderer = this;
+                customProjection.project = (canonicalModel) => {
+                    return formatRenderer.project(canonicalModel);
+                };
+                
+                // Override applyOperation() to call this format renderer's applyOperation method
+                customProjection.applyOperation = (operation) => {
+                    return formatRenderer.applyOperation(operation);
+                };
+                
+                this.viewProjection = customProjection;
+                
+                // Set up ViewProjection but don't call init() yet (wait for DOM)
+                this.viewProjection.canonicalModel = appState;
+                this.viewProjection.container = container;
+                
+                // Register with ViewManager
+                const viewManager = getService(SERVICES.VIEW_MANAGER);
+                if (viewManager) {
+                    viewManager.registerView(this.viewProjection, page.id);
+                }
+            }
+        } else {
+            // Update page ID if changed
+            if (this.currentPageId !== page.id) {
+                this.currentPageId = page.id;
+                this.viewProjection.setPageId(page.id);
+            }
+            // Update container reference
+            this.viewProjection.container = container;
+        }
+        
         // Initialize LaTeX parser and renderer
         const latexParser = new LaTeXParser();
         const latexRenderer = new LaTeXRenderer(app.latexFileManager);
@@ -605,17 +655,23 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
                         this.updateOutline(outlineContainer, editTextarea.value);
                     }
                 }
+                
+                // Run error check if enabled (debounced)
+                if (errorCheckEnabled) {
+                    clearTimeout(errorCheckTimeout);
+                    errorCheckTimeout = setTimeout(() => {
+                        runErrorCheck();
+                    }, 500); // Longer delay for error checking
+                }
             }, { source: 'LaTeXEditorFormat-editTextarea' });
         });
-            
-            // Run error check if enabled (debounced)
-            if (errorCheckEnabled) {
-                clearTimeout(errorCheckTimeout);
-                errorCheckTimeout = setTimeout(() => {
-                    runErrorCheck();
-                }, 500); // Longer delay for error checking
-            }
-        });
+        
+        // Now that DOM is ready, initialize ViewProjection if it exists
+        if (this.viewProjection && !this.viewProjection.isActive) {
+            this.viewProjection.isActive = true;
+            this.viewProjection._subscribeToOperations();
+            // Don't call update() here - let the normal render flow handle initial display
+        }
         
         // Initial render
         setViewMode(currentViewMode);

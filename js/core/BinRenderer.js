@@ -3,6 +3,10 @@
 import { eventBus } from './EventBus.js';
 import { EventHelper } from '../utils/EventHelper.js';
 import { ItemHierarchy } from '../utils/ItemHierarchy.js';
+import { ViewportRenderer } from './ViewportRenderer.js';
+import { viewportConfig } from './ViewportConfig.js';
+import { activeSetManager } from './ActiveSetManager.js';
+import { getService, SERVICES } from './AppServices.js';
 
 /**
  * BinRenderer - Handles rendering of bins
@@ -15,12 +19,123 @@ export class BinRenderer {
     }
     
     /**
+     * Calculate drop position for drag-drop operations
+     * Works with both virtualized and non-virtualized lists
+     * @param {HTMLElement} elementsList - The elements list container
+     * @param {number} mouseY - Mouse Y position (clientY)
+     * @param {Array} items - Items array (rootItems for virtualized, bin.items for non-virtualized)
+     * @param {Object} bin - Bin data object
+     * @returns {Object} - { insertIndex, targetElement }
+     */
+    _calculateDropPosition(elementsList, mouseY, items, bin) {
+        const virtualScroller = elementsList._virtualScroller;
+        const elementsListRect = elementsList.getBoundingClientRect();
+        const relativeY = mouseY - elementsListRect.top;
+        
+        let insertIndex = items.length; // Default to end
+        let targetElement = null;
+        
+        if (virtualScroller) {
+            // Virtualized calculation: use scroll position + item heights
+            const scrollTop = elementsList.scrollTop;
+            const absoluteY = relativeY + scrollTop;
+            const defaultHeight = viewportConfig.getDefaultHeight();
+            
+            // Optimized linear search with early exit
+            let accumulatedHeight = 0;
+            
+            for (let i = 0; i < items.length; i++) {
+                const height = virtualScroller.heightCache.get(i) || defaultHeight;
+                const itemTop = accumulatedHeight;
+                const itemBottom = accumulatedHeight + height;
+                const itemMiddle = (itemTop + itemBottom) / 2;
+                
+                // Check if mouse is within this item's bounds
+                if (absoluteY >= itemTop && absoluteY < itemBottom) {
+                    // Determine if above or below middle
+                    insertIndex = absoluteY < itemMiddle ? i : i + 1;
+                    break; // Early exit - found the item
+                }
+                
+                // Track the last position we've passed (for when we're past all items)
+                if (absoluteY >= itemBottom) {
+                    insertIndex = i + 1;
+                }
+                
+                accumulatedHeight = itemBottom;
+            }
+            
+            // Clamp to valid range
+            insertIndex = Math.max(0, Math.min(insertIndex, items.length));
+            
+            // Try to find the target element in the visible range
+            const range = virtualScroller.getVisibleRange();
+            for (let i = range.startIndex; i < range.endIndex && i < items.length; i++) {
+                const element = elementsList.querySelector(`[data-element-index="${i}"]`);
+                if (element && !element.classList.contains('child-element')) {
+                    // Check if this is the target element
+                    const elementRect = element.getBoundingClientRect();
+                    const elementTop = elementRect.top - elementsListRect.top;
+                    const elementBottom = elementRect.bottom - elementsListRect.top;
+                    
+                    if (relativeY >= elementTop && relativeY < elementBottom) {
+                        targetElement = element;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Non-virtualized calculation: use existing DOM-based approach
+            const elements = Array.from(elementsList.querySelectorAll('.element:not(.child-element)'));
+            
+            for (let i = 0; i < elements.length; i++) {
+                const elementRect = elements[i].getBoundingClientRect();
+                const elementTop = elementRect.top - elementsListRect.top;
+                const elementBottom = elementRect.bottom - elementsListRect.top;
+                const elementMiddle = (elementTop + elementBottom) / 2;
+                
+                // If mouse is above the middle of this element, insert before it
+                if (relativeY < elementMiddle) {
+                    const elementIndexStr = elements[i].dataset.elementIndex;
+                    if (elementIndexStr) {
+                        // Handle child elements - get parent index
+                        if (typeof elementIndexStr === 'string' && elementIndexStr.includes('-')) {
+                            const parentIndex = parseInt(elementIndexStr.split('-')[0]);
+                            if (!isNaN(parentIndex)) {
+                                insertIndex = parentIndex;
+                                targetElement = elements[i];
+                            }
+                        } else {
+                            const elementIndex = parseInt(elementIndexStr);
+                            if (!isNaN(elementIndex)) {
+                                insertIndex = elementIndex;
+                                targetElement = elements[i];
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        
+        // If we didn't find a target element, check if we should append at the end
+        if (targetElement === null && insertIndex >= items.length) {
+            const addButton = elementsList.querySelector('.add-element-btn');
+            if (addButton) {
+                targetElement = addButton;
+            }
+        }
+        
+        return { insertIndex, targetElement };
+    }
+    
+    /**
      * Render a bin element
      * @param {string} pageId - Page ID
      * @param {Object} bin - Bin data object
      * @returns {HTMLElement} The rendered bin element
      */
-    renderBin(pageId, bin) {
+    async renderBin(pageId, bin) {
         const binDiv = document.createElement('div');
         binDiv.className = 'bin';
         binDiv.dataset.binId = bin.id;
@@ -28,9 +143,30 @@ export class BinRenderer {
         binDiv.draggable = true;
         binDiv.dataset.dragType = 'bin';
         
+        // Check if document is loaded (for lazy loading support)
+        const appState = getService(SERVICES.APP_STATE);
+        let page = appState?.documents?.find(p => p.id === pageId);
+        
+        // If page is metadata-only or doesn't have groups, try to load it
+        if (activeSetManager.config.isEnabled() && (!page || !page.groups)) {
+            // Document might not be loaded - trigger loading
+            const loadedPage = await activeSetManager.getDocument(pageId);
+            if (loadedPage) {
+                page = loadedPage;
+                // Update bin from loaded page
+                const loadedBin = page.groups?.find(g => g.id === bin.id);
+                if (loadedBin) {
+                    bin = loadedBin;
+                }
+            } else {
+                // Show loading indicator if document can't be loaded
+                binDiv.innerHTML = '<div class="loading-indicator" style="padding: 20px; text-align: center; color: #888;">Loading document...</div>';
+                return binDiv;
+            }
+        }
+        
         // Apply visual settings for this bin (includes tag-based settings)
         if (this.app.visualSettingsManager) {
-            const page = this.app.appState?.documents?.find(page => page.id === pageId);
             const viewFormat = page?.format || 'default';
             // Tags are automatically retrieved and applied in applyVisualSettings
             this.app.visualSettingsManager.applyVisualSettings(binDiv, 'bin', bin.id, pageId, viewFormat);
@@ -81,11 +217,25 @@ export class BinRenderer {
         bin.items = items;
 
         const rootItems = ItemHierarchy.getRootItems(items);
-        rootItems.forEach((element, elIndex) => {
-            // Delegate to ElementRenderer (will be created)
-            const elementNode = this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
-            elementsList.appendChild(elementNode);
-        });
+        
+        // Use viewport rendering for large lists (50+ items)
+        // VirtualScroller will handle the scrolling container setup
+        const virtualScroller = ViewportRenderer.renderViewport(
+            elementsList,
+            rootItems,
+            (element, elIndex) => {
+                // Delegate to ElementRenderer
+                return this.app.renderService.getRenderer().renderElement(pageId, bin.id, element, elIndex);
+            },
+            {
+                threshold: 50 // Use virtualization for 50+ items
+            }
+        );
+        
+        // Store virtual scroller reference for cleanup/updates if needed
+        if (virtualScroller) {
+            elementsList._virtualScroller = virtualScroller;
+        }
         
         const addElementBtn = document.createElement('button');
         addElementBtn.className = 'add-element-btn';
@@ -389,6 +539,11 @@ export class BinRenderer {
             });
         };
         
+        // Throttle indicator updates using requestAnimationFrame
+        let pendingUpdate = null;
+        let lastMouseY = null;
+        const MOUSE_MOVE_THRESHOLD = 2; // Only recalculate if mouse moved more than 2px
+        
         // Helper function to calculate and show drop indicator
         const updateDropIndicator = (e, elementsList, bin) => {
             const dragData = this.app.appState.dragData || (() => {
@@ -408,6 +563,10 @@ export class BinRenderer {
                     elementsList._dropIndicator = null;
                     elementsList._dropTargetIndex = null;
                 }
+                if (pendingUpdate) {
+                    cancelAnimationFrame(pendingUpdate);
+                    pendingUpdate = null;
+                }
                 return;
             }
             
@@ -415,86 +574,107 @@ export class BinRenderer {
             e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
             
-            // Find which position we're hovering over
-            const elements = Array.from(elementsList.querySelectorAll('.element:not(.child-element)'));
-            const mouseY = e.clientY;
-            const elementsListRect = elementsList.getBoundingClientRect();
-            const relativeY = mouseY - elementsListRect.top;
+            // Throttle updates: only recalculate if mouse moved significantly
+            const currentMouseY = e.clientY;
+            if (lastMouseY !== null && Math.abs(currentMouseY - lastMouseY) < MOUSE_MOVE_THRESHOLD) {
+                return; // Skip update if mouse hasn't moved much
+            }
+            lastMouseY = currentMouseY;
             
-            // Find the insertion point
-            let insertIndex = bin.items.length; // Default to end
-            let targetElement = null;
+            // Cancel any pending update
+            if (pendingUpdate) {
+                cancelAnimationFrame(pendingUpdate);
+            }
             
-            for (let i = 0; i < elements.length; i++) {
-                const elementRect = elements[i].getBoundingClientRect();
-                const elementTop = elementRect.top - elementsListRect.top;
-                const elementBottom = elementRect.bottom - elementsListRect.top;
-                const elementMiddle = (elementTop + elementBottom) / 2;
+            // Schedule update for next animation frame
+            pendingUpdate = requestAnimationFrame(() => {
+                pendingUpdate = null;
                 
-                // If mouse is above the middle of this element, insert before it
-                if (relativeY < elementMiddle) {
-                    const elementIndexStr = elements[i].dataset.elementIndex;
-                    if (elementIndexStr) {
-                        // Handle child elements - get parent index
-                        if (typeof elementIndexStr === 'string' && elementIndexStr.includes('-')) {
-                            const parentIndex = parseInt(elementIndexStr.split('-')[0]);
-                            if (!isNaN(parentIndex)) {
-                                insertIndex = parentIndex;
-                                targetElement = elements[i];
-                            }
+                // Get root items for virtualized calculation (virtualization only renders root items)
+                const rootItems = ItemHierarchy.getRootItems(bin.items || []);
+                
+                // Calculate drop position using helper (works for both virtualized and non-virtualized)
+                const { insertIndex, targetElement } = this._calculateDropPosition(
+                    elementsList,
+                    currentMouseY,
+                    rootItems,
+                    bin
+                );
+                
+                // Show visual indicator at the insertion point
+                const virtualScroller = elementsList._virtualScroller;
+                const needsRecreate = dropTargetIndex !== insertIndex || dropIndicator === null;
+                
+                if (needsRecreate) {
+                    dropTargetIndex = insertIndex;
+                    
+                    // Clear ALL drop indicators before showing a new one
+                    clearAllDropIndicators();
+                    dropIndicator = null;
+                    
+                    // Create new indicator
+                    dropIndicator = document.createElement('div');
+                    dropIndicator.className = 'drop-indicator';
+                    dropIndicator.style.cssText = `
+                        height: 2px;
+                        background: #4a9eff;
+                        margin: 4px 0;
+                        border-radius: 1px;
+                        pointer-events: none;
+                        position: relative;
+                        z-index: 1000;
+                    `;
+                    
+                    // Store reference
+                    elementsList._dropIndicator = dropIndicator;
+                    elementsList._dropTargetIndex = insertIndex;
+                }
+                
+                // Position indicator based on virtualization status
+                if (virtualScroller && targetElement === null) {
+                    // For virtualized lists without a target element, calculate position from heights
+                    const scrollTop = elementsList.scrollTop;
+                    const defaultHeight = viewportConfig.getDefaultHeight();
+                    const rootItems = ItemHierarchy.getRootItems(bin.items || []);
+                    let accumulatedHeight = 0;
+                    
+                    for (let i = 0; i < insertIndex && i < rootItems.length; i++) {
+                        accumulatedHeight += virtualScroller.heightCache.get(i) || defaultHeight;
+                    }
+                    
+                    // Calculate relative position (subtract scroll to get viewport-relative)
+                    const indicatorY = accumulatedHeight - scrollTop;
+                    
+                    // Update position directly if indicator already exists
+                    if (needsRecreate) {
+                        // Position absolutely within the container
+                        dropIndicator.style.position = 'absolute';
+                        dropIndicator.style.left = '0';
+                        dropIndicator.style.right = '0';
+                        dropIndicator.style.width = '100%';
+                        
+                        // Ensure container has relative positioning
+                        if (getComputedStyle(elementsList).position === 'static') {
+                            elementsList.style.position = 'relative';
+                        }
+                        
+                        elementsList.appendChild(dropIndicator);
+                    }
+                    
+                    // Update position (even if we just created it, to ensure it's correct)
+                    dropIndicator.style.top = `${indicatorY}px`;
+                } else {
+                    // Non-virtualized or has target element: use existing logic
+                    if (needsRecreate) {
+                        if (targetElement && elementsList.contains(targetElement) && targetElement.parentElement === elementsList) {
+                            elementsList.insertBefore(dropIndicator, targetElement);
                         } else {
-                            const elementIndex = parseInt(elementIndexStr);
-                            if (!isNaN(elementIndex)) {
-                                insertIndex = elementIndex;
-                                targetElement = elements[i];
-                            }
+                            // Fallback: append to end
+                            elementsList.appendChild(dropIndicator);
                         }
                     }
-                    break;
                 }
-            }
-            
-            // If we didn't find a target element, check if we should append at the end
-            if (targetElement === null && insertIndex >= bin.items.length) {
-                const addButton = elementsList.querySelector('.add-element-btn');
-                if (addButton) {
-                    targetElement = addButton;
-                }
-            }
-            
-            // Show visual indicator at the insertion point
-            if (dropTargetIndex !== insertIndex || dropIndicator === null) {
-                dropTargetIndex = insertIndex;
-                
-                // Clear ALL drop indicators before showing a new one
-                clearAllDropIndicators();
-                dropIndicator = null;
-                
-                // Create new indicator
-                dropIndicator = document.createElement('div');
-                dropIndicator.className = 'drop-indicator';
-                dropIndicator.style.cssText = `
-                    height: 2px;
-                    background: #4a9eff;
-                    margin: 4px 0;
-                    border-radius: 1px;
-                    pointer-events: none;
-                    position: relative;
-                    z-index: 1000;
-                `;
-                
-                // Store reference
-                elementsList._dropIndicator = dropIndicator;
-                elementsList._dropTargetIndex = insertIndex;
-                
-                // Insert indicator at the correct position
-                if (targetElement && elementsList.contains(targetElement) && targetElement.parentElement === elementsList) {
-                    elementsList.insertBefore(dropIndicator, targetElement);
-                } else {
-                    // Fallback: append to end
-                    elementsList.appendChild(dropIndicator);
-                }
-            }
+            });
         };
         
         elementsList.addEventListener('dragover', (e) => {

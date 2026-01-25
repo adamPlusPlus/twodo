@@ -65,8 +65,33 @@ export class PerformanceOptimizer {
     
     /**
      * Virtual scrolling for long lists
+     * @deprecated Use ViewportRenderer.renderViewport() instead
+     * This method is kept for backward compatibility but delegates to the new implementation
      */
     createVirtualScroller(container, items, itemHeight, renderItem) {
+        // Import and use the new ViewportRenderer
+        import('../core/ViewportRenderer.js').then(({ ViewportRenderer }) => {
+            ViewportRenderer.renderViewport(
+                container,
+                items,
+                renderItem,
+                {
+                    itemHeight: itemHeight,
+                    threshold: 0 // Force virtualization
+                }
+            );
+        }).catch(err => {
+            console.warn('Failed to load ViewportRenderer, using fallback:', err);
+            // Fallback to original implementation
+            this._createVirtualScrollerFallback(container, items, itemHeight, renderItem);
+        });
+    }
+    
+    /**
+     * Fallback virtual scroller implementation
+     * @private
+     */
+    _createVirtualScrollerFallback(container, items, itemHeight, renderItem) {
         const viewportHeight = container.clientHeight;
         const visibleCount = Math.ceil(viewportHeight / itemHeight);
         const buffer = 5;

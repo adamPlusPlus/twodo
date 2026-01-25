@@ -90,6 +90,43 @@ Each plugin entry includes three ratings:
 **Rating Sources:**
 - Differentiation ratings and demand assessments from `docs/COMPLETE_FEATURE_DEMAND_ASSESSMENT.md`
 
+## Core Differentiators (Priority Focus)
+
+These features are the primary differentiators that address real market needs and should be prioritized above all others:
+
+### 1. Focus Mode (Guided Workflow Manager) - ⭐⭐⭐⭐
+- **MVP**: Basic Focus Mode with manager view, automatic progression, basic feedback
+- **Version 1.0**: Add integrations (Templates, Time Tracking, Version Control, Cross-Platform Monitoring)
+- **Version 1.5**: Add AI-Guided Focus Coach (high-value combination: Focus Mode + AI Integration = ⭐⭐⭐⭐⭐)
+- **Version 1.5**: Add Dynamic Focus UI Adaptation (high-value combination: Focus Mode + Element Type Conversion = ⭐⭐⭐⭐⭐)
+- **Version 2.0+**: Add advanced combinations (Synchronized Team Focus Sessions, Cross-Device Focus Continuity)
+- **Location**: See [Focus Mode (Mobile-Native)](#focus-mode-mobile-native) in Mobile-First Features section
+- **Success Metrics**: Track focus session completion rate, productivity, satisfaction
+
+### 2. Subscription Reuse Model - ⭐⭐⭐⭐⭐
+- **Version**: 1.5
+- **Unique Value**: "Use your existing subscriptions, no separate app subscriptions"
+- **Location**: See [External Integration Plugin](#external-integration-plugin) in Integration Plugins section
+- **Implementation Strategy**: Start with 2-3 services, expand gradually, robust error handling
+
+### 3. Mobile Bridge System - ⭐⭐⭐⭐
+- **Version**: 1.0
+- **Unique Value**: Addresses real mobile workflow pain point (sandboxed apps can't integrate)
+- **Location**: See [Mobile Bridge System](#mobile-bridge-system) in Integration Plugins section
+- **Implementation Strategy**: Start with most common protocols, expand gradually, robust testing
+
+### 4. Multi-Repository Undo/Redo System - ⭐⭐⭐⭐
+- **Version**: 1.0
+- **Unique Value**: "Undo any action, even system-level changes"
+- **Location**: See [Multi-Repository Undo/Redo System](#multi-repository-undo-redo) in Version Control & File Management Plugins section
+- **Implementation Strategy**: Start with simpler versioning, add complexity gradually, strong UI for repository management
+
+### 5. High-Value Feature Combinations (Prioritize Only)
+- **Focus Mode + AI Integration** = AI-Guided Focus Coach (⭐⭐⭐⭐⭐) - Version 1.5
+- **Focus Mode + Element Type Conversion** = Dynamic Focus UI Adaptation (⭐⭐⭐⭐⭐) - Version 1.5
+- **Focus Mode + Collaboration** = Synchronized Team Focus Sessions (⭐⭐⭐⭐⭐) - Version 2.0+
+- **Defer**: Low-value combinations and experimental features until after product-market fit
+
 ## Integration Plugins
 
 These plugins share API client infrastructure, authentication, and OAuth handling.
@@ -109,8 +146,8 @@ These plugins share API client infrastructure, authentication, and OAuth handlin
 - Email templates for task updates
 
 <a id="calendar-integration"></a>
-**Calendar Integration** - Two-way calendar synchronization:
-- [Differentiation: ⭐⭐] [Demand: HIGH] [Version: MVP]
+**Calendar Integration** - Two-way calendar synchronization with Focus Mode integration:
+- [Differentiation: ⭐⭐⭐] [Demand: HIGH] [Version: MVP]
 - Connect to calendar services (Google Calendar, iCal, etc.)
 - Two-way sync (app ↔ calendar)
 - Auto-create tasks from calendar events
@@ -118,6 +155,14 @@ These plugins share API client infrastructure, authentication, and OAuth handlin
 - Show tasks on calendar by deadline
 - Create calendar events from tasks
 - Recurring event handling
+- **Focus Mode Integration** - "Calendar that guides your workflow":
+  - Calendar events can automatically trigger Focus Mode sessions (optional, user-configurable)
+  - "Deep work" calendar events → Auto-start Focus Mode with writing template
+  - "Review" calendar events → Auto-start Focus Mode with review template
+  - "Meeting at 2pm" → Auto-starts Focus Mode session 15 min before (if enabled)
+  - Calendar + Focus Mode = "Time-blocked workflow automation" (nice-to-have, not revolutionary)
+  - Calendar events can have associated Focus Mode templates
+  - Differentiates: ⭐⭐ → ⭐⭐⭐ (modest improvement when integrated with Focus Mode)
 
 <a id="github-integration"></a>
 **GitHub Integration** - GitHub repository integration:
@@ -250,6 +295,73 @@ These plugins share versioning logic, diff algorithms, and history tracking.
 **Enhanced Version Control** - Git-like undo-redo with branching, merging, and contribution tracking (system-wide)
 - [Differentiation: ⭐⭐⭐⭐] [Demand: LOW-MEDIUM] [Version: 2.0+]
 
+<a id="multi-repository-undo-redo"></a>
+**Multi-Repository Undo/Redo System** - Separate git-style repositories for different system components with independent versioning:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: MEDIUM] [Version: 1.0]
+- **Independent Repository Architecture**:
+  - Each repository is completely independent (like separate git repos)
+  - Repositories are "aware" of each other but never interact directly
+  - No cross-repository dependencies or merges
+  - Each repository maintains its own complete history and branches
+- **Repository Types**:
+  - **Settings Repository**: All application settings and preferences
+    - User preferences, default behaviors, system configurations
+    - Branch navigation: Switch between different setting configurations
+    - Undo/redo: Revert any setting change to any previous state
+    - Branch management: Create branches for experimental settings, rollback to stable configurations
+  - **UI/UX Customizations Repository**: All UI customizations and layouts
+    - Custom themes, layouts, view configurations
+    - Toolbar customizations, panel arrangements
+    - Branch navigation: Switch between different UI configurations
+    - Undo/redo: Revert UI changes, restore previous layouts
+    - Experimental UI branches: Try new layouts without affecting main UI
+  - **Templates Repository**: All template definitions and modifications
+    - Template creation, editing, deletion history
+    - Template versioning and branching
+    - Undo/redo: Revert template changes, restore previous template versions
+    - Branch navigation: Switch between template sets, experimental templates
+  - **Vault/Workspace Repositories**: Separate repository per user vault/workspace
+    - Each vault (document file structure) has its own independent repository
+    - Complete version history per vault
+    - Branch navigation: Switch between different vault states
+    - Undo/redo: Revert any action within a vault
+    - Vault isolation: Changes in one vault never affect others
+- **Repository Awareness**:
+  - Repositories know about each other's existence (for UI display)
+  - Can see repository status across all repositories
+  - Unified UI for managing all repositories
+  - Cross-repository search (find changes across repositories)
+  - But no direct interaction: repositories remain independent
+- **Git-Style Operations Per Repository**:
+  - **Branching**: Create branches for experimental changes
+    - Settings branches: "Dark Mode Experiment", "Minimal UI", "Power User Settings"
+    - UI branches: "New Layout Test", "Mobile-First UI", "Classic Layout"
+    - Template branches: "New Template Set", "Experimental Templates"
+    - Vault branches: "Feature Branch", "Backup State", "Experimental Changes"
+  - **Merging**: Merge branches within same repository
+  - **Commits**: Each action creates a commit in appropriate repository
+  - **History Navigation**: Browse complete history per repository
+  - **Diff Viewing**: See what changed between any two states
+  - **Rollback**: Revert to any previous state in any repository
+- **Undo/Redo Integration**:
+  - Every action is undoable through repository system
+  - Undo/redo works within repository context
+  - Can undo settings changes, UI changes, template changes, vault changes independently
+  - Cross-repository undo awareness: See what can be undone across all repositories
+- **User Benefits**:
+  - **Complete Reversibility**: Any action can be undone, even system-level changes
+  - **Experimental Safety**: Try new settings/UI/templates without risk
+  - **Configuration Management**: Switch between different configurations easily
+  - **Vault Isolation**: Changes in one vault don't affect others
+  - **Branch Workflows**: Use git-style workflows for settings and configurations
+  - **Time Travel**: Navigate through history of any system component
+- **Technical Implementation**:
+  - Each repository uses same git-style versioning as content versioning
+  - Repository metadata stored separately from content
+  - Efficient storage: Only store deltas, not full copies
+  - Fast switching: Quick branch/state switching within repositories
+  - Repository synchronization: Keep repositories in sync with content changes
+
 <a id="file-management-system"></a>
 **File Management System** - Git-like file management with versioning, diff viewing, and history
 - [Differentiation: ⭐⭐] [Demand: MEDIUM] [Version: 1.0]
@@ -302,16 +414,25 @@ These plugins share encryption libraries, key management, and access control.
 
 ## Finance & Shopping Plugins
 
+**Positioning**: "Life Management Platform" - Manage your entire life, not just projects
+
 These plugins share finance data structures, calculations, and shopping workflows.
 
 <a id="budget-finance-tracker"></a>
-**Budget/Finance Tracker** - Budget and expense tracking:
+**Budget/Finance Tracker** - Budget and expense tracking with Focus Mode integration:
+- [Differentiation: ⭐⭐] [Demand: MEDIUM] [Version: 2.0+]
 - Budget allocation per page/bin/element
 - Expense tracking
 - Budget alerts and warnings
 - Spending categories
 - Budget vs. actual reporting
 - Integration with shopping lists
+- **Focus Mode Integration** - "Life Management, Not Just Projects":
+  - Budget tracking integrated with task management
+  - Finance plugins are optional (not core) - niche market
+  - Position as "life management" not "project management with finance"
+  - **Market Reality**: Users have dedicated finance apps (Mint, YNAB, etc.) - why use this?
+  - Differentiates: Niche → ⭐⭐ (better positioning, but still niche, not core feature)
 
 <a id="purchase-history-tracker"></a>
 **Purchase History Tracker** - Track purchase history:
@@ -331,7 +452,20 @@ These plugins share finance data structures, calculations, and shopping workflow
 - Budget reporting
 
 <a id="product-element"></a>
-**Product Element** - Structured product data for shopping:
+**Product Element** - Structured product data for shopping with Focus Mode integration:
+- [Differentiation: ⭐⭐] [Demand: LOW] [Version: 2.0+]
+- Product fields (name, brand, price, specs, reviews, etc.)
+- Product images
+- Price tracking
+- Product comparison
+- Product links (URLs, reviews)
+- **Focus Mode Integration** - "Shopping Lists in Focus Mode":
+  - "Grocery shopping" Focus Mode template with shopping list (nice-to-have, not revolutionary)
+  - Shopping list items become Focus Mode tasks
+  - Purchase tracking integrated with task completion
+  - Position as "workflow-integrated shopping" not "shopping plugin"
+  - **Market Reality**: Still niche, optional plugin for specific users
+  - Differentiates: Niche → ⭐⭐ (better positioning, but still niche)
 - Product fields (name, brand, price, specs, reviews, etc.)
 - Product images
 - Price tracking
@@ -411,13 +545,24 @@ These plugins share OCR, parsing, validation, and data transformation logic.
 These plugins share AI API integration, prompt management, and AI workflows. AI is integrated throughout the application, not just as features but as core interaction patterns.
 
 <a id="ai-integration-plugin"></a>
-**AI Integration Plugin** - Core AI infrastructure:
+**AI Integration Plugin** - Core AI infrastructure focused on problem-solving:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: MEDIUM] [Version: 1.5]
 - API intake for chat, image, and other generative AI services
 - Multiple AI provider support (OpenAI, Anthropic, local models, etc.)
 - AI provider abstraction layer
 - Cost tracking and optimization
 - Rate limiting and retry logic
 - Streaming response support
+- **Focus Mode Integration** - "AI that makes Focus Mode smarter":
+  - **AI-Guided Focus Coach** (Focus Mode + AI Integration = ⭐⭐⭐⭐⭐ combination, not plugin rating)
+  - AI monitors focus session in real-time, suggests optimizations
+  - AI predicts completion: "Based on your pace, you'll finish in 15 min"
+  - AI learns preferences: "You prefer 25-min focus, 5-min breaks"
+  - AI suggests Focus Mode templates based on patterns
+  - AI detects when user is struggling and offers help
+  - Position as "AI that solves workflow problems" not "AI everywhere"
+  - Make AI optional but valuable when used
+  - **Note**: Plugin is infrastructure (⭐⭐⭐⭐), the combination (Focus Mode + AI) is ⭐⭐⭐⭐⭐
 
 <a id="ai-first-interaction-system"></a>
 **AI-First Interaction System** - AI integrated into core interactions:
@@ -704,11 +849,16 @@ These plugins share input handling, command processing, and interaction manageme
   - User can Ctrl+click two separate items, then Shift+click to select range from the second item
   - Allows complex selection patterns: Ctrl+click item A, Ctrl+click item C, Shift+click item E → selects C to E
   - Last selected position tracks the most recently selected item (by Ctrl+click or box selection)
+- **Lasso Selection**: Draw freeform selection containers around items (see Voice Interface Plugin - Lasso Tool)
+  - Freeform drawing for irregular selections
+  - Multiple lasso containers can be combined
+  - Works with voice commands for selection ("select all", "select visible", etc.)
 - **Cross-Format Support**: Works in all format renderers (Document View, Kanban, Grid, List, etc.)
 - **Visual Feedback**: Selected elements highlighted, selection box visible during drag
 - **Selection State Management**: Track selected elements across format changes
 - **Keyboard Support**: Shift+Arrow keys for range selection, Ctrl+Arrow for individual selection
 - **Touch Support**: Long-press to start selection, drag for box selection, tap with modifier for toggle
+- **Voice Selection Commands**: Voice commands can trigger selections (integrated with Voice Interface Plugin)
 - **Batch Operations Integration**: Selected elements available for batch operations (move, delete, tag, transform)
 - **Selection Persistence**: Selection maintained when switching between format renderers (if elements still visible)
 
@@ -737,8 +887,16 @@ These plugins share input handling, command processing, and interaction manageme
 - Haptic feedback integration
 
 <a id="innovative-i-o-system"></a>
-**Innovative I/O System** - Novel input methods leveraging all available hardware:
-- [Differentiation: ⭐⭐] [Demand: LOW] [Version: 2.0+]
+**Innovative I/O System** - Experimental accessibility input methods leveraging all available hardware:
+- [Differentiation: ⭐⭐] [Demand: MEDIUM] [Version: 2.0+]
+- **Positioning**: "Accessibility & Hands-Free Operation" - Work without touching your device (experimental, technical challenges)
+- **Focus Mode Integration** - Hands-free Focus Mode activation (experimental):
+  - Hand wave (camera) → Activate Focus Mode (requires ML models, may not work reliably)
+  - Shake device (motion) → Quick Focus Mode activation (more reliable)
+  - Tilt device (motion) → Navigate between focus tasks (experimental)
+  - Controller buttons → Focus Mode navigation (more reliable)
+  - **Technical Reality**: Camera gestures, eye tracking, facial expressions are HARD - positioning doesn't solve technical challenges
+  - Differentiates: Experimental → ⭐⭐ (better positioning, but technical feasibility remains challenging)
 - **Camera-Based Input**:
   - Hand gesture recognition (wave, point, pinch, etc.)
   - Eye tracking for navigation (look to select, blink to confirm)
@@ -796,12 +954,71 @@ These plugins share input handling, command processing, and interaction manageme
 
 <a id="voice-interface-plugin"></a>
 **Voice Interface Plugin** - Full voice-first interface:
+- [Differentiation: ⭐⭐] [Demand: LOW-MEDIUM] [Version: 1.5]
+- **Custom Voice Input Implementation** (No Platform Assistant Dependency):
+  - **Web/Browser**: Web Speech API (SpeechRecognition) - direct browser API, no Siri/Google Assistant needed
+  - **Android Native**: Android SpeechRecognizer API - direct access, bypasses Google Assistant
+  - **iOS Native**: iOS Speech Framework (AVSpeechRecognizer) - direct access, bypasses Siri
+  - **Cross-Platform Options**:
+    - On-device libraries (Mozilla DeepSpeech, Whisper.cpp, Vosk) for offline processing
+    - Cloud services (Google Cloud Speech, Azure Speech, AWS Transcribe) for high accuracy
+    - Hybrid approach: on-device for quick commands, cloud for complex dictation
+  - **Advantages of Custom Implementation**:
+    - Full control over wake words and activation
+    - App-specific vocabulary and command recognition
+    - Better integration with app workflows
+    - No dependency on platform assistant limitations
+    - Can work offline (with on-device models)
+    - Customizable feedback and confirmation
+    - Privacy: voice data stays in-app or user-controlled
 - Voice navigation (navigate pages, bins, elements)
 - Voice editing (dictate text, edit elements)
 - Voice commands (natural language task creation)
 - Voice feedback (read back information, confirm actions)
 - Offline voice processing (when possible)
+- **Wake Word Support**: Custom wake words for hands-free activation
+- **Context-Aware Recognition**: Understands app context for better accuracy
+- **Command Customization**: User-defined voice commands and shortcuts
+- **Multi-Language Support**: Recognition in multiple languages
+- **Privacy Controls**: Option to process entirely on-device, no cloud dependency
 - Multi-language support
+- **Advanced Voice+Gesture Interaction Patterns**:
+  - **Magic Cursor**: Voice-enabled cursor that accepts voice input/commands based on touch interaction
+    - Touch cursor to activate voice input mode
+    - Speak commands or text directly into cursor
+    - More seamless than typing - voice input flows naturally with touch
+    - Context-aware: cursor understands what element it's over
+    - Voice commands interpreted based on cursor position and context
+    - Real-time voice feedback and confirmation
+  - **Lasso Tool with Voice Commands**: Advanced selection and command system
+    - **Selection Methods**:
+      - Draw one or more selection containers (lasso) around items, groups, docs, UI elements
+      - Alternative selection triggers: gestures, keyboard shortcuts, or voice commands ("select all", "select visible", etc.)
+      - Multi-selection: Combine multiple selection containers or methods
+      - Cross-format selection: Select across different format renderers simultaneously
+    - **Command Input**:
+      - Say or type what you want to happen to selected items
+      - Natural language processing: "move these to archive", "tag with urgent", "convert to checklist"
+    - **Command Processing Pipeline**:
+      - **Simple Commands**: Processed by keyword tools for fast, common operations
+      - **Complex Commands**: Processed by LLM for natural language understanding
+      - Commands translated into internal command language
+      - Commands sorted into prioritized task list for execution
+    - **Verification & Editing**:
+      - User verification step (if user preference enabled)
+      - Command palette shows: default commands, similar commands, suggested alternatives
+      - User can edit automation flow through UI/UX or further voice/text input:
+        - Add specificity: "apply to only these 3 items, not the others"
+        - Specify targets: "move these items to the 'Archive' bin, not 'Trash'"
+        - Omit items: "except for the first item in the selection"
+        - Clarify actions: "tag with 'urgent' and 'review', not just 'urgent'"
+      - Real-time preview of what will happen
+      - Step-by-step confirmation for complex operations
+    - **Command Refinement**:
+      - Iterative refinement: user adds more detail through voice/text
+      - Visual command builder: see and edit the command sequence
+      - Command history: learn from previous commands
+      - Command templates: save common command patterns
 
 <a id="touch-gesture-plugin"></a>
 **Touch Gesture Plugin** - Advanced touch interactions:
@@ -836,6 +1053,31 @@ These plugins share input handling, command processing, and interaction manageme
 **Bin Quick Actions** - Keyboard shortcuts for common bin operations
 - [Differentiation: ⭐] [Demand: MEDIUM-HIGH] [Version: 1.0]
 
+<a id="cross-platform-monitoring-cli-integration"></a>
+**Cross-Platform Monitoring & CLI Integration** - System-level monitoring and command execution for automatic task assessment and completion:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: 1.0]
+- Cross-platform process and file system monitoring
+- Automatic completion assessment for focus mode and other workflow modes
+- CLI command execution on user behalf (where possible and permitted)
+- Integration with Focus Mode for automatic task progression
+- Integration with other workflow modes (review, planning, etc.)
+- Process monitoring: Detect when external processes complete (builds, compiles, tests, etc.)
+- File system monitoring: Detect when files are created, modified, or deleted
+- Network monitoring: Detect when network operations complete (downloads, uploads, API calls)
+- Automatic task status updates based on monitored events
+- CLI action execution: Execute commands to complete tasks automatically
+  - Git operations (commit, push, pull)
+  - Build/test execution
+  - File operations (move, copy, delete, rename)
+  - Application launches and closures
+  - System commands (where permitted by OS security)
+- Permission system: User controls what actions can be performed automatically
+- Safety features: Confirmation prompts for destructive operations
+- Cross-platform support: Works on Windows, macOS, and Linux
+- Integration with Automation Rules: Can trigger rules based on monitored events
+- Integration with Time Tracking: Automatically log time when tasks complete
+- Learning system: Learns which actions are safe to perform automatically based on user behavior
+
 <a id="cli-plugin"></a>
 **CLI Plugin** - In-app command-line interface for advanced operations:
 - [Differentiation: ⭐⭐⭐⭐] [Demand: LOW] [Version: 2.0+]
@@ -866,6 +1108,186 @@ These plugins share input handling, command processing, and interaction manageme
 - High contrast mode
 - Text-to-speech for content
 - Audio-only mode (no visual UI)
+
+## Mobile-First Features
+
+These plugins leverage mobile-native capabilities to provide features that desktop-first apps cannot offer. They differentiate the app by being designed mobile-first, not as desktop ports.
+
+<a id="lock-screen-quick-capture"></a>
+**Lock Screen Quick Capture Widget** - Add tasks from lock screen without opening app:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- One-tap quick capture from lock screen
+- Works on iOS and Android lock screens
+- No need to unlock phone or open app
+- Differentiates: Most apps require opening the app to add tasks
+
+<a id="notification-quick-add"></a>
+**Notification Quick-Add** - Swipe notification to add as task:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- Swipe any notification to add it as a task
+- Works from any app notification
+- Native mobile workflow integration
+- Differentiates: Native mobile interaction pattern, not desktop port
+
+<a id="location-based-smart-views"></a>
+**Location-Based Smart Views** - Auto-show relevant tasks based on location:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- Automatically show relevant tasks when arriving at work/home/store
+- Context-aware task filtering based on GPS location
+- Geofencing support for automatic view switching
+- Differentiates: Uses mobile sensors that desktop-first apps ignore
+
+<a id="time-based-smart-views"></a>
+**Time-Based Smart Views** - Auto-organize tasks by time patterns:
+- [Differentiation: ⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- "Morning routine" view (7-9 AM) - shows morning tasks automatically
+- "Evening review" view (6-8 PM) - shows evening tasks automatically
+- Auto-organizes tasks by time patterns, not just dates
+- Differentiates: Time-aware organization, not just date-based
+
+<a id="one-handed-operation-mode"></a>
+**One-Handed Operation Mode** - Thumb-optimized UI for mobile ergonomics:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Bottom-aligned controls optimized for thumb reach
+- Swipe gestures for common actions (swipe right to complete, left for options)
+- Mobile-first ergonomics, not desktop port
+- Differentiates: Designed for mobile ergonomics, not adapted from desktop
+
+<a id="smart-quick-actions"></a>
+**Smart Quick Actions** - Context-aware quick actions that change based on time/location/patterns:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- Quick actions change based on context (time, location, usage patterns)
+- "Add to grocery list" appears when near a store
+- "Start work focus" appears when at work location
+- Context intelligence, not just static buttons
+- Differentiates: Context-aware actions, not just fixed buttons
+
+<a id="voice-to-task-natural-language"></a>
+**Voice-to-Task (Natural Language)** - Parse natural language into structured tasks:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- "Remind me to call mom tomorrow at 3pm" → creates task with due date/time
+- Parses natural language into structured tasks (not just voice commands)
+- Understands intent, not just commands
+- Differentiates: Natural language understanding, not just voice commands
+
+<a id="swipe-to-complete-haptic"></a>
+**Swipe-to-Complete with Haptic Feedback** - Native mobile interaction patterns:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Swipe right to complete with satisfying haptic feedback
+- Swipe left for options (reschedule, delete, etc.)
+- Native mobile interaction patterns, not desktop clicks
+- Differentiates: Mobile-native gestures, not desktop port interactions
+
+<a id="smart-grouping-by-context"></a>
+**Smart Grouping by Context** - Auto-group tasks by location, time, or project:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Auto-group tasks by location ("Tasks for when I'm at Target")
+- Auto-group tasks by time ("Tasks for this evening")
+- Auto-group tasks by project or category
+- Automatic organization, not manual grouping
+- Differentiates: Intelligent auto-organization, not manual work
+
+<a id="quick-filters-gesture-based"></a>
+**Quick Filters (Gesture-Based)** - Gesture-based filtering, not menu-based:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Swipe down for "due today"
+- Swipe up for "overdue"
+- Pinch for "high priority"
+- Gesture-first filtering, not menu-first
+- Differentiates: Mobile-native gestures, not desktop menus
+
+<a id="smart-due-date-suggestions"></a>
+**Smart Due Date Suggestions** - Learn patterns and suggest due dates:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Learns your patterns ("I usually do this on Tuesdays")
+- Suggests due dates based on history and patterns
+- Predictive suggestions, not just manual entry
+- Differentiates: Intelligent suggestions, not just calendar picker
+
+<a id="focus-mode-mobile-native"></a>
+**Focus Mode (Mobile-Native)** - Guided workflow manager with automatic progression and adaptive feedback:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- **Manager View**: Primary focus interface showing only current item, time remaining, sub-goals, and next steps
+- **Diegetic Display**: Information shown naturally in context (time remaining, progress, sub-goals) without separate UI elements
+- **Automatic Progression**: Automatically advances between tasks and subtasks based on user preferences and completion
+- **Seamless UI Transitions**: Automatically switches UI based on item type (writing task → rich text editor, review task → checklist UI, planning task → outline UI)
+- **Automatic Logging**: Tracks successes and failures automatically (completion time, skipped items, difficulty patterns)
+- **Adaptive Feedback System**: Rare, contextual queries to monitor feelings, performance, and expectations
+  - Simple adaptive questions help users monitor their own feelings, performance, expectations
+  - Queries triggered when patterns suggest issues (not constant popups)
+  - Used to understand why items aren't being completed
+- **Behavioral Learning**: App learns from user behavior over time
+  - Time estimates become more accurate (actual vs. planned)
+  - Schedules adapt with more/less slack based on historical accuracy
+  - Goals become more realistic based on past performance
+  - Templates adjust based on what works for the user
+- **Workflow App Analogy**: Like workout apps that automatically progress between exercises
+  - User interaction during transitions indicates success or failure
+  - Minimal navigation required - app handles progression
+  - App optimizes over time based on patterns
+- **Integration with Other Systems**:
+  - Works with Templates (templates define progression rules and timing)
+  - Works with Time-Based Smart Views (manager view adapts based on time patterns)
+  - Leverages JSON Coherence Model (seamless transitions between item types)
+  - Can integrate with Collaboration (team focus modes)
+  - Can integrate with AI (AI suggests what to focus on based on patterns)
+- **Focus Levels**: Micro-focus (single task), Focus (current project), Macro-focus (work vs personal)
+- **Focus Sessions**: Time-boxed focus with automatic transitions
+- **Focus Analytics**: Track what user actually focuses on vs. what they plan to
+- **Context-Aware Focus**: Auto-suggest focus based on time/location/patterns
+- One-tap to enter/exit focus mode
+- Mobile-first distraction reduction
+- Differentiates: Guided workflow manager that learns and adapts, not just a simple filter. Automatic progression reduces cognitive load. Behavioral learning optimizes schedules and goals over time.
+
+<a id="quick-templates-mobile"></a>
+**Quick Templates for Common Scenarios** - One-tap templates optimized for mobile:
+- [Differentiation: ⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- "Grocery shopping" template (one tap)
+- "Morning routine" template
+- "Weekend planning" template
+- Mobile-optimized templates, not desktop forms
+- Differentiates: Mobile-first templates, not desktop forms
+
+<a id="smart-notifications-learn"></a>
+**Smart Notifications That Learn** - Adaptive notifications based on patterns:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Learns when you actually complete tasks
+- Suggests better notification times based on your patterns
+- "You usually do this at 2pm, remind you then?"
+- Adaptive notifications, not just scheduled
+- Differentiates: Intelligent notifications, not just timers
+
+<a id="share-sheet-quick-capture"></a>
+**Share Sheet Quick Capture** - Add tasks from any app via iOS/Android share sheet:
+- [Differentiation: ⭐⭐⭐⭐] [Demand: HIGH] [Version: MVP]
+- Add tasks from any app via iOS/Android share sheet
+- One-tap capture from browser, email, messages
+- Native mobile integration, not web-only
+- Differentiates: Native mobile share sheet integration
+
+<a id="batch-operations-smart-suggestions"></a>
+**Batch Operations with Smart Suggestions** - Mobile-optimized batch operations:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- Long-press to select multiple tasks
+- Smart suggestions: "Mark all as done?", "Reschedule all to tomorrow?"
+- Mobile-optimized batch operations, not desktop port
+- Differentiates: Mobile-native batch operations, not desktop multi-select
+
+<a id="visual-task-dependencies-mobile"></a>
+**Visual Task Dependencies (Mobile-Optimized)** - Interactive dependency graph for mobile:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM] [Version: 1.0]
+- Interactive dependency graph you can pinch/zoom
+- Tap to see what blocks what
+- Mobile-native visualization, not desktop port
+- Differentiates: Mobile-optimized visualization, not desktop Gantt chart
+
+<a id="context-switching-helpers"></a>
+**Context Switching Helpers** - One-tap context switching:
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM-HIGH] [Version: MVP]
+- "Switching to work mode" → shows work tasks
+- "Switching to personal mode" → shows personal tasks
+- One-tap context switching
+- Differentiates: Mobile-first context management, not desktop tabs
 
 ## Universal Annotation & Overlay System
 
@@ -936,12 +1358,20 @@ These plugins share UI rendering, theming, and customization logic.
 - **Action Suggestions**: System suggests available actions based on context
 
 <a id="ui-customization-plugin"></a>
-**UI Customization Plugin** - Deep UI/UX customization options:
+**UI Customization Plugin** - Deep UI/UX customization options with Focus Mode integration:
+- [Differentiation: ⭐⭐] [Demand: MEDIUM] [Version: 1.0]
 - Customizable layouts
 - Widget placement
 - Toolbar customization
 - Menu customization
 - Panel visibility controls
+- **Focus Mode Integration** - "Customization that suggests defaults":
+  - Customization preferences inform Focus Mode behavioral learning
+  - "You always customize this view" → App suggests it as default (suggestion, not automatic)
+  - Custom Focus Mode templates can incorporate your customization patterns
+  - Customization + Focus Mode = "Smarter defaults based on usage"
+  - App suggests preferences based on usage patterns (not "learns" or "self-optimizes")
+  - Differentiates: ⭐ → ⭐⭐ (slight improvement when integrated with behavioral learning)
 
 <a id="custom-css-themes"></a>
 **Custom CSS Themes** - User-defined CSS for complete customization
@@ -1124,6 +1554,8 @@ These plugins share format rendering logic and view management.
 
 ### Master Views Architecture
 
+**Positioning**: "Workspace Flexibility" - Build your perfect workspace
+
 <a id="view-interchangeability"></a>
 **View Interchangeability** - All views are interchangeable:
 - Switch between any view format instantly
@@ -1132,19 +1564,33 @@ These plugins share format rendering logic and view management.
 - Seamless format conversion
 
 <a id="nestable-views"></a>
-**Nestable Views** - Views can be embedded within other views:
+**Nestable Views** - Views can be embedded within other views (Workspace Flexibility):
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM] [Version: 1.5]
 - Embed a table view within a document view
 - Embed a kanban view within a dashboard view
 - Embed a timeline view within a calendar view
+- Dashboard view with nested kanban, table, timeline
 - Nested views maintain their own state
 - Nested views can be independently formatted
 - Deep nesting support (view within view within view)
+- **Focus Mode Integration** - "Dashboards in Focus Mode":
+  - Focus Mode can show nested views (e.g., calendar + task list)
+  - Workspace templates with pre-configured nested views
+  - Position as "workspace flexibility" not "experimental feature"
+  - Differentiates: Experimental → ⭐⭐⭐ (as workspace flexibility)
 
 <a id="view-portals"></a>
-**View Portals** - Portal system for view embedding:
+**View Portals** - Portal system for view embedding (Context-Aware Views):
+- [Differentiation: ⭐⭐⭐] [Demand: MEDIUM] [Version: 1.5]
 - Create "portals" that display another view format
 - Portals can show different pages, bins, or filtered data
 - Portals are interactive (can interact with nested view)
+- **Focus Mode Integration** - "Context-Aware Views":
+  - Focus Mode shows portal to related calendar events
+  - Focus Mode shows portal to related tasks
+  - Context-aware view portals show what you need, when you need it
+  - Position as "smart workspace" not "complex feature"
+  - Differentiates: Experimental → ⭐⭐⭐ (as context-aware feature)
 - Portals can be resized, moved, styled
 - Portals maintain data synchronization with source
 
@@ -1398,11 +1844,87 @@ These plugins provide general utility functions that can be applied across the a
 These plugins share collaboration logic, permissions, and sharing.
 
 <a id="collaboration"></a>
-**Collaboration** - Share pages, bins, or elements with others, real-time sync
-- [Differentiation: ⭐] [Demand: HIGH] [Version: 1.0]
+**Collaboration** - Share pages, bins, or elements with others, real-time sync with Focus Mode integration
+- [Differentiation: ⭐⭐⭐⭐⭐] [Demand: HIGH] [Version: 1.0]
+- **Focus Mode Integration** - "Collaborate in focused sessions":
+  - Synchronized Team Focus Sessions (Focus Mode + Collaboration = ⭐⭐⭐⭐⭐)
+  - Team enters shared focus session, everyone sees same current task
+  - Automatic progression syncs across all team members
+  - Team feedback: "How is everyone feeling?" aggregates responses
+  - Team learns together: "Team usually needs 10 extra minutes for code reviews"
+  - Presence awareness: See who's in focus, who's on break
+  - Calendar integration: "Team standup" → Auto-start team focus session
+  - Differentiates: ⭐ → ⭐⭐⭐⭐⭐ (when integrated with Focus Mode)
 - **Level A → B Upgrade Path**:
   - Start: operation-stream sync + snapshots/checkpoints
   - Upgrade: CRDT/OT per block text + presence/cursors + deterministic structural merge rules
+- **Privacy & Security Features**:
+  - **Easy-to-Verify Permissions**: Visual permission indicators that are immediately clear
+    - Color-coded permission badges (green = full access, yellow = limited, red = restricted)
+    - One-click permission verification (hover or click to see detailed permissions)
+    - Permission inheritance visualization (show what permissions come from parent elements)
+    - Real-time permission status indicators in UI
+  - **Automated Private Information Detection**:
+    - Pattern recognition for sensitive data (SSN, credit cards, passwords, API keys, emails, phone numbers)
+    - Automatic detection of personal information (names, addresses, medical info, financial data)
+    - Custom detection rules (user-defined patterns for company-specific sensitive data)
+    - Machine learning-based detection (learns from user feedback on what's sensitive)
+    - Detection confidence scoring (high/medium/low confidence indicators)
+  - **Placeholder-Based Privacy Protection**:
+    - **No Information Transfer**: Private information is never sent to collaborators
+    - **Placeholder Representation**: Sensitive data replaced with placeholders in collaborative views
+      - Email addresses → `[email protected]`
+      - Phone numbers → `[phone number]`
+      - Credit cards → `[card ending in XXXX]`
+      - SSN → `[SSN]`
+      - Custom patterns → `[sensitive data]`
+    - **Context Preservation**: Placeholders maintain structure and context without revealing data
+      - "Contact John at john@example.com" → "Contact [name] at [email]"
+      - Maintains sentence structure and workflow context
+    - **Permission-Based Reveal**: Users with appropriate permissions see actual data
+      - Granular permission levels (view placeholders, view partial, view full)
+      - Permission verification before revealing sensitive data
+      - Audit trail of who accessed sensitive information
+  - **Non-Disruptive UI/UX**:
+    - **Seamless Integration**: Privacy features don't disrupt normal collaboration workflow
+    - **Visual Clarity**: Clear indicators show what's protected without cluttering UI
+      - Subtle icons/indicators for protected content
+      - Hover tooltips explain privacy status
+      - Optional detailed privacy view (expandable, not always visible)
+    - **Collaborative Context Maintained**: Placeholders allow full collaboration without exposing data
+      - Can comment on placeholder-protected content
+      - Can assign tasks referencing protected information
+      - Can discuss workflows without revealing sensitive details
+    - **User Control**: Easy to adjust privacy settings without breaking collaboration
+      - Quick privacy level adjustment (public/team/private)
+      - Per-element privacy overrides
+      - Bulk privacy updates with confirmation
+  - **Prevention of Unwanted Information Exchange**:
+    - **Pre-Sharing Checks**: Automatic scan before sharing to detect sensitive information
+      - Warning dialog if sensitive data detected
+      - Option to replace with placeholders before sharing
+      - Option to exclude sensitive elements from share
+    - **Real-Time Protection**: Continuous monitoring during collaboration
+      - Detects if user accidentally pastes sensitive information
+      - Auto-replaces with placeholders in real-time
+      - Notifies user of replacement (non-intrusive notification)
+    - **Export Protection**: Sensitive data protection extends to exports
+      - Placeholders in exported documents (unless user has permission)
+      - Separate "full data" export for authorized users only
+      - Export permission verification
+  - **Clarity Across Collaboration**:
+    - **Transparent Privacy Status**: All collaborators see what's protected (without seeing data)
+      - Visual indicators show "this section contains protected information"
+      - Permission status visible to all (who can see what)
+      - Clear communication about why content is protected
+    - **Collaborative Awareness**: Users understand collaboration boundaries
+      - See what others can/cannot see
+      - Understand permission inheritance
+      - Clear feedback on permission changes
+    - **Workflow Continuity**: Collaboration works smoothly despite privacy protection
+      - Can collaborate on protected content using placeholders
+      - Can request access to protected information (with approval workflow)
+      - Can work around protected sections without disruption
 
 ## Format Renderer Plugins (Authority + Source Text)
 
@@ -1423,6 +1945,21 @@ Some format renderers represent a “source language” rather than a projection
 <a id="sharing-permissions"></a>
 **Sharing Permissions** - Granular permissions (view, edit, admin) for pages, bins, or elements
 - [Differentiation: ⭐] [Demand: HIGH] [Version: 1.0]
+- **Easy Verification System**:
+  - One-glance permission visualization (color-coded, icon-based)
+  - Hover/click for detailed permission breakdown
+  - Permission inheritance tree visualization
+  - Real-time permission status updates
+- **Privacy-Aware Permissions**:
+  - Permission levels that respect privacy protection
+  - "View placeholders only" permission level
+  - "View partial data" permission level (e.g., last 4 digits of card)
+  - "View full data" permission level (requires explicit approval)
+  - Permission verification before revealing sensitive information
+- **Automated Permission Suggestions**:
+  - Suggest permissions based on content sensitivity
+  - Recommend placeholder protection for detected sensitive data
+  - Suggest permission levels based on collaboration context
 
 <a id="element-collaboration"></a>
 **Element Collaboration** - Comments, mentions, assignments
@@ -1770,6 +2307,10 @@ These features are primarily relevant at the page level.
 
 **Voice Commands**: Requires Web Speech API or external service
 
+**Multi-Repository Undo/Redo System**: Requires repository management system, git-style versioning per repository, branch/merge logic per repository, repository metadata storage, efficient delta storage, fast state switching, repository synchronization, cross-repository awareness (UI only, no direct interaction)
+- **Magic Cursor**: Requires cursor tracking, touch event handling, voice input integration, context-aware command interpretation
+- **Lasso Tool**: Requires freeform drawing/selection algorithm, path/container detection, element hit testing, natural language processing (keyword tools + LLM), command translation engine, command verification UI, command refinement system, visual command builder
+
 **LLM Processing**: Requires API integration or local model loading
 
 **Universal Utilities Architecture**: Should use a plugin registry that allows utilities to register for specific entity types (page, bin, element) with optional inheritance and override mechanisms
@@ -1786,51 +2327,66 @@ These features are primarily relevant at the page level.
 
 ### Priority Recommendations
 
-#### High Priority (Implement First) - Vision-Critical
-1. **Input Normalization Layer** - Foundation for multi-modal input (voice, touch, keyboard, gestures)
-2. **Innovative I/O System** - Novel input methods (camera, motion, game controllers, novel gestures) - Critical UX challenge
-3. **Adaptive UI System** - UI complexity adapts to user/context, no convention assumptions, discoverable features
-4. **Interactive Feature Discovery** - Help users discover features without relying on conventions
-5. **Progressive Onboarding** - Learn app through use, no documentation required
-6. **Multi-Modal Guidance** - Visual/audio/haptic cues for all actions
-7. **Multi-Select System** - Core interaction feature (works across all formats, enables batch operations)
-8. **Master Views Architecture** - Views are interchangeable, nestable, with total user control (foundational for all views)
-9. **Universal Annotation Layer** - Universal drawing/annotation on any view (essential communication tool)
-10. **Smart Annotation System** - Actionable annotations with symbol library (permissioned implementation)
-11. **Table/Spreadsheet View** - Most common data organization method (essential)
-12. **Timeline/Gantt View** - Essential for project management
-13. **Calendar View** - Essential for time-based information
-14. **Outline/Tree View** - Essential for hierarchical data
-15. **Performance Optimizer** - Sub-100ms interactions (extremely fast)
-16. **Multi-Instance System** - All devices support (compatible with all devices)
-17. **Offline Support System** - Full functionality offline (seamless across devices)
-18. **Storage Provider Manager** - Foundational
-19. **Security Manager** - Essential
-20. **Encryption Manager** - Essential
-21. **Sync Manager** - Real-time sync across devices (< 500ms latency)
-22. **Autosave Manager** - Reliability
-23. **AI Integration Plugin** - AI-first design (built for automation and AI)
-24. **AI-First Interaction System** - AI integrated into core interactions
-25. **Element Type Conversion System** - Seamless data representation (same data, multiple views)
-26. **Accessibility Plugin** - Bridge between power users and non-technical (WCAG 2.1 AA)
-27. **Voice Interface Plugin** - Novel UI/UX per input method (voice-first interface)
-28. **Touch Gesture Plugin** - Novel UI/UX per input method (gesture-based interactions)
-29. **Non-Visual Interface Plugin** - Non-visual input/output methods (screen reader, audio)
+#### Tier 1: Core Differentiators (Highest Priority)
+1. **Focus Mode (Mobile-Native)** - MVP: Basic Focus Mode with manager view, automatic progression, basic feedback
+2. **Mobile Bridge System** - Version 1.0: Addresses real mobile workflow pain point
+3. **Multi-Repository Undo/Redo System** - Version 1.0: Unique differentiator for complete reversibility
+4. **Subscription Reuse Model** - Version 1.5: Killer feature - use existing subscriptions
 
-#### Medium Priority (Implement Next)
+#### Tier 2: Foundation & Core Experience (High Priority)
+5. **Input Normalization Layer** - Foundation for multi-modal input (voice, touch, keyboard, gestures)
+6. **Multi-Select System** - Core interaction feature (works across all formats, enables batch operations)
+7. **Master Views Architecture** - Views are interchangeable, nestable, with total user control (foundational for all views)
+8. **Table/Spreadsheet View** - Most common data organization method (essential)
+9. **Timeline/Gantt View** - Essential for project management
+10. **Calendar View** - Essential for time-based information
+11. **Outline/Tree View** - Essential for hierarchical data
+12. **Performance Optimizer** - Realistic performance targets (sub-100ms for common operations, <500ms for complex operations)
+13. **Multi-Instance System** - All devices support (compatible with all devices)
+14. **Offline Support System** - Full functionality offline (seamless across devices)
+15. **Storage Provider Manager** - Foundational
+16. **Security Manager** - Essential
+17. **Encryption Manager** - Essential
+18. **Sync Manager** - Real-time sync across devices (< 500ms latency)
+19. **Autosave Manager** - Reliability
+20. **Element Type Conversion System** - Seamless data representation (same data, multiple views)
+
+#### Tier 3: UX Foundation (Phased Approach - Simplicity First)
+21. **Progressive Onboarding** - Learn app through use, no documentation required (start simple)
+22. **Multi-Modal Guidance** - Visual/audio/haptic cues for all actions (basic first)
+23. **Interactive Feature Discovery** - Help users discover features without relying on conventions (basic first)
+24. **Adaptive UI System** - UI complexity adapts to user/context (start with simple mode, add depth gradually)
+25. **Accessibility Plugin** - Bridge between power users and non-technical (WCAG 2.1 AA)
+
+#### Tier 4: Advanced Features (Defer Until After Product-Market Fit)
+26. **Innovative I/O System** - Novel input methods (camera, motion, game controllers) - EXPERIMENTAL, defer
+27. **Universal Annotation Layer** - Universal drawing/annotation on any view (defer to 1.5+)
+28. **Smart Annotation System** - Actionable annotations with symbol library (defer to 1.5+)
+29. **AI Integration Plugin** - AI-first design (defer advanced AI to 1.5, basic AI in 1.0)
+30. **AI-First Interaction System** - AI integrated into core interactions (defer to 1.5)
+31. **Voice Interface Plugin** - Novel UI/UX per input method (defer advanced voice to 1.5)
+32. **Touch Gesture Plugin** - Novel UI/UX per input method (defer advanced gestures to 1.5)
+33. **Non-Visual Interface Plugin** - Non-visual input/output methods (defer to 1.5+)
+
+#### Medium Priority (Version 1.0 - After Core Differentiators)
 1. **Enhanced Version Control** - Start with linear history
-2. **CLI Plugin** - Power users
-3. **Input Methods Plugin** - Accessibility
-4. **Keyboard Shortcuts Plugin** - UX
-5. **UI Customization Plugin** - Personalization
-6. **AI Prompt Plugin** - Companion feature
+2. **Cross-Platform Monitoring & CLI Integration** - Automatic completion assessment for Focus Mode
+3. **Enhanced Collaboration Privacy** - Automated private information detection, placeholder-based protection
+4. **Input Methods Plugin** - Accessibility
+5. **Keyboard Shortcuts Plugin** - UX
+6. **UI Customization Plugin** - Personalization
 7. **Advanced Clipboard Plugin** - High productivity value
-8. **AI Clipboard Plugin** - Valuable for AI workflows
-9. **Image Editor Element** - Enhancement
-10. **AI Image Element** - Feature
-11. **VSCode/Obsidian UI Theme** - UX
-12. **Multi-Window Format** - Advanced workflows
-13. **Browser Extension API** - Good extensibility, enables ecosystem of extensions
+8. **Browser Extension API** - Good extensibility, enables ecosystem of extensions
+
+#### Version 1.5 - Focus Mode Enhancements & Differentiators
+1. **AI-Guided Focus Coach** - Focus Mode + AI Integration (⭐⭐⭐⭐⭐ combination)
+2. **Dynamic Focus UI Adaptation** - Focus Mode + Element Type Conversion (⭐⭐⭐⭐⭐ combination)
+3. **Subscription Reuse Model** - External Integration Plugin (⭐⭐⭐⭐⭐ killer feature)
+4. **Voice+Gesture Interactions** - Magic Cursor and Lasso Tool (experimental, but high differentiation)
+5. **AI Prompt Plugin** - Companion feature
+6. **AI Clipboard Plugin** - Valuable for AI workflows
+7. **Image Editor Element** - Enhancement
+8. **AI Image Element** - Feature
 
 #### Low Priority (Defer or Reconsider)
 1. **AI History Tracking** - Defer until AI mature
@@ -1838,6 +2394,9 @@ These features are primarily relevant at the page level.
 3. **External CLI Listener** - Browser security restrictions
 4. **Input Processing Plugin** - Experimental
 5. **File Management System** - Integrate with Version Control
+6. **Novel I/O Methods** (camera, motion, game controllers) - Experimental, defer until after product-market fit
+7. **View Nesting** (Master Views advanced features) - Experimental, defer until after product-market fit
+8. **Low-Value 135 Combinations** - Community-driven implementation, defer until after product-market fit
 
 ### Architectural Considerations
 
@@ -1855,28 +2414,26 @@ These features are primarily relevant at the page level.
 
 **Universal Annotation & Smart Annotations**: Annotation system works on top of any view format. Can use the same comprehensive drawing system as AI-Enhanced Drawing. Smart annotations use symbol library for actionable annotations - users draw suggestions/comments using recognizable symbols (text alteration, insertion, deletion, diagram, comment, suggestion, etc.), and permissioned users can implement fixes with one click. The annotation system is as comprehensive as the drawing system, or directly uses that system. Supports collaborative annotations, version tracking, and permission-based implementation workflows.
 
-**Vision Alignment**: See `docs/VISION.md` for complete vision statement. Key principles: universal compatibility (all devices), extreme performance (sub-100ms), novel UI/UX per input method (voice, touch, keyboard, gestures, non-visual), built for automation and AI (AI-first design), seamless data representation (same data, multiple views), coherent and consistent (bridge power users and non-technical), instant information presentation, seamless collaboration. All plugins should support this vision.
+**Vision Alignment**: See `docs/VISION.md` for complete vision statement. Key principles: universal compatibility (all devices), realistic performance (sub-100ms for common operations, <500ms for complex), phased UX approach (simplicity first, then depth), built for automation and AI (AI-first design, but phased), seamless data representation (same data, multiple views), coherent and consistent (bridge power users and non-technical), instant information presentation, seamless collaboration. All plugins should support this vision, with realistic expectations and phased implementation.
 
 ### Implementation Phases
 
-#### Phase 1: Foundation (High Priority) - Vision Foundation
-- **Input Normalization Layer** - Core multi-modal input support
-- **Innovative I/O System** - Novel input methods (camera, motion, game controllers, novel gestures) - Critical UX challenge
-- **Adaptive UI System** - UI adapts to user/context, no convention assumptions, discoverable features
-- **Interactive Feature Discovery** - Help users discover features without relying on conventions
-- **Progressive Onboarding** - Learn app through use, no documentation required
-- **Multi-Modal Guidance** - Visual/audio/haptic cues for all actions
+#### Phase 1: MVP - Foundation + Core Differentiators
+**Focus: Simplicity First, Core Differentiators**
+
+**Core Differentiators:**
+- **Focus Mode (Basic)** - Manager view, automatic progression, basic feedback
+- **Multi-Repository Undo/Redo System** - Start with simpler versioning, add complexity gradually
+
+**Foundation:**
+- **Input Normalization Layer** - Core multi-modal input support (basic)
 - **Multi-Select System** - Core interaction feature (box selection, shift+click, ctrl+click, flexible range selection)
 - **Master Views Architecture** - Views are interchangeable, nestable, with total user control (foundational)
-- **Universal Annotation Layer** - Universal drawing/annotation on any view
 - **Table/Spreadsheet View** - Most common data organization (essential)
 - **Timeline/Gantt View** - Essential for project management
 - **Calendar View** - Essential for time-based information
 - **Outline/Tree View** - Essential for hierarchical data
-- **Mobile Bridge System** - Critical for mobile workflow integration (addresses sandboxed app problem)
-- **Browser Extension Plugins** - Bridge app to other web services (addresses workflow integration)
-- **Browser Extension API** - Access point for extensions (enables ecosystem)
-- **Performance Optimizer** - Sub-100ms interactions
+- **Performance Optimizer** - Realistic targets (sub-100ms for common operations, <500ms for complex)
 - **Offline Support System** - Full offline functionality
 - **Multi-Instance System** - All devices support
 - Storage Provider Manager
@@ -1885,24 +2442,69 @@ These features are primarily relevant at the page level.
 - Sync Manager (enhancement, < 500ms latency)
 - Autosave Manager
 
-#### Phase 2: Core Experience (High Priority) - Vision Core
-- **Smart Annotation System** - Actionable annotations with symbol library (permissioned implementation)
-- **AI-Enhanced Drawing Element** - Voice + position input drawing (on-device, low-cost, real-time)
-- **View Portals & Nesting** - Embed views within views, portal system
-- **View Composition** - Compose complex views from simpler ones
-- **AI Integration Plugin** - AI-first design
-- **AI-First Interaction System** - AI in core interactions
-- **Voice Interface Plugin** - Voice-first interface
-- **Touch Gesture Plugin** - Gesture-based interactions
-- **Non-Visual Interface Plugin** - Screen reader, audio
-- **Accessibility Plugin** - WCAG 2.1 AA compliance
-- **Dashboard/Widget View** - Aggregated information display (uses view portals)
-- Element Type Conversion System (framework + common conversions)
-- Universal File Renderer Element
-- AI Chat Element
-- External Integration Plugin
+**UX Foundation (Simplicity First):**
+- **Progressive Onboarding** - Start simple, learn through use (basic)
+- **Multi-Modal Guidance** - Visual/audio/haptic cues (basic)
+- **Interactive Feature Discovery** - Help users discover features (basic)
 
-#### Phase 3: Power User Features (Medium Priority)
+**Defer to Later Phases:**
+- Innovative I/O System (experimental)
+- Advanced Adaptive UI (add depth gradually)
+- Universal Annotation Layer (defer to 1.5+)
+- Advanced AI features (defer to 1.5)
+
+#### Phase 2: Version 1.0 - Core Experience + Differentiators
+**Focus: Add Core Differentiators, Maintain Simplicity**
+
+**Core Differentiators:**
+- **Mobile Bridge System** - Start with most common protocols, expand gradually
+- **Cross-Platform Monitoring & CLI Integration** - Automatic completion assessment for Focus Mode
+- **Enhanced Collaboration Privacy** - Automated private information detection, placeholder-based protection
+- **Focus Mode Integrations** - Templates, Time Tracking, Version Control
+
+**Core Experience:**
+- **Enhanced Version Control** - Start with linear history
+- **Element Type Conversion System** - Seamless data representation
+- **Input Methods Plugin** - Accessibility
+- **Keyboard Shortcuts Plugin** - UX
+- **UI Customization Plugin** - Personalization
+- **Advanced Clipboard Plugin** - High productivity value
+- **Browser Extension API** - Good extensibility, enables ecosystem
+
+**UX Enhancement (Add Depth Gradually):**
+- **Adaptive UI System** - Add power user features gradually
+- **Interactive Feature Discovery** - Enhance discoverability
+- **Accessibility Plugin** - Bridge between power users and non-technical
+
+**Defer to Later Phases:**
+- Advanced AI features
+- Voice+Gesture interactions
+- Universal Annotation Layer
+
+#### Phase 3: Version 1.5 - Focus Mode Enhancements & Differentiators
+**Focus: High-Value Combinations, Killer Features**
+
+**Core Differentiators:**
+- **AI-Guided Focus Coach** - Focus Mode + AI Integration (⭐⭐⭐⭐⭐ combination)
+- **Dynamic Focus UI Adaptation** - Focus Mode + Element Type Conversion (⭐⭐⭐⭐⭐ combination)
+- **Subscription Reuse Model** - External Integration Plugin (⭐⭐⭐⭐⭐ killer feature)
+
+**Advanced Features:**
+- **Voice+Gesture Interactions** - Magic Cursor and Lasso Tool (experimental, but high differentiation)
+- **AI Prompt Plugin** - Companion feature
+- **AI Clipboard Plugin** - Valuable for AI workflows
+- **Image Editor Element** - Enhancement
+- **AI Image Element** - Feature
+- **Smart Annotation System** - Actionable annotations with symbol library (defer from 1.0)
+- **Universal Annotation Layer** - Universal drawing/annotation on any view (defer from 1.0)
+
+**Defer to Version 2.0+:**
+- Synchronized Team Focus Sessions (Focus Mode + Collaboration)
+- Cross-Device Focus Continuity (Focus Mode + Multi-Instance)
+- Advanced view nesting and portals
+- Experimental I/O methods
+
+#### Phase 4: Power User Features (Version 2.0+)
 - **UI Inspector Tool** - Toggleable UI inspection (hover + click modal) for AI customizer and development
 - Enhanced Version Control (linear first)
 - CLI Plugin
@@ -1915,7 +2517,7 @@ These features are primarily relevant at the page level.
 - Regex Support
 - Custom Validators
 
-#### Phase 4: Polish & Enhancement (Medium Priority)
+#### Phase 5: Polish & Enhancement (Version 2.0+)
 - UI Customization Plugin
 - Input Methods Plugin
 - AI Prompt Plugin
@@ -1924,7 +2526,7 @@ These features are primarily relevant at the page level.
 - Image Editor Element
 - AI Image Element
 
-#### Phase 5: Experimental (Low Priority)
+#### Phase 6: Experimental (Defer Until After Product-Market Fit)
 - AI History Tracking
 - Input Processing Plugin
 - Multi-Window Format
@@ -1947,8 +2549,8 @@ All plugins organized by recommended version, with differentiation ratings and d
 
 | [Plugin Name](#plugin-name) | Differentiation | Demand | Version |
 |------------|----------------|--------|---------|
-| **MVP (Must Have - 6-12 months)** ||||
-| [Calendar Integration](#calendar-integration) | ⭐⭐ | HIGH | MVP |
+| **MVP (Must Have)** ||||
+| [Calendar Integration](#calendar-integration) | ⭐⭐⭐ | HIGH | MVP |
 | [Search](#search) | ⭐ | HIGH | MVP |
 | [Security & Encryption](#security-and-encryption) | ⭐⭐⭐ | HIGH | MVP |
 | [Security Manager](#security-manager) | ⭐⭐⭐ | HIGH | MVP |
@@ -1968,7 +2570,8 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Outline/Tree View](#outlinetree-view) | ⭐ | HIGH | MVP |
 | [Bin Calendar Integration](#bin-calendar-integration) | ⭐⭐ | HIGH | MVP |
 | [Responsive Breakpoints](#responsive-breakpoints) | ⭐⭐ | MEDIUM | MVP |
-| **Version 1.0 (High Value - 12-18 months)** ||||
+| **Version 1.0 (High Value)** ||||
+| [Cross-Platform Monitoring & CLI Integration](#cross-platform-monitoring-cli-integration) | ⭐⭐⭐⭐ | MEDIUM-HIGH | 1.0 |
 | [Universal Annotation Layer](#universal-annotation-layer) | ⭐⭐⭐⭐ | MEDIUM-HIGH | 1.0 |
 | [Smart Annotation System](#smart-annotation-system) | ⭐⭐⭐⭐ | MEDIUM-HIGH | 1.0 |
 | [Mobile Bridge System](#mobile-bridge-system) | ⭐⭐⭐⭐ | HIGH | 1.0 |
@@ -1978,7 +2581,8 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Advanced Clipboard Plugin](#advanced-clipboard-plugin) | ⭐⭐⭐⭐ | MEDIUM | 1.0 |
 | [UI Inspector Tool](#ui-inspector-tool) | ⭐⭐⭐⭐ | MEDIUM-HIGH | 1.0 |
 | [Version Control](#version-control) | ⭐⭐⭐⭐ | MEDIUM-HIGH | 1.0 |
-| [Collaboration](#collaboration) | ⭐ | HIGH | 1.0 |
+| [Multi-Repository Undo/Redo System](#multi-repository-undo-redo) | ⭐⭐⭐⭐ | MEDIUM | 1.0 |
+| [Collaboration](#collaboration) | ⭐⭐⭐⭐⭐ | HIGH | 1.0 |
 | [Sharing Permissions](#sharing-permissions) | ⭐ | HIGH | 1.0 |
 | [Time Tracking](#time-tracking) | ⭐⭐ | MEDIUM-HIGH | 1.0 |
 | [File Attachment Element](#file-attachment-element) | ⭐ | MEDIUM-HIGH | 1.0 |
@@ -2038,7 +2642,7 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Bin Merge](#bin-merge) | ⭐ | MEDIUM | 1.0 |
 | [Element Templates Library](#element-templates-library) | ⭐ | MEDIUM | 1.0 |
 | Element Version History | ⭐⭐ | MEDIUM | 1.0 |
-| **Version 1.5 (Enhancements - 18-24 months)** ||||
+| **Version 1.5 (Enhancements)** ||||
 | [External Integration Plugin](#external-integration-plugin) | ⭐⭐⭐⭐⭐ | MEDIUM | 1.5 |
 | [AI Integration Plugin](#ai-integration-plugin) | ⭐⭐⭐⭐ | MEDIUM | 1.5 |
 | [Adaptive UI System](#adaptive-ui-system) | ⭐⭐⭐ | MEDIUM | 1.5 |
@@ -2060,11 +2664,11 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Productivity Analytics Dashboard](#productivity-analytics-dashboard) | ⭐ | MEDIUM | 1.5 |
 | [Completion Rate Trends](#completion-rate-trends) | ⭐ | MEDIUM | 1.5 |
 | [Goal Progress Tracking](#goal-progress-tracking) | ⭐ | MEDIUM | 1.5 |
-| **Version 2.0+ (Power Users & Experimental - 24+ months)** ||||
-| [Master Views Architecture](#master-views-architecture) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
-| [View Interchangeability](#view-interchangeability) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
-| [Nestable Views](#nestable-views) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
-| [View Portals](#view-portals) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
+| **Version 2.0+ (Power Users & Experimental)** ||||
+| [Master Views Architecture](#master-views-architecture) | ⭐⭐⭐ | MEDIUM | 1.5 |
+| [View Interchangeability](#view-interchangeability) | ⭐⭐⭐ | MEDIUM | 1.5 |
+| [Nestable Views](#nestable-views) | ⭐⭐⭐ | MEDIUM | 1.5 |
+| [View Portals](#view-portals) | ⭐⭐⭐ | MEDIUM | 1.5 |
 | [View Transportation](#view-transportation) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
 | [View Composition](#view-composition) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
 | [View State Management](#view-state-management) | ⭐⭐⭐⭐⭐ | LOW-MEDIUM | 2.0+ |
@@ -2080,7 +2684,7 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Database Plugin](#database-plugin) | ⭐ | LOW | 2.0+ |
 | [Git History](#git-history) | ⭐⭐ | LOW | 2.0+ |
 | [Input Processing Plugin](#input-processing-plugin) | ⭐⭐ | LOW | 2.0+ |
-| [Innovative I/O System](#innovative-i-o-system) | ⭐⭐ | LOW | 2.0+ |
+| [Innovative I/O System](#innovative-i-o-system) | ⭐⭐ | MEDIUM | 2.0+ |
 | [External CLI Listener](#external-cli-listener) | ⭐⭐ | LOW | 2.0+ |
 | [Developer Tools](#developer-tools) | ⭐ | LOW | 2.0+ |
 | [Performance Monitoring Dashboard](#performance-monitoring-dashboard) | ⭐ | LOW | 2.0+ |
@@ -2094,10 +2698,10 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Regex Support](#regex-support) | ⭐ | LOW | 2.0+ |
 | [Custom Validators](#custom-validators) | ⭐ | LOW | 2.0+ |
 | [Advanced Export/Import with Transformers](#advanced-export-import-with-transformers) | ⭐ | LOW | 2.0+ |
-| [Budget/Finance Tracker](#budget-finance-tracker) | ⭐ | LOW | 2.0+ |
+| [Budget/Finance Tracker](#budget-finance-tracker) | ⭐⭐ | MEDIUM | 2.0+ |
 | [Purchase History Tracker](#purchase-history-tracker) | ⭐ | LOW | 2.0+ |
 | [Budget Tracker Element](#budget-tracker-element) | ⭐ | LOW | 2.0+ |
-| [Product Element](#product-element) | ⭐ | LOW | 2.0+ |
+| [Product Element](#product-element) | ⭐⭐ | LOW | 2.0+ |
 | [Product Comparison View](#product-comparison-view) | ⭐ | LOW | 2.0+ |
 | [Form Builder Plugin](#form-builder-plugin) | ⭐⭐ | MEDIUM | 2.0+ |
 | [Receipt/Invoice Element](#receipt-invoice-element) | ⭐ | LOW | 2.0+ |
@@ -2115,7 +2719,7 @@ All plugins organized by recommended version, with differentiation ratings and d
 | [Page Automation Rules](#page-automation-rules) | ⭐⭐ | MEDIUM | 2.0+ |
 | [Element Automation](#element-automation) | ⭐ | MEDIUM | 2.0+ |
 | [Custom Event System](#custom-event-system) | ⭐ | LOW | 2.0+ |
-| [UI Customization Plugin](#ui-customization-plugin) | ⭐ | MEDIUM | 2.0+ |
+| [UI Customization Plugin](#ui-customization-plugin) | ⭐⭐ | MEDIUM | 1.0 |
 | [Custom CSS Themes](#custom-css-themes) | ⭐ | MEDIUM | 2.0+ |
 | [Dark/Light Mode Toggle](#dark-light-mode-toggle) | ⭐ | MEDIUM | 2.0+ |
 | [VSCode/Obsidian UI Theme](#vscode-obsidian-ui-theme) | ⭐ | MEDIUM | 2.0+ |
