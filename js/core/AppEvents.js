@@ -166,7 +166,33 @@ export const EVENTS = {
          * @type {{operation: Object}}
          * Emitted when operation is logged (for future sync)
          */
-        LOGGED: 'operation:logged'
+        LOGGED: 'operation:logged',
+        
+        /** Operation rejected due to authority conflict
+         * @event operation:rejected
+         * @type {{operation: Object, reason: string, pageId: string, viewId: string}}
+         * Emitted when operation is rejected due to authority conflict
+         */
+        REJECTED: 'operation:rejected'
+    },
+    
+    /**
+     * Authority management events
+     */
+    AUTHORITY: {
+        /** Authority mode changed
+         * @event authority:mode-changed
+         * @type {{pageId: string, viewId: string, oldMode: string, newMode: string}}
+         * Emitted when authority mode changes for a page/view
+         */
+        MODE_CHANGED: 'authority:mode-changed',
+        
+        /** Drift detected between representations
+         * @event authority:drift-detected
+         * @type {{pageId: string, viewId: string, authority: string, sourceText: string, canonicalModel: Object}}
+         * Emitted when inconsistency is detected between representations
+         */
+        DRIFT_DETECTED: 'authority:drift-detected'
     },
     
     /**

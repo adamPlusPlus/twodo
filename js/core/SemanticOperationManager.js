@@ -5,6 +5,7 @@ import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
 import { getService, SERVICES } from './AppServices.js';
 import { getOperationLog } from './OperationLog.js';
+import { AUTHORITY_MODES } from './AuthorityManager.js';
 import {
     SetTextOperation,
     SplitOperation,
@@ -36,6 +37,70 @@ export class SemanticOperationManager {
      */
     _getAppState() {
         return getService(SERVICES.APP_STATE);
+    }
+    
+    /**
+     * Get page ID for an operation
+     * @private
+     * @param {BaseOperation} operation - Operation instance
+     * @returns {string|null} Page ID or null if not found
+     */
+    _getPageIdForOperation(operation) {
+        if (!operation || !operation.itemId) {
+            return null;
+        }
+        
+        // Try to find the item to get its page ID
+        // Use the operation's _findItem method if available
+        if (typeof operation._findItem === 'function') {
+            const location = operation._findItem();
+            if (location && location.documentId) {
+                return location.documentId;
+            }
+        }
+        
+        // Fallback: search through AppState
+        const appState = this._getAppState();
+        if (!appState || !appState.documents) {
+            return null;
+        }
+        
+        for (const document of appState.documents) {
+            if (!document.groups) continue;
+            
+            for (const group of document.groups) {
+                if (!group.items) continue;
+                
+                // Search for item in this group
+                const found = this._findItemInGroup(group.items, operation.itemId);
+                if (found) {
+                    return document.id;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Recursively find item in group
+     * @private
+     * @param {Array} items - Items array
+     * @param {string} itemId - Item ID to find
+     * @returns {boolean} True if found
+     */
+    _findItemInGroup(items, itemId) {
+        for (const item of items) {
+            if (item && item.id === itemId) {
+                return true;
+            }
+            if (item && item.children) {
+                if (this._findItemInGroup(item.children, itemId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
     
     /**
@@ -120,6 +185,28 @@ export class SemanticOperationManager {
         if (!operation.validate()) {
             console.error('[SemanticOperationManager] Operation validation failed');
             return null;
+        }
+        
+        // Check authority before applying
+        const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+        if (authorityManager) {
+            const pageId = this._getPageIdForOperation(operation);
+            if (pageId) {
+                const isValid = authorityManager.validateOperation(operation, pageId, null);
+                if (!isValid) {
+                    // Operation rejected due to authority conflict
+                    eventBus.emit(EVENTS.OPERATION.REJECTED, {
+                        operation: {
+                            op: operation.getType(),
+                            itemId: operation.itemId,
+                            params: operation.params
+                        },
+                        reason: 'authority_conflict',
+                        pageId
+                    });
+                    return { success: false, reason: 'authority_conflict' };
+                }
+            }
         }
         
         // Apply operation

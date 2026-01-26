@@ -7,6 +7,7 @@ import { asyncIndexer } from './AsyncIndexer.js';
 import { repositoryManager } from './RepositoryManager.js';
 import { semanticOperationManager } from './SemanticOperationManager.js';
 import { viewManager } from './ViewManager.js';
+import { authorityManager } from './AuthorityManager.js';
 
 /**
  * Service name constants
@@ -22,6 +23,7 @@ export const SERVICES = {
     PERFORMANCE_BUDGET: 'performanceBudget',
     SEMANTIC_OPERATION_MANAGER: 'semanticOperationManager',
     VIEW_MANAGER: 'viewManager',
+    AUTHORITY_MANAGER: 'authorityManager',
     ACTIVE_SET_MANAGER: 'activeSetManager',
     ASYNC_INDEXER: 'asyncIndexer',
     REPOSITORY_MANAGER: 'repositoryManager',
@@ -122,6 +124,7 @@ export function registerAllServices(app) {
     registerService(SERVICES.PERFORMANCE_BUDGET, performanceBudgetManager);
     registerService(SERVICES.SEMANTIC_OPERATION_MANAGER, semanticOperationManager);
     registerService(SERVICES.VIEW_MANAGER, viewManager);
+    registerService(SERVICES.AUTHORITY_MANAGER, authorityManager);
     
     // Initialize ViewManager
     viewManager.init();

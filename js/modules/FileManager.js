@@ -407,26 +407,46 @@ export class FileManager {
     
     showFileManager() {
         // Wait a bit to ensure DOM is ready (in case called during render)
-        const modal = document.getElementById('modal');
-        const modalBody = document.getElementById('modal-body');
+        let modal = document.getElementById('modal');
+        let modalBody = document.getElementById('modal-body');
         
-        if (!modal || !modalBody) {
-            console.error('[FileManager] Modal elements not found!', { 
-                hasModal: !!modal, 
-                hasModalBody: !!modalBody,
-                modalHTML: document.querySelector('#modal')?.outerHTML?.substring(0, 100)
-            });
-            // Try again after a short delay in case DOM isn't ready
+        // If modal doesn't exist, try to find it or wait
+        if (!modal) {
+            console.warn('[FileManager] Modal not found, waiting for DOM...');
             setTimeout(() => {
-                const retryModal = document.getElementById('modal');
-                const retryModalBody = document.getElementById('modal-body');
-                if (retryModal && retryModalBody) {
-                    this.showFileManager();
-                } else {
-                    console.error('[FileManager] Modal elements still not found after retry');
-                }
-            }, 100);
+                this.showFileManager();
+            }, 200);
             return;
+        }
+        
+        // Ensure modal-content exists
+        let modalContent = modal.querySelector('.modal-content');
+        if (!modalContent) {
+            console.warn('[FileManager] Modal content not found, creating it...');
+            modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            modal.appendChild(modalContent);
+        }
+        
+        // Ensure modal-body exists
+        if (!modalBody) {
+            console.warn('[FileManager] Modal body not found, creating it...');
+            modalBody = document.createElement('div');
+            modalBody.id = 'modal-body';
+            modalContent.appendChild(modalBody);
+        }
+        
+        // Ensure modal-close exists
+        let modalClose = modalContent.querySelector('.modal-close');
+        if (!modalClose) {
+            modalClose = document.createElement('span');
+            modalClose.className = 'modal-close';
+            modalClose.innerHTML = '&times;';
+            modalClose.onclick = () => {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            };
+            modalContent.insertBefore(modalClose, modalContent.firstChild);
         }
         
         modalBody.innerHTML = `
@@ -444,6 +464,8 @@ export class FileManager {
             </div>
         `;
         
+        // Make sure modal is visible
+        modal.style.display = 'block';
         modal.classList.add('active');
         
         // Attach event listeners

@@ -41,3 +41,6 @@ docs/
 node_modules/
 dist/
 .vite/
+coverage/
+.nyc_output/
+nul

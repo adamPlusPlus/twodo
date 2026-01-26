@@ -11,6 +11,8 @@ import { ViewportRenderer } from '../../core/ViewportRenderer.js';
 import { performanceBudgetManager } from '../../core/PerformanceBudgetManager.js';
 import { ViewProjection } from '../../core/ViewProjection.js';
 import { getService, SERVICES } from '../../core/AppServices.js';
+import { AUTHORITY_MODES } from '../../core/AuthorityManager.js';
+import { latexDiffParser } from '../../utils/LaTeXDiffParser.js';
 
 export default class LaTeXEditorFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -334,6 +336,57 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
         `;
         splitBtn.onclick = () => setViewMode('split');
         
+        // Authority toggle button
+        const authorityBtn = document.createElement('button');
+        authorityBtn.textContent = 'LaTeX is source';
+        authorityBtn.className = 'authority-toggle-btn';
+        authorityBtn.title = 'Toggle: When enabled, LaTeX edits update the canonical model';
+        authorityBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #2a2a2a;
+            color: #888;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        // Check current authority mode
+        const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+        const viewId = this.viewProjection?.viewId;
+        const isAuthoritative = authorityManager && viewId && 
+            authorityManager.isAuthoritative(page.id, viewId, AUTHORITY_MODES.LATEX_SOURCE);
+        
+        if (isAuthoritative) {
+            authorityBtn.style.background = '#4a9eff';
+            authorityBtn.style.color = '#fff';
+            authorityBtn.style.borderColor = '#4a9eff';
+        }
+        
+        authorityBtn.addEventListener('click', () => {
+            if (authorityManager && viewId) {
+                const currentMode = authorityManager.getAuthority(page.id, viewId);
+                const newMode = currentMode === AUTHORITY_MODES.LATEX_SOURCE
+                    ? AUTHORITY_MODES.CANONICAL
+                    : AUTHORITY_MODES.LATEX_SOURCE;
+                
+                authorityManager.setAuthority(page.id, viewId, newMode);
+                
+                // Update button appearance
+                if (newMode === AUTHORITY_MODES.LATEX_SOURCE) {
+                    authorityBtn.style.background = '#4a9eff';
+                    authorityBtn.style.color = '#fff';
+                    authorityBtn.style.borderColor = '#4a9eff';
+                } else {
+                    authorityBtn.style.background = '#2a2a2a';
+                    authorityBtn.style.color = '#888';
+                    authorityBtn.style.borderColor = '#444';
+                }
+            }
+        });
+        
+        viewControls.appendChild(authorityBtn);
+        
         // Error checking toggle
         const errorCheckBtn = document.createElement('button');
         errorCheckBtn.textContent = '✓ Check';
@@ -540,12 +593,71 @@ export default class LaTeXEditorFormat extends BaseFormatRenderer {
         this._updatePreviewFn = updatePreview;
         
         // Debounced save function
+        // Phase 5: When LaTeX is authoritative, parse diff and generate operations
         let saveTimeout;
         const saveLaTeX = () => {
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(async () => {
-                if (app.dataManager) {
-                    await app.dataManager.saveData();
+                const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+                const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+                const viewId = this.viewProjection?.viewId;
+                
+                const isAuthoritative = authorityManager && viewId && 
+                    authorityManager.isAuthoritative(page.id, viewId, AUTHORITY_MODES.LATEX_SOURCE);
+                
+                if (isAuthoritative && semanticOpManager) {
+                    // LaTeX is authoritative - parse diff and generate operations
+                    const currentLaTeX = editTextarea.value;
+                    const oldLaTeX = this._latexCache || '';
+                    
+                    if (oldLaTeX !== currentLaTeX) {
+                        try {
+                            // Parse diff and generate operations
+                            const operations = latexDiffParser.parseDiff(oldLaTeX, currentLaTeX, page.id);
+                            
+                            // Prevent circular updates
+                            authorityManager.preventCircularUpdate(page.id, viewId, 'latex');
+                            
+                            // Apply operations
+                            for (const op of operations) {
+                                const operation = semanticOpManager.createOperation(
+                                    op.op,
+                                    op.itemId,
+                                    op.params
+                                );
+                                
+                                if (operation) {
+                                    const result = semanticOpManager.applyOperation(operation);
+                                    if (result && result.success) {
+                                        // Record for undo/redo
+                                        const undoRedoManager = getService(SERVICES.UNDO_REDO_MANAGER);
+                                        if (undoRedoManager) {
+                                            undoRedoManager.recordOperation(operation);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Update cache
+                            this._latexCache = currentLaTeX;
+                            
+                            // Save data
+                            if (app.dataManager) {
+                                await app.dataManager.saveData();
+                            }
+                        } catch (error) {
+                            console.error('[LaTeXEditorFormat] Error parsing LaTeX diff:', error);
+                            // Fallback: just save data
+                            if (app.dataManager) {
+                                await app.dataManager.saveData();
+                            }
+                        }
+                    }
+                } else {
+                    // Not authoritative - just save data
+                    if (app.dataManager) {
+                        await app.dataManager.saveData();
+                    }
                 }
             }, 1000);
         };

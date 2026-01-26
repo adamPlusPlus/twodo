@@ -36,5 +36,25 @@ export const ItemHierarchy = {
         }
         const childIds = Array.isArray(item?.childIds) ? item.childIds : [];
         return childIds.map(id => itemIndex[id]).filter(Boolean);
+    },
+
+    getAllItems(items, itemIndex) {
+        const allItems = [];
+        if (!items || !Array.isArray(items)) {
+            return allItems;
+        }
+        const processItems = (itemList) => {
+            for (const item of itemList) {
+                if (item) {
+                    allItems.push(item);
+                    const children = ItemHierarchy.getChildItems(item, itemIndex);
+                    if (children.length > 0) {
+                        processItems(children);
+                    }
+                }
+            }
+        };
+        processItems(items);
+        return allItems;
     }
 };

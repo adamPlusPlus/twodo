@@ -3,6 +3,7 @@
 
 import { eventBus } from './EventBus.js';
 import { EVENTS } from './AppEvents.js';
+import { getService, SERVICES } from './AppServices.js';
 
 /**
  * ViewProjection - Abstract base class for view projections
@@ -76,6 +77,28 @@ export class ViewProjection {
      * @returns {boolean} True if operation was handled, false otherwise
      */
     applyOperation(operation) {
+        // Check if this update is from authoritative source
+        // If so, skip view update to prevent circular updates
+        const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+        if (authorityManager && this._pageId && this.viewId) {
+            const isFromAuthoritativeSource = authorityManager.isUpdateFromAuthoritativeSource(
+                this._pageId,
+                this.viewId,
+                operation
+            );
+            
+            if (isFromAuthoritativeSource) {
+                // This update came from the authoritative source (e.g., markdown edit)
+                // Skip view update to prevent circular update loop
+                console.log('[ViewProjection] Skipping update from authoritative source:', {
+                    viewId: this.viewId,
+                    pageId: this._pageId,
+                    operation: operation.op
+                });
+                return true; // Handled, but no view update needed
+            }
+        }
+        
         // Override in subclasses for incremental updates
         // Default: fallback to full re-project
         if (this.isOperationRelevant(operation)) {

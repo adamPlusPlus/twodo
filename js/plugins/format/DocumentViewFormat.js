@@ -5,6 +5,8 @@ import { ItemHierarchy } from '../../utils/ItemHierarchy.js';
 import { performanceBudgetManager } from '../../core/PerformanceBudgetManager.js';
 import { ViewProjection } from '../../core/ViewProjection.js';
 import { getService, SERVICES } from '../../core/AppServices.js';
+import { AUTHORITY_MODES } from '../../core/AuthorityManager.js';
+import { markdownDiffParser } from '../../utils/MarkdownDiffParser.js';
 
 export default class DocumentViewFormat extends BaseFormatRenderer {
     constructor(config = {}) {
@@ -1033,6 +1035,58 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
             font-size: 14px;
         `;
         
+        // Authority toggle button
+        const authorityBtn = document.createElement('button');
+        authorityBtn.textContent = 'Markdown is source';
+        authorityBtn.className = 'authority-toggle-btn';
+        authorityBtn.title = 'Toggle: When enabled, markdown edits update the canonical model';
+        authorityBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #2a2a2a;
+            color: #888;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: auto;
+        `;
+        
+        // Check current authority mode
+        const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+        const viewId = this.viewProjection?.viewId;
+        const isAuthoritative = authorityManager && viewId && 
+            authorityManager.isAuthoritative(page.id, viewId, AUTHORITY_MODES.MARKDOWN_SOURCE);
+        
+        if (isAuthoritative) {
+            authorityBtn.style.background = '#4a9eff';
+            authorityBtn.style.color = '#fff';
+            authorityBtn.style.borderColor = '#4a9eff';
+        }
+        
+        authorityBtn.addEventListener('click', () => {
+            if (authorityManager && viewId) {
+                const currentMode = authorityManager.getAuthority(page.id, viewId);
+                const newMode = currentMode === AUTHORITY_MODES.MARKDOWN_SOURCE
+                    ? AUTHORITY_MODES.CANONICAL
+                    : AUTHORITY_MODES.MARKDOWN_SOURCE;
+                
+                authorityManager.setAuthority(page.id, viewId, newMode);
+                
+                // Update button appearance
+                if (newMode === AUTHORITY_MODES.MARKDOWN_SOURCE) {
+                    authorityBtn.style.background = '#4a9eff';
+                    authorityBtn.style.color = '#fff';
+                    authorityBtn.style.borderColor = '#4a9eff';
+                } else {
+                    authorityBtn.style.background = '#2a2a2a';
+                    authorityBtn.style.color = '#888';
+                    authorityBtn.style.borderColor = '#444';
+                }
+            }
+        });
+        
+        viewControls.appendChild(authorityBtn);
+        
         // Store current view mode (restore from page metadata or default to split)
         const pageViewModeKey = `_documentViewMode_${page.id}`;
         let currentViewMode = page._documentViewMode || 'split';
@@ -1571,11 +1625,68 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
         };
         
         // Function to save markdown back to page data
-        // Phase 4: Instead of directly modifying AppState, we should parse markdown
-        // and create operations. For now, keep metadata storage but don't modify canonical model directly.
+        // Phase 5: When markdown is authoritative, parse diff and generate operations
         const saveMarkdownToPage = async (markdownText) => {
-            // Store markdown in page metadata (non-canonical, view-specific)
-            // Future: Parse markdown and create semantic operations to update canonical model
+            const authorityManager = getService(SERVICES.AUTHORITY_MANAGER);
+            const semanticOpManager = getService(SERVICES.SEMANTIC_OPERATION_MANAGER);
+            const viewId = this.viewProjection?.viewId;
+            
+            const isAuthoritative = authorityManager && viewId && 
+                authorityManager.isAuthoritative(page.id, viewId, AUTHORITY_MODES.MARKDOWN_SOURCE);
+            
+            if (isAuthoritative && semanticOpManager) {
+                // Markdown is authoritative - parse diff and generate operations
+                const oldMarkdown = this._markdownCache || '';
+                
+                if (oldMarkdown !== markdownText) {
+                    try {
+                        // Parse diff and generate operations
+                        const operations = markdownDiffParser.parseDiff(oldMarkdown, markdownText, page.id);
+                        
+                        // Prevent circular updates
+                        authorityManager.preventCircularUpdate(page.id, viewId, 'markdown');
+                        
+                        // Apply operations
+                        for (const op of operations) {
+                            const operation = semanticOpManager.createOperation(
+                                op.op,
+                                op.itemId,
+                                op.params
+                            );
+                            
+                            if (operation) {
+                                const result = semanticOpManager.applyOperation(operation);
+                                if (result && result.success) {
+                                    // Record for undo/redo
+                                    const undoRedoManager = getService(SERVICES.UNDO_REDO_MANAGER);
+                                    if (undoRedoManager) {
+                                        undoRedoManager.recordOperation(operation);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Update cache
+                        this._markdownCache = markdownText;
+                        
+                        // Save data
+                        if (app.dataManager) {
+                            await app.dataManager.saveData();
+                        }
+                    } catch (error) {
+                        console.error('[DocumentViewFormat] Error parsing markdown diff:', error);
+                        // Fallback to metadata storage
+                        this._saveMarkdownMetadata(markdownText, app);
+                    }
+                }
+            } else {
+                // Not authoritative - store as metadata only
+                this._saveMarkdownMetadata(markdownText, app);
+            }
+        };
+        
+        // Helper function to save markdown as metadata
+        this._saveMarkdownMetadata = async (markdownText, app) => {
             if (app.appState) {
                 const pages = this._getPages(app);
                 const pageIndex = pages.findIndex(p => p.id === page.id);
@@ -1585,8 +1696,6 @@ export default class DocumentViewFormat extends BaseFormatRenderer {
                     }
                     pages[pageIndex]._documentMarkdown.raw = markdownText;
                     pages[pageIndex]._documentMarkdown.lastModified = Date.now();
-                    // Note: We're storing metadata, not modifying canonical structure
-                    // The canonical model is updated via operations, not direct assignment
                     // Trigger save (metadata only)
                     if (app.dataManager) {
                         await app.dataManager.saveData();
