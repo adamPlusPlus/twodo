@@ -93,10 +93,10 @@ Since the app uses `fetch()` to load files, you need to run it from a local serv
 
 Or manually:
 ```bash
-python3 -m http.server 8000 --bind 0.0.0.0
+python3 -m http.server 8001 --bind 0.0.0.0
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:8001` in your browser.
 
 **LAN Access**: The server binds to all network interfaces (0.0.0.0), making it accessible from other devices on your local network. The script will display your local IP address when starting - use `http://YOUR_IP:8000` on other devices to access the app.
 
@@ -117,10 +117,10 @@ bash start_servers.sh
 Or manually:
 ```bash
 # Terminal 1: HTTP server
-python3 server.py 8000
+python3 server.py 8001
 
 # Terminal 2: WebSocket server  
-python3 websocket_server.py 8001
+python3 websocket_server.py 8000
 ```
 
 ### Adding Elements

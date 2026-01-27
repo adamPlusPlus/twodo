@@ -1,0 +1,11 @@
+fix: harden DataManager and ActiveSetManager against undefined sub-managers
+
+- DataManager: wrap dailyResetManager/dataSyncManager construction in try/catch;
+  use optional chaining for checkDailyReset, loadData daily reset, and saveData
+  (scheduleAutosave/scheduleSync) so missing sub-managers no longer throw.
+- ActiveSetManager: set load function in DataManager constructor when
+  active-set is enabled, so any early getDocument() (e.g. before loadData)
+  succeeds; loadData still overwrites with the richer implementation.
+- Prevents "Cannot read properties of undefined (reading 'checkDailyReset')",
+  "Cannot read properties of undefined (reading 'scheduleAutosave')", and
+  "[ActiveSetManager] No load function set, cannot load: document-1".

@@ -1,8 +1,0 @@
-Update AppRenderer and PluginLoaderService
-
-## Summary
-Updated AppRenderer.js and PluginLoaderService.js with recent changes.
-
-## Changes
-- Modified js/core/AppRenderer.js
-- Modified js/core/PluginLoaderService.js

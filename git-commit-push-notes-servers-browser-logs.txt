@@ -1,0 +1,8 @@
+Servers and logs check
+
+- Fixed ElementMoveHandler.js: removed duplicate "export class ElementMoveHandler" that caused Vite build to fail (invalid JS syntax).
+- Build: succeeds (npm run build).
+- HTTP server (port 8000): started; server.log empty; curl returns 200 for / and /app.js.
+- WebSocket server (port 8001): failed to bind — OSError 10048 "only one usage of each socket address" (port in use). Log: websocket.log.
+- Vite dev (port 3000): runs; warning only — PluginLoaderService.js dynamic import cannot be analyzed (known/acceptable).
+- Browser logs: not captured automatically. Open http://localhost:8000 or http://localhost:3000, F12 → Console, check for red errors.

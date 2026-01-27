@@ -163,6 +163,9 @@ class TodoApp {
         // Initialize app initialization manager
         this.appInitializer = new AppInitializationManager(this);
         
+        // Wire app reference into FileManager (needed for Load, sync, undo in file-manager modal)
+        this.fileManager.app = this;
+        
         // Listen for render requests from EventBus (handled by RenderService now)
         
         performance.mark('app-constructor-end');
@@ -366,10 +369,7 @@ class TodoApp {
                 // Fall through to load last opened file or default
             }
         } else {
-            // Check daily reset before loading data (only if no URL file param)
-            this.dataManager.checkDailyReset();
-            
-            // Load data (only once, only if no URL file param)
+            // Load data (only once, only if no URL file param). loadData runs daily reset on storage first.
             this.dataManager.loadData();
         }
         

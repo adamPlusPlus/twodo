@@ -3,6 +3,9 @@
 
 import { getService, SERVICES } from './AppServices.js';
 import { ItemHierarchy } from '../utils/ItemHierarchy.js';
+import { OperationValidator } from '../utils/OperationValidator.js';
+import { OperationInverter } from '../utils/OperationInverter.js';
+import { OperationApplier } from '../utils/OperationApplier.js';
 
 /**
  * Base class for all semantic operations
@@ -61,56 +64,7 @@ class BaseOperation {
      * @returns {Object|null} Item with location info
      */
     _findItem() {
-        const appState = getService(SERVICES.APP_STATE);
-        if (!appState) return null;
-        
-        const documents = appState.documents || [];
-        for (const document of documents) {
-            if (!document.groups) continue;
-            
-            for (const group of document.groups) {
-                if (!group.items) continue;
-                
-                const itemIndex = ItemHierarchy.buildItemIndex(group.items);
-                
-                // Check root items
-                for (let i = 0; i < group.items.length; i++) {
-                    const item = group.items[i];
-                    if (item && item.id === this.itemId) {
-                        return {
-                            item,
-                            documentId: document.id,
-                            groupId: group.id,
-                            itemIndex: i,
-                            isChild: false,
-                            group
-                        };
-                    }
-                    
-                    // Check child items
-                    if (item) {
-                        const children = ItemHierarchy.getChildItems(item, itemIndex);
-                        for (let j = 0; j < children.length; j++) {
-                            const child = children[j];
-                            if (child && child.id === this.itemId) {
-                                return {
-                                    item: child,
-                                    documentId: document.id,
-                                    groupId: group.id,
-                                    itemIndex: i,
-                                    childIndex: j,
-                                    isChild: true,
-                                    parentItem: item,
-                                    group
-                                };
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        return null;
+        return OperationApplier.findItem(this.itemId);
     }
 }
 
@@ -151,12 +105,7 @@ export class SetTextOperation extends BaseOperation {
     }
     
     invert() {
-        return new SetTextOperation(
-            this.itemId,
-            this.params.oldText || '',
-            this.params.text,
-            this.timestamp
-        );
+        return OperationInverter.invertSetTextOperation(this, SetTextOperation);
     }
 }
 
@@ -213,8 +162,7 @@ export class SplitOperation extends BaseOperation {
         };
         
         // Insert new item after current item
-        const insertIndex = location.itemIndex + 1;
-        location.group.items.splice(insertIndex, 0, newItem);
+        const insertIndex = OperationApplier.insertItemAt(location.group, newItem, location.itemIndex + 1);
         
         return {
             success: true,
@@ -242,12 +190,7 @@ export class MergeOperation extends BaseOperation {
     }
     
     validate() {
-        if (!super.validate()) return false;
-        if (!this.params.previousItemId) {
-            console.error('[MergeOperation] Missing previousItemId parameter');
-            return false;
-        }
-        return true;
+        return OperationValidator.validateMergeOperation(this);
     }
     
     apply() {
@@ -259,7 +202,7 @@ export class MergeOperation extends BaseOperation {
             return null;
         }
         
-        const previousLocation = new BaseOperation(this.params.previousItemId, {})._findItem();
+        const previousLocation = OperationApplier.findItem(this.params.previousItemId);
         if (!previousLocation) {
             console.error(`[MergeOperation] Previous item not found: ${this.params.previousItemId}`);
             return null;
@@ -284,7 +227,7 @@ export class MergeOperation extends BaseOperation {
         previousItem.text = mergedText;
         
         // Remove merged item
-        location.group.items.splice(location.itemIndex, 1);
+        OperationApplier.removeItemAt(location.group, location.itemIndex);
         
         return {
             success: true,
@@ -321,12 +264,7 @@ export class MoveOperation extends BaseOperation {
     }
     
     validate() {
-        if (!super.validate()) return false;
-        if (this.params.newIndex === undefined) {
-            console.error('[MoveOperation] Missing newIndex parameter');
-            return false;
-        }
-        return true;
+        return OperationValidator.validateMoveOperation(this);
     }
     
     apply() {
@@ -355,7 +293,7 @@ export class MoveOperation extends BaseOperation {
         // Find new location
         let newGroup = location.group;
         if (this.params.newParentId) {
-            const newParentLocation = new BaseOperation(this.params.newParentId, {})._findItem();
+            const newParentLocation = OperationApplier.findItem(this.params.newParentId);
             if (!newParentLocation) {
                 console.error(`[MoveOperation] New parent not found: ${this.params.newParentId}`);
                 return null;
@@ -368,18 +306,13 @@ export class MoveOperation extends BaseOperation {
         newGroup.items.splice(insertIndex, 0, item);
         
         // Update parent's childIds if needed
+        // This is now handled by updateParentChildIds, but keeping for backward compatibility
         if (oldParentId) {
-            const oldParent = new BaseOperation(oldParentId, {})._findItem();
-            if (oldParent && oldParent.item.childIds) {
-                const childIndex = oldParent.item.childIds.indexOf(this.itemId);
-                if (childIndex !== -1) {
-                    oldParent.item.childIds.splice(childIndex, 1);
-                }
-            }
+            OperationApplier.removeFromParentChildIds(oldParentId, this.itemId);
         }
         
         if (this.params.newParentId) {
-            const newParent = new BaseOperation(this.params.newParentId, {})._findItem();
+            const newParent = OperationApplier.findItem(this.params.newParentId);
             if (newParent && newParent.item) {
                 if (!newParent.item.childIds) {
                     newParent.item.childIds = [];
@@ -400,14 +333,7 @@ export class MoveOperation extends BaseOperation {
     }
     
     invert() {
-        return new MoveOperation(
-            this.itemId,
-            this.params.oldParentId,
-            this.params.oldIndex,
-            this.params.newParentId,
-            this.params.newIndex,
-            this.timestamp
-        );
+        return OperationInverter.invertMoveOperation(this, MoveOperation);
     }
 }
 
@@ -439,7 +365,7 @@ export class ReparentOperation extends BaseOperation {
         
         const item = location.item;
         const oldParentId = item.parentId || null;
-        const oldDepth = this._calculateDepth(item);
+        const oldDepth = OperationApplier.calculateDepth(item);
         
         // Store old values for invert
         this.params.oldParentId = oldParentId;
@@ -449,27 +375,7 @@ export class ReparentOperation extends BaseOperation {
         item.parentId = this.params.newParentId;
         
         // Update parent's childIds
-        if (oldParentId) {
-            const oldParent = new BaseOperation(oldParentId, {})._findItem();
-            if (oldParent && oldParent.item.childIds) {
-                const childIndex = oldParent.item.childIds.indexOf(this.itemId);
-                if (childIndex !== -1) {
-                    oldParent.item.childIds.splice(childIndex, 1);
-                }
-            }
-        }
-        
-        if (this.params.newParentId) {
-            const newParent = new BaseOperation(this.params.newParentId, {})._findItem();
-            if (newParent && newParent.item) {
-                if (!newParent.item.childIds) {
-                    newParent.item.childIds = [];
-                }
-                if (!newParent.item.childIds.includes(this.itemId)) {
-                    newParent.item.childIds.push(this.itemId);
-                }
-            }
-        }
+        OperationApplier.updateParentChildIds(oldParentId, this.params.newParentId, this.itemId);
         
         return {
             success: true,
@@ -478,26 +384,6 @@ export class ReparentOperation extends BaseOperation {
             newParentId: this.params.newParentId,
             newDepth: this.params.newDepth
         };
-    }
-    
-    _calculateDepth(item) {
-        // Calculate depth by counting parent chain
-        let depth = 0;
-        let current = item;
-        const visited = new Set();
-        
-        while (current && current.parentId && !visited.has(current.id)) {
-            visited.add(current.id);
-            const parent = new BaseOperation(current.parentId, {})._findItem();
-            if (parent && parent.item) {
-                depth++;
-                current = parent.item;
-            } else {
-                break;
-            }
-        }
-        
-        return depth;
     }
     
     invert() {
@@ -521,7 +407,7 @@ export class DeleteOperation extends BaseOperation {
     }
     
     validate() {
-        return super.validate();
+        return OperationValidator.validateDeleteOperation(this);
     }
     
     apply() {
@@ -541,7 +427,7 @@ export class DeleteOperation extends BaseOperation {
         
         // Remove from parent's childIds if needed
         if (location.item.parentId) {
-            const parent = new BaseOperation(location.item.parentId, {})._findItem();
+            const parent = OperationApplier.findItem(location.item.parentId);
             if (parent && parent.item.childIds) {
                 const childIndex = parent.item.childIds.indexOf(this.itemId);
                 if (childIndex !== -1) {
@@ -560,14 +446,7 @@ export class DeleteOperation extends BaseOperation {
     }
     
     invert() {
-        return new CreateOperation(
-            this.itemId,
-            this.params.deletedItem.type,
-            this.params.deletedParentId,
-            this.params.deletedIndex,
-            this.params.deletedItem,
-            this.timestamp
-        );
+        return OperationInverter.invertDeleteOperation(this, CreateOperation);
     }
 }
 
@@ -595,29 +474,11 @@ export class CreateOperation extends BaseOperation {
     apply() {
         if (!this.validate()) return null;
         
-        // Find parent group
+        // Find target group
         const appState = getService(SERVICES.APP_STATE);
         if (!appState) return null;
         
-        const documents = appState.documents || [];
-        let targetGroup = null;
-        
-        if (this.params.parentId) {
-            // Find parent item's group
-            const parentLocation = new BaseOperation(this.params.parentId, {})._findItem();
-            if (!parentLocation) {
-                console.error(`[CreateOperation] Parent not found: ${this.params.parentId}`);
-                return null;
-            }
-            targetGroup = parentLocation.group;
-        } else {
-            // Find first group in current document
-            const currentDoc = documents.find(d => d.id === appState.currentDocumentId);
-            if (currentDoc && currentDoc.groups && currentDoc.groups.length > 0) {
-                targetGroup = currentDoc.groups[0];
-            }
-        }
-        
+        const targetGroup = OperationApplier.findTargetGroup(this.params.parentId, appState);
         if (!targetGroup) {
             console.error('[CreateOperation] No target group found');
             return null;
@@ -638,20 +499,11 @@ export class CreateOperation extends BaseOperation {
         newItem.id = this.itemId;
         
         // Insert at index
-        const insertIndex = Math.min(this.params.index, targetGroup.items.length);
-        targetGroup.items.splice(insertIndex, 0, newItem);
+        const insertIndex = OperationApplier.insertItemAt(targetGroup, newItem, this.params.index);
         
         // Update parent's childIds if needed
         if (this.params.parentId) {
-            const parent = new BaseOperation(this.params.parentId, {})._findItem();
-            if (parent && parent.item) {
-                if (!parent.item.childIds) {
-                    parent.item.childIds = [];
-                }
-                if (!parent.item.childIds.includes(this.itemId)) {
-                    parent.item.childIds.push(this.itemId);
-                }
-            }
+            OperationApplier.addToParentChildIds(this.params.parentId, this.itemId);
         }
         
         return {
@@ -662,10 +514,6 @@ export class CreateOperation extends BaseOperation {
     }
     
     invert() {
-        return new DeleteOperation(
-            this.itemId,
-            this.params.itemData,
-            this.timestamp
-        );
+        return OperationInverter.invertCreateOperation(this, DeleteOperation);
     }
 }

@@ -33,7 +33,7 @@ await testEventStormControl();
 ### Method 2: Interactive Test Page
 
 1. Start your development server
-2. Navigate to: `http://localhost:8000/test-event-storm.html`
+2. Navigate to: `http://localhost:8001/test-event-storm.html`
 3. Click the test buttons to run individual tests
 
 ### Method 3: Manual Browser Console Tests

@@ -3,21 +3,16 @@ import { eventBus } from '../core/EventBus.js';
 import { EVENTS } from '../core/AppEvents.js';
 import { getService, SERVICES, hasService } from '../core/AppServices.js';
 import { performanceBudgetManager } from '../core/PerformanceBudgetManager.js';
+import { SyncConflictResolver } from '../utils/SyncConflictResolver.js';
+import { SyncQueue } from '../utils/SyncQueue.js';
+import { SyncProtocol } from '../utils/SyncProtocol.js';
+import { SyncState } from '../utils/SyncState.js';
 
 export class SyncManager {
     constructor() {
         this.ws = null;
-        this.clientId = null;
-        this.currentFilename = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 10;
-        this.reconnectDelay = 1000;
-        this.isConnected = false;
-        this.pendingChanges = [];
-        this.pendingFileJoin = null; // File to join once connected
-        this.syncedFiles = new Set(); // Track files that have been synced (for initial sync detection)
-        this._applyingRemoteOperation = false; // Flag to prevent echo when applying remote operations
-        this.lastSyncedSequence = 0; // Track last synced sequence number
+        this.state = new SyncState();
+        this.queue = new SyncQueue();
         
         // Listen to operation:applied events for operation-based sync
         eventBus.on('operation:applied', (event) => {
@@ -42,7 +37,7 @@ export class SyncManager {
     
     async connect() {
         // Don't reconnect if already connected
-        if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.state.getConnectionState() && this.ws && this.ws.readyState === WebSocket.OPEN) {
             console.log('WebSocket already connected');
             return;
         }
@@ -51,7 +46,7 @@ export class SyncManager {
         // Use window.location.hostname which will be the actual IP when accessed from another device
         // or localhost when accessed locally
         const host = window.location.hostname;
-        const wsPort = '8001'; // WebSocket server port
+        const wsPort = '8000'; // WebSocket server port
         
         const wsUrl = `${protocol}//${host}:${wsPort}`;
         
@@ -100,7 +95,7 @@ export class SyncManager {
                 this.ws.onclose = () => {
                     clearTimeout(timeout);
                     console.log('WebSocket disconnected');
-                    this.isConnected = false;
+                    this.state.setConnectionState(false);
                     this._connectResolve = null;
                     this._connectReject = null;
                     // Only attempt reconnect if this wasn't a manual close
@@ -128,22 +123,25 @@ export class SyncManager {
     }
     
     handleMessage(message) {
-        const { type } = message;
+        if (!SyncProtocol.validateMessage(message)) {
+            console.error('[SyncManager] Invalid message received');
+            return;
+        }
         
-        switch (type) {
-            case 'connected':
-                this.clientId = message.clientId;
-                console.log(`Received client ID: ${this.clientId}`);
+        const handlers = {
+            'connected': (msg) => {
+                this.state.setClientId(msg.clientId);
+                console.log(`Received client ID: ${this.state.getClientId()}`);
                 
                 // Now that we have clientId, we can join files and send messages
                 // Send any pending changes
                 this.flushPendingChanges();
                 
                 // Join current file if any, or pending file join
-                const fileToJoin = this.currentFilename || this.pendingFileJoin;
+                const fileToJoin = this.state.getCurrentFilename() || this.state.getPendingFileJoin();
                 if (fileToJoin) {
-                    this.currentFilename = fileToJoin;
-                    this.pendingFileJoin = null;
+                    this.state.setCurrentFilename(fileToJoin);
+                    this.state.setPendingFileJoin(null);
                     this.joinFile(fileToJoin);
                 }
                 
@@ -153,35 +151,23 @@ export class SyncManager {
                     this._connectResolve = null;
                     this._connectReject = null;
                 }
-                break;
-            case 'file_joined':
-                this.handleFileJoined(message);
-                break;
-            case 'full_sync':
-                this.handleFullSync(message);
-                break;
-            case 'change':
-                this.handleRemoteChange(message);
-                break;
-            case 'undo':
-                this.handleRemoteUndo(message);
-                break;
-            case 'redo':
-                this.handleRemoteRedo(message);
-                break;
-            case 'client_joined':
-                console.log(`Client ${message.clientId} joined ${message.filename}`);
-                break;
-            case 'client_left':
-                console.log(`Client ${message.clientId} left ${message.filename}`);
-                break;
-            case 'operation_sync':
-                this.handleOperationSync(message);
-                break;
-            case 'operations_response':
-                this.handleOperationsResponse(message);
-                break;
-        }
+            },
+            'file_joined': (msg) => this.handleFileJoined(msg),
+            'full_sync': (msg) => this.handleFullSync(msg),
+            'change': (msg) => this.handleRemoteChange(msg),
+            'undo': (msg) => this.handleRemoteUndo(msg),
+            'redo': (msg) => this.handleRemoteRedo(msg),
+            'client_joined': (msg) => {
+                console.log(`Client ${msg.clientId} joined ${msg.filename}`);
+            },
+            'client_left': (msg) => {
+                console.log(`Client ${msg.clientId} left ${msg.filename}`);
+            },
+            'operation_sync': (msg) => this.handleOperationSync(msg),
+            'operations_response': (msg) => this.handleOperationsResponse(msg)
+        };
+        
+        SyncProtocol.routeMessage(message, handlers);
     }
     
     /**
@@ -212,27 +198,20 @@ export class SyncManager {
      * @param {Object} operation - Operation object with sequence
      */
     sendOperation(operation) {
-        if (!this.isConnected || !this.clientId || !this.currentFilename) {
+        if (!this.state.getConnectionState() || !this.state.getClientId() || !this.state.getCurrentFilename()) {
             return;
         }
         
-        this.send({
-            type: 'operation_sync',
-            filename: this.currentFilename,
-            operation: {
-                sequence: operation.sequence,
-                op: operation.op,
-                itemId: operation.itemId,
-                params: operation.params,
-                timestamp: operation.timestamp,
-                clientId: this.clientId
-            }
-        });
+        const message = SyncProtocol.createOperationSyncMessage(
+            this.state.getCurrentFilename(),
+            operation,
+            this.state.getClientId()
+        );
+        
+        this.send(message);
         
         // Update last synced sequence
-        if (operation.sequence > this.lastSyncedSequence) {
-            this.lastSyncedSequence = operation.sequence;
-        }
+        this.state.updateLastSyncedSequence(operation.sequence);
     }
     
     /**
@@ -241,8 +220,8 @@ export class SyncManager {
      */
     handleOperationSync(message) {
         performanceBudgetManager.measureOperation('SYNC', () => {
-            if (message.filename !== this.currentFilename) return;
-            if (message.clientId === this.clientId) return; // Ignore own operations
+            if (message.filename !== this.state.getCurrentFilename()) return;
+            if (message.clientId === this.state.getClientId()) return; // Ignore own operations
             
             const operation = message.operation;
             if (!operation) return;
@@ -301,7 +280,7 @@ export class SyncManager {
                                     params: operation.params,
                                     timestamp: operation.timestamp,
                                     clientId: operation.clientId,
-                                    filename: this.currentFilename
+                                    filename: this.state.getCurrentFilename()
                                 });
                                 operationLog.save();
                             }
@@ -335,7 +314,7 @@ export class SyncManager {
      * @param {Object} message - Message from server
      */
     handleOperationsResponse(message) {
-        if (message.filename !== this.currentFilename) return;
+        if (message.filename !== this.state.getCurrentFilename()) return;
         
         const operations = message.operations || [];
         if (operations.length === 0) return;
@@ -347,7 +326,7 @@ export class SyncManager {
         }
         
         // Apply operations in order
-        this._applyingRemoteOperation = true;
+        this.state.setApplyingRemoteOperation(true);
         
         // Also append to local operation log (for consistency)
         import('../core/OperationLog.js').then(({ getOperationLog }) => {
@@ -388,7 +367,7 @@ export class SyncManager {
         
         for (const opData of operations) {
             // Skip own operations
-            if (opData.clientId === this.clientId) {
+            if (opData.clientId === this.state.getClientId()) {
                 continue;
             }
             
@@ -407,12 +386,10 @@ export class SyncManager {
                 semanticOpManager.applyOperation(opInstance);
                 
                 // Update last synced sequence
-                if (opData.sequence > this.lastSyncedSequence) {
-                    this.lastSyncedSequence = opData.sequence;
-                }
+                this.state.updateLastSyncedSequence(opData.sequence);
             }
         }
-        this._applyingRemoteOperation = false;
+        this.state.setApplyingRemoteOperation(false);
         
         console.log(`[SyncManager] Applied ${operations.length} operations for catch-up sync`);
     }
@@ -439,58 +416,44 @@ export class SyncManager {
         const fileManager = this._getFileManager();
         if (message.data && fileManager) {
             // Update app data if it matches current file
-            if (this.currentFilename === message.filename) {
+            if (this.state.getCurrentFilename() === message.filename) {
                 const appState = this._getAppState();
                 const dataManager = this._getDataManager();
                 
-                // Compare data FIRST - if identical, skip entirely
-                const currentData = JSON.stringify(appState.documents);
-                const newData = JSON.stringify(message.data.documents || []);
-                
-                if (currentData === newData) {
-                    console.log('[SyncManager] File join data matches local data exactly, skipping update');
-                    // Update timestamp to match remote but don't overwrite data
-                    const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
-                    if (remoteTimestamp > 0 && dataManager) {
-                        dataManager._lastSyncTimestamp = remoteTimestamp;
-                    }
-                    return;
-                }
-                
-                // Data is different - check timestamps
-                const remoteTimestamp = message.timestamp || message.data?._lastSyncTimestamp || message.data?.timestamp || 0;
+                const localData = appState.documents;
+                const remoteData = message.data.documents || [];
+                const remoteTimestamp = SyncConflictResolver.extractTimestamp(message);
                 const localTimestamp = dataManager?._lastSyncTimestamp || 0;
+                const timeSinceLoad = localTimestamp > 0 ? Date.now() - localTimestamp : 0;
                 
-                // If we just loaded the file (timestamp was set recently), be very conservative
-                // Only apply remote if it's significantly newer (more than 2 seconds)
-                if (localTimestamp > 0) {
-                    const timeSinceLoad = Date.now() - localTimestamp;
-                    // If we loaded less than 3 seconds ago, only apply remote if it's significantly newer
-                    if (timeSinceLoad < 3000) {
-                        const timeDiff = remoteTimestamp - localTimestamp;
-                        if (timeDiff < 2000) {
-                            console.log(`[SyncManager] Ignoring file join - just loaded file ${timeSinceLoad}ms ago, remote not significantly newer (diff: ${timeDiff}ms)`);
-                            return;
-                        }
-                    }
-                }
+                // Resolve conflict
+                const resolution = SyncConflictResolver.resolveDataConflict(
+                    localData,
+                    remoteData,
+                    localTimestamp,
+                    remoteTimestamp,
+                    { timeSinceLoad }
+                );
                 
-                // Only apply if remote change is newer (or if we don't have a local timestamp)
-                if (remoteTimestamp < localTimestamp && localTimestamp > 0) {
-                    console.log(`[SyncManager] Ignoring older file join (remote: ${remoteTimestamp}, local: ${localTimestamp})`);
+                if (!resolution.shouldApply) {
+                    console.log(`[SyncManager] Not applying file join: ${resolution.reason}`);
                     return;
                 }
                 
-                // Update local timestamp
-                if (remoteTimestamp > 0) {
-                    if (dataManager) {
-                        dataManager._lastSyncTimestamp = remoteTimestamp;
-                    }
+                // Update timestamp if needed
+                if (remoteTimestamp > 0 && dataManager) {
+                    dataManager._lastSyncTimestamp = remoteTimestamp;
+                }
+                
+                // Skip data update if data is identical
+                if (resolution.skipDataUpdate) {
+                    console.log('[SyncManager] File join data matches local data exactly, skipping update');
+                    return;
                 }
                 
                 // Apply remote data
                 console.log('[SyncManager] Applying file join data (remote is newer or equal)');
-                appState.documents = message.data.documents || [];
+                appState.documents = remoteData;
                 appState.currentDocumentId = message.data.currentDocumentId || (appState.documents.length > 0 ? appState.documents[0].id : 'document-1');
                 appState.groupStates = message.data.groupStates || {};
                 appState.subtaskStates = message.data.subtaskStates || {};
@@ -503,7 +466,7 @@ export class SyncManager {
                 }
                 
                 // Mark file as synced (initial sync complete)
-                this._markFileSynced(message.filename);
+                this.state.markFileSynced(message.filename);
                 
                 eventBus.emit(EVENTS.APP.RENDER_REQUESTED);
             }
@@ -578,20 +541,20 @@ export class SyncManager {
     handleRemoteChange(message) {
         performanceBudgetManager.measureOperation('SYNC', () => {
             // Apply remote change
-            if (message.filename === this.currentFilename && this.app && this.app.undoRedoManager) {
+            if (message.filename === this.state.getCurrentFilename() && this.app && this.app.undoRedoManager) {
                 this.app.undoRedoManager.applyRemoteChange(message.change);
             }
         }, { source: 'SyncManager-handleRemoteChange' });
     }
     
     handleRemoteUndo(message) {
-        if (message.filename === this.currentFilename && this.app && this.app.undoRedoManager) {
+        if (message.filename === this.state.getCurrentFilename() && this.app && this.app.undoRedoManager) {
             this.app.undoRedoManager.handleRemoteUndo(message.changeId);
         }
     }
     
     handleRemoteRedo(message) {
-        if (message.filename === this.currentFilename && this.app && this.app.undoRedoManager) {
+        if (message.filename === this.state.getCurrentFilename() && this.app && this.app.undoRedoManager) {
             this.app.undoRedoManager.handleRemoteRedo(message.changeId);
         }
     }
@@ -625,41 +588,32 @@ export class SyncManager {
     }
     
     sendChange(change) {
-        if (!this.isConnected || !this.clientId || !this.currentFilename) {
+        if (!this.state.getConnectionState() || !this.state.getClientId() || !this.state.getCurrentFilename()) {
             // Queue for later
-            this.pendingChanges.push(change);
+            this.queue.enqueue({ type: 'change', change });
             return;
         }
         
-        this.send({
-            type: 'change',
-            filename: this.currentFilename,
-            change: change
-        });
+        const message = SyncProtocol.createChangeMessage(this.state.getCurrentFilename(), change);
+        this.send(message);
     }
     
     sendUndo(changeId) {
-        if (!this.isConnected || !this.currentFilename) {
+        if (!this.state.getConnectionState() || !this.state.getCurrentFilename()) {
             return;
         }
         
-        this.send({
-            type: 'undo',
-            filename: this.currentFilename,
-            changeId: changeId
-        });
+        const message = SyncProtocol.createUndoMessage(this.state.getCurrentFilename(), changeId);
+        this.send(message);
     }
     
     sendRedo(changeId) {
-        if (!this.isConnected || !this.currentFilename) {
+        if (!this.state.getConnectionState() || !this.state.getCurrentFilename()) {
             return;
         }
         
-        this.send({
-            type: 'redo',
-            filename: this.currentFilename,
-            changeId: changeId
-        });
+        const message = SyncProtocol.createRedoMessage(this.state.getCurrentFilename(), changeId);
+        this.send(message);
     }
     
     send(message) {
@@ -683,8 +637,8 @@ export class SyncManager {
     }
     
     disconnect() {
-        if (this.currentFilename) {
-            this.leaveFile(this.currentFilename);
+        if (this.state.getCurrentFilename()) {
+            this.leaveFile(this.state.getCurrentFilename());
         }
         if (this.ws) {
             this.ws.close();

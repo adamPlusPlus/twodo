@@ -1,0 +1,14 @@
+Fix ActiveSetManager load-function and DataManager scheduleAutosave init errors
+
+- DataManager.loadData(): when active-set is enabled, set load function and
+  metadata before any appState.documents assignment, including when
+  allDocuments.length === 0. Use initialDocuments (allDocuments or default)
+  and a load function that resolves from initialDocuments, storage, or
+  default for document-1.
+- DataManager constructor: create this.dataSyncManager = new DataSyncManager(this).
+- DataManager.saveData(): call this.dataSyncManager.scheduleAutosave(500) and
+  this.dataSyncManager.scheduleSync(200, skipSync) instead of calling those
+  on _getSyncManager() (WebSocket SyncManager has no scheduleAutosave/scheduleSync).
+
+Resolves: [ActiveSetManager] No load function set, cannot load: document-1
+Resolves: syncManager.scheduleAutosave is not a function

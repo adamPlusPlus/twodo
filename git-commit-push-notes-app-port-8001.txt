@@ -1,0 +1,9 @@
+App on port 8001, WebSocket on 8000
+
+- start-servers.ps1: HTTP server on 8001, WebSocket on 8000 (foreground and
+  background); verify checks and displayed URLs updated accordingly.
+- js/modules/SyncManager.js: wsPort set to '8000' so client connects to WS on 8000.
+- vite.config.js: all dev proxy targets updated to http://localhost:8001.
+- README.md: app URL and LAN port set to 8001; manual server commands use
+  server.py 8001 and websocket_server.py 8000.
+- TEST_EVENT_STORM_CONTROL.md: test page URL updated to http://localhost:8001.

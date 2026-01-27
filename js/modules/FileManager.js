@@ -504,30 +504,41 @@ export class FileManager {
             return;
         }
         
+        // Support both Python server (filename, size, modified unix) and Vercel-style (name, size, modified ISO)
+        const getDisplayName = (f) => (f.filename ?? f.name ?? '').toString();
+        const getModifiedMs = (f) => {
+            const m = f.modified;
+            if (m == null) return 0;
+            return typeof m === 'number' ? m * 1000 : new Date(m).getTime();
+        };
+        const getSize = (f) => (f.size != null && !isNaN(Number(f.size))) ? Number(f.size) : 0;
+
         let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
         files.forEach(file => {
-            const isCurrent = file.filename === this.currentFilename;
-            const modifiedDate = new Date(file.modified * 1000).toLocaleString();
-            const sizeKB = (file.size / 1024).toFixed(1);
+            const displayName = getDisplayName(file);
+            const canonicalName = displayName || 'unknown';
+            const isCurrent = (file.filename ?? file.name) === this.currentFilename;
+            const modifiedDate = new Date(getModifiedMs(file)).toLocaleString();
+            const sizeKB = (getSize(file) / 1024).toFixed(1);
             
             html += `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: ${isCurrent ? '#2a4a6a' : '#2a2a2a'}; border-radius: 4px; border: 1px solid #444; gap: 10px;">
                     <div style="flex: 1; min-width: 0; overflow: hidden;">
                         <div style="font-weight: ${isCurrent ? 'bold' : 'normal'}; color: ${isCurrent ? '#4a9eff' : '#e0e0e0'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${file.filename} ${isCurrent ? '(current)' : ''}
+                            ${displayName || '(no name)'} ${isCurrent ? '(current)' : ''}
                         </div>
                         <div style="font-size: 12px; color: #888; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             ${sizeKB} KB • ${modifiedDate}
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; flex-shrink: 0;">
-                        <button onclick="window.app.fileManager.handleLoad('${file.filename.replace(/'/g, "\\'")}')" 
+                        <button onclick="window.app && window.app.fileManager && window.app.fileManager.handleLoad('${canonicalName.replace(/'/g, "\\'")}')" 
                                 style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">📂 Load</button>
-                        <button onclick="window.app.fileManager.handleLoadBackup('${file.filename.replace(/'/g, "\\'")}')" 
+                        <button onclick="window.app && window.app.fileManager && window.app.fileManager.handleLoadBackup('${canonicalName.replace(/'/g, "\\'")}')" 
                                 style="padding: 6px 12px; background: #6a8eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">💾 Load .bak</button>
-                        <button onclick="window.app.fileManager.handleRename('${file.filename.replace(/'/g, "\\'")}')" 
+                        <button onclick="window.app && window.app.fileManager && window.app.fileManager.handleRename('${canonicalName.replace(/'/g, "\\'")}')" 
                                 style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">✏️ Rename</button>
-                        <button onclick="window.app.fileManager.handleDelete('${file.filename.replace(/'/g, "\\'")}')" 
+                        <button onclick="window.app && window.app.fileManager && window.app.fileManager.handleDelete('${canonicalName.replace(/'/g, "\\'")}')" 
                                 style="padding: 6px 12px; background: #ff5555; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">🗑️ Delete</button>
                     </div>
                 </div>
@@ -729,7 +740,7 @@ export class FileManager {
             this.refreshFileList();
             
             // Connect to sync and join file session
-            if (this.app.syncManager) {
+            if (this.app?.syncManager) {
                 if (!this.app.syncManager.isConnected) {
                     await this.app.syncManager.connect();
                 }
@@ -737,7 +748,7 @@ export class FileManager {
             }
             
             // Set current file in undo/redo manager (this loads the buffer)
-            if (this.app.undoRedoManager) {
+            if (this.app?.undoRedoManager) {
                 await this.app.undoRedoManager.setCurrentFile(filename);
             }
         } catch (error) {
@@ -835,7 +846,7 @@ export class FileManager {
             this.refreshFileList();
             
             // Connect to sync and join file session (use original filename, not backup)
-            if (this.app.syncManager) {
+            if (this.app?.syncManager) {
                 if (!this.app.syncManager.isConnected) {
                     await this.app.syncManager.connect();
                 }
@@ -843,11 +854,11 @@ export class FileManager {
             }
             
             // Set current file in undo/redo manager (this loads the buffer) - use original filename
-            if (this.app.undoRedoManager) {
+            if (this.app?.undoRedoManager) {
                 await this.app.undoRedoManager.setCurrentFile(filename);
             }
         } catch (error) {
-            if (this.app && this.app.modalHandler) {
+            if (this.app?.modalHandler) {
                 await this.app.modalHandler.showAlert(`Failed to load backup file: ${error.message}`);
             } else {
                 alert(`Failed to load backup file: ${error.message}`);
@@ -982,7 +993,7 @@ export class FileManager {
             this.refreshFileList();
             
             // Connect to sync and join file session
-            if (this.app.syncManager) {
+            if (this.app?.syncManager) {
                 if (!this.app.syncManager.isConnected) {
                     await this.app.syncManager.connect();
                 }
@@ -990,7 +1001,7 @@ export class FileManager {
             }
             
             // Set current file in undo/redo manager (this initializes empty buffer for new file)
-            if (this.app.undoRedoManager) {
+            if (this.app?.undoRedoManager) {
                 await this.app.undoRedoManager.setCurrentFile(this.currentFilename);
                 // Clear stacks for new file
                 this.app.undoRedoManager.clear();

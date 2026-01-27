@@ -1,0 +1,20 @@
+File browser: show names and make Load work
+
+- app.js: set this.fileManager.app = this after app init so FileManager has
+  app reference for handleLoad (sync, undo, modal). Load was throwing when
+  accessing this.app.syncManager because this.app was never set.
+
+- FileManager.js refreshFileList: support both Python server (filename, size,
+  modified unix) and Vercel-style API (name, size, modified ISO). Use
+  file.filename ?? file.name for display and for button handlers; use safe
+  getSize/getModifiedMs so missing or wrong types don't break the list or
+  show "undefined"/NaN. Show "(no name)" when both filename and name are
+  missing.
+
+- FileManager.js: add optional chaining (this.app?.syncManager,
+  this.app?.undoRedoManager, this.app?.modalHandler) in handleLoad,
+  handleLoadBackup, and handleNew so calls don't throw if app is missing.
+
+- FileManager.js: use window.app && window.app.fileManager in onclick
+  attributes for Load/Load .bak/Rename/Delete so handlers don't throw when
+  app or fileManager is not yet set.
